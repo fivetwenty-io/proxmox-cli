@@ -33,7 +33,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.27.0"
+          go-version-file: go.mod
           check-latest: true
           # Off on purpose: these jobs run on the host (not in a container),
           # so ~/go/pkg/mod and ~/.cache/go-build already survive between
@@ -129,7 +129,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.27.0"
+          go-version-file: go.mod
           check-latest: true
           # Off on purpose: these jobs run on the host (not in a container),
           # so ~/go/pkg/mod and ~/.cache/go-build already survive between
