@@ -39,3 +39,6 @@ coverage.html
 # working state, never anything this repo should carry.
 /.superpowers/
 /.agents/
+
+# Pinned local tool copies (make trivy-install)
+/.tools/

@@ -261,13 +261,51 @@ govulncheck: ## Scan the module graph for reachable vulnerabilities with govulnc
 	}
 	@govulncheck ./...
 
+# CI installs the Trivy version pinned on its setup-trivy step. Locally,
+# `make trivy-install` puts that same version under .tools/, and `make trivy`
+# prefers it over whatever trivy is on PATH. A pin bump changes the directory
+# name, so a stale copy is ignored rather than silently used.
+TRIVY_PIN := $(shell awk '/setup-trivy@/{f=1} f&&/version:/{print $$2; exit}' .github/workflows/ci.yml)
+TRIVY_DIR := $(CURDIR)/.tools/trivy-$(TRIVY_PIN)
+TRIVY     := $(firstword $(wildcard $(TRIVY_DIR)/trivy) trivy)
+
+.PHONY: trivy-install
+trivy-install: ## Install the Trivy version CI pins into .tools/ (checksum-verified)
+	@[ -n "$(TRIVY_PIN)" ] || { echo "trivy-install: no Trivy version pin found in .github/workflows/ci.yml"; exit 1; }
+	@set -e; \
+	ver="$(TRIVY_PIN)"; ver="$${ver#v}"; \
+	case "$$(uname -s)/$$(uname -m)" in \
+		Darwin/arm64) plat=macOS-ARM64 ;; \
+		Darwin/x86_64) plat=macOS-64bit ;; \
+		Linux/aarch64|Linux/arm64) plat=Linux-ARM64 ;; \
+		Linux/x86_64) plat=Linux-64bit ;; \
+		*) echo "trivy-install: no Trivy release for $$(uname -s)/$$(uname -m)"; exit 1 ;; \
+	esac; \
+	tarball="trivy_$${ver}_$${plat}.tar.gz"; \
+	base="https://github.com/aquasecurity/trivy/releases/download/v$${ver}"; \
+	tmp="$$(mktemp -d)"; trap 'rm -rf "$$tmp"' EXIT; \
+	curl -fsSL -o "$$tmp/$$tarball" "$$base/$$tarball"; \
+	curl -fsSL -o "$$tmp/checksums.txt" "$$base/trivy_$${ver}_checksums.txt"; \
+	want="$$(awk -v f="$$tarball" '$$2 == f {print $$1}' "$$tmp/checksums.txt")"; \
+	have="$$(shasum -a 256 "$$tmp/$$tarball" | awk '{print $$1}')"; \
+	[ -n "$$want" ] && [ "$$want" = "$$have" ] || { echo "trivy-install: checksum mismatch for $$tarball"; exit 1; }; \
+	mkdir -p "$(TRIVY_DIR)"; \
+	tar -xzf "$$tmp/$$tarball" -C "$(TRIVY_DIR)" trivy; \
+	echo "trivy-install: $$("$(TRIVY_DIR)/trivy" --version | head -1) -> $(TRIVY_DIR)/trivy"
+
 .PHONY: trivy
 trivy: ## Scan dependencies, committed secrets, and misconfigurations with trivy (CI gate)
-	@command -v trivy >/dev/null 2>&1 || { \
-		echo "trivy: not found — install: https://trivy.dev/latest/getting-started/installation/"; \
+	@command -v "$(TRIVY)" >/dev/null 2>&1 || { \
+		echo "trivy: not found — install the CI-pinned version with: make trivy-install"; \
 		exit 1; \
 	}
-	@trivy fs --scanners vuln,secret,misconfig --exit-code 1 --ignore-unfixed .
+	@[ -n "$(TRIVY_PIN)" ] || { echo "trivy: no Trivy version pin found in .github/workflows/ci.yml"; exit 1; }
+	@have="v$$("$(TRIVY)" --version 2>/dev/null | awk '/^Version:/{print $$2; exit}')"; \
+	[ "$$have" = "$(TRIVY_PIN)" ] || { \
+		echo "trivy: $(TRIVY) is $$have but CI pins $(TRIVY_PIN) — install the pinned version with: make trivy-install"; \
+		exit 1; \
+	}
+	@"$(TRIVY)" fs --scanners vuln,secret,misconfig --exit-code 1 --ignore-unfixed --skip-dirs .tools --skip-dirs .claude .
 
 .PHONY: ci
 ci: ## Run every CI check in workflow order and stop at the first failure (govulncheck and trivy only if installed)
@@ -285,7 +323,8 @@ ci: ## Run every CI check in workflow order and stop at the first failure (govul
 	}; \
 	for stage in $(CI_STAGES); do run "$$stage"; done; \
 	for stage in $(CI_OPTIONAL); do \
-		if command -v "$$stage" >/dev/null 2>&1; then \
+		tool="$$stage"; [ "$$stage" != trivy ] || tool="$(TRIVY)"; \
+		if command -v "$$tool" >/dev/null 2>&1; then \
 			run "$$stage"; \
 		else \
 			echo "ci: $$stage not installed, skipping"; \

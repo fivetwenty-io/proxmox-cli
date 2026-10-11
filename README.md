@@ -1426,6 +1426,8 @@ Each Makefile category delegates to a script under `scripts/` (`build`, `test`,
 
 Run `make ci` before you push. It runs every check the CI workflow runs, in the same order and through the same Makefile targets, and it stops at the first failure, so a push that would fail CI fails on your machine first. It also runs `govulncheck` and `trivy` when they are installed and prints a one-line notice when they are not. Expect a couple of minutes with a warm Go cache, since the race-detector tests and the coverage-matrix check take the longest.
 
+The local tools have to match the versions CI pins, or a green local run can disagree with CI. The Go toolchain comes from the `toolchain` line in `go.mod`, which CI reads too. `make lint-check` fails unless your golangci-lint matches the version pinned in `.github/workflows/ci.yml`, and its error message gives the `go install` command for the right one. `make trivy` makes the same check against CI's Trivy pin. Run `make trivy-install` once to put that exact version, checksum-verified, under `.tools/`, where `make trivy` picks it up ahead of any other trivy on your PATH.
+
 Run `make hooks` once per clone to turn this into a habit. It points git at the versioned hooks in `.githooks/`. The pre-push hook runs `make ci` for you, and the commit-msg hook rejects any commit message that carries AI attribution, using the same pattern as the CI attribution job. In an emergency you can skip the pre-push hook with `git push --no-verify`, but CI will still run the same checks on the pull request.
 
 `scripts/e2e` is a live, read-only happy-path sweep of every command tree
