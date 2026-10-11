@@ -57,6 +57,10 @@ jobs:
         with:
           version: v2.13.1
           install-only: true
+          # Off for the same reason as setup-go's cache, and because a
+          # restore untars into a Go cache that sibling jobs on this
+          # runner may be reading at that moment.
+          skip-cache: true
 
       - name: Lint
         run: make lint-check
