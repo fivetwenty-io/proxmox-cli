@@ -36,6 +36,16 @@ func renderCertTask(cmd *cobra.Command, deps *cli.Deps, raw json.RawMessage, don
 	return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: doneMsg}, deps.Format)
 }
 
+// certTaskPending reports whether renderCertTask returned before the task
+// finished, which it does under --async when the response carried a UPID.
+func certTaskPending(deps *cli.Deps, raw json.RawMessage) bool {
+	if !deps.Async {
+		return false
+	}
+	_, err := apiclient.UPIDFromRaw(raw)
+	return err == nil
+}
+
 func newCertCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "cert",
@@ -143,7 +153,8 @@ func newCertAcmeOrderCmd() *cobra.Command {
 		Use:   "order",
 		Short: "Order a new ACME certificate for the node",
 		Long: "Request a new ACME (Let's Encrypt) certificate for the resolved node and install it. " +
-			"This contacts the configured ACME directory and replaces the node's API certificate.",
+			"This contacts the configured ACME directory and replaces the node's API certificate.\n\n" +
+			acmeTrustHelp,
 		Example: `  pmx pve node cert acme order --yes`,
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -158,12 +169,20 @@ func newCertAcmeOrderCmd() *cobra.Command {
 			if cmd.Flags().Changed("force") {
 				params.Force = &force
 			}
+			trust := planACMETrust(cmd, deps)
 			resp, err := deps.API.Nodes.CreateCertificatesAcmeCertificate(cmd.Context(), deps.Node, params)
 			if err != nil {
 				return fmt.Errorf("order ACME certificate on node %q: %w", deps.Node, err)
 			}
-			return renderCertTask(cmd, deps, rawOrNil(resp),
-				fmt.Sprintf("ACME certificate ordered on node %q.", deps.Node))
+			raw := rawOrNil(resp)
+			if err := renderCertTask(cmd, deps, raw,
+				fmt.Sprintf("ACME certificate ordered on node %q.", deps.Node)); err != nil {
+				return err
+			}
+			if hint := trust.hint(deps.Node, certTaskPending(deps, raw)); hint != "" {
+				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), hint)
+			}
+			return nil
 		},
 	}
 	f := cmd.Flags()
@@ -181,7 +200,7 @@ func newCertAcmeRenewCmd() *cobra.Command {
 		Use:   "renew",
 		Short: "Renew the node's ACME certificate",
 		Long: "Renew the ACME (Let's Encrypt) certificate for the resolved node. By default PVE only " +
-			"renews when expiry is within 30 days; pass --force to renew regardless.",
+			"renews when expiry is within 30 days; pass --force to renew regardless.\n\n" + acmeTrustHelp,
 		Example: `  pmx pve node cert acme renew --yes
   pmx pve node cert acme renew --force --yes`,
 		Args: cobra.NoArgs,
@@ -197,12 +216,20 @@ func newCertAcmeRenewCmd() *cobra.Command {
 			if cmd.Flags().Changed("force") {
 				params.Force = &force
 			}
+			trust := planACMETrust(cmd, deps)
 			resp, err := deps.API.Nodes.UpdateCertificatesAcmeCertificate(cmd.Context(), deps.Node, params)
 			if err != nil {
 				return fmt.Errorf("renew ACME certificate on node %q: %w", deps.Node, err)
 			}
-			return renderCertTask(cmd, deps, rawOrNil(resp),
-				fmt.Sprintf("ACME certificate renewed on node %q.", deps.Node))
+			raw := rawOrNil(resp)
+			if err := renderCertTask(cmd, deps, raw,
+				fmt.Sprintf("ACME certificate renewed on node %q.", deps.Node)); err != nil {
+				return err
+			}
+			if hint := trust.hint(deps.Node, certTaskPending(deps, raw)); hint != "" {
+				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), hint)
+			}
+			return nil
 		},
 	}
 	f := cmd.Flags()
