@@ -316,8 +316,8 @@ func TestAcmePlugin_SetForwardsChanged(t *testing.T) {
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
 
 	var buf bytes.Buffer
-	require.NoError(t, run(deps, &buf, "acme", "plugin", "set", "dns-cf", "--api", "route53"))
-	require.Equal(t, "route53", gotForm.Get("api"))
+	require.NoError(t, run(deps, &buf, "acme", "plugin", "set", "dns-cf", "--api", "aws"))
+	require.Equal(t, "aws", gotForm.Get("api"))
 	_, hasData := gotForm["data"]
 	require.False(t, hasData, "unset --data must be omitted from the request body")
 }
@@ -474,4 +474,22 @@ func TestAcmePlugin_CreateRejectsPlaintextData(t *testing.T) {
 	require.NotContains(t, err.Error(), "plaintext-secret")
 	require.NotContains(t, buf.String(), "plaintext-secret")
 	require.False(t, called)
+}
+
+// TestAcmePlugin_ExamplesUseRealPluginIDs guards the help examples against
+// provider names that are not acme.sh plugin ids. PVE validates --api against
+// its plugin list, so "cloudflare" fails where "cf" works.
+func TestAcmePlugin_ExamplesUseRealPluginIDs(t *testing.T) {
+	plugin, _, err := Group(&cli.Deps{}).Find([]string{"acme", "plugin"})
+	require.NoError(t, err)
+
+	for _, sub := range plugin.Commands() {
+		for _, bad := range []string{"--api cloudflare", "--api route53"} {
+			require.NotContains(t, sub.Example, bad, "acme plugin %s example", sub.Name())
+		}
+	}
+
+	create, _, err := plugin.Find([]string{"create"})
+	require.NoError(t, err)
+	require.Contains(t, create.Example, "--api cf ")
 }

@@ -272,7 +272,7 @@ func TestConfigAcmePluginLs_SortsAndStripsSecret(t *testing.T) {
 
 	f.HandleJSON("GET "+acmePluginsPath, []map[string]any{
 		{"plugin": "zeta", "type": "dns", "api": "cf", "data": "secret-z"},
-		{"plugin": "alpha", "type": "dns", "api": "route53", "data": "secret-a", "disable": true, "validation-delay": 30},
+		{"plugin": "alpha", "type": "dns", "api": "aws", "data": "secret-a", "disable": true, "validation-delay": 30},
 	})
 
 	var buf bytes.Buffer
@@ -430,7 +430,7 @@ func TestConfigAcmePluginUpdate_SurfacesAPIError(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newConfigAcmePluginCmd(), "plugin", "update", "cfplugin", "--api", "route53")
+	err := run(deps, &buf, newConfigAcmePluginCmd(), "plugin", "update", "cfplugin", "--api", "aws")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), `update acme plugin "cfplugin"`)
 }

@@ -335,7 +335,7 @@ func TestAcmePluginLs_ListsPluginsSortedByPlugin(t *testing.T) {
 	var rec recordedRequest
 	recordJSON(f, "GET /api2/json/config/acme/plugins", &rec, []map[string]any{
 		{"plugin": "zzz", "type": "dns", "api": "cf"},
-		{"plugin": "aaa", "type": "dns", "api": "route53", "validation-delay": 30},
+		{"plugin": "aaa", "type": "dns", "api": "aws", "validation-delay": 30},
 	})
 
 	var buf bytes.Buffer
@@ -349,7 +349,7 @@ func TestAcmePluginLs_ListsPluginsSortedByPlugin(t *testing.T) {
 	zIdx := strings.Index(out, "zzz")
 	require.True(t, aIdx >= 0 && zIdx >= 0)
 	require.Less(t, aIdx, zIdx, "entries must be sorted by plugin id")
-	require.Contains(t, out, "route53")
+	require.Contains(t, out, "aws")
 	require.Contains(t, out, "30")
 }
 
@@ -521,7 +521,7 @@ func TestAcmePluginUpdate_AuditAllFlags(t *testing.T) {
 
 	var buf bytes.Buffer
 	err := run(deps, &buf, newAcmePluginUpdateCmd(), "update", "dns1",
-		"--api", "route53",
+		"--api", "aws",
 		"--data", "bmV3ZGF0YQ==",
 		"--disable",
 		"--validation-delay", "60",
@@ -531,7 +531,7 @@ func TestAcmePluginUpdate_AuditAllFlags(t *testing.T) {
 	require.Equal(t, http.MethodPut, rec.method)
 
 	want := map[string]string{
-		"api":              "route53",
+		"api":              "aws",
 		"data":             "bmV3ZGF0YQ==",
 		"disable":          "1",
 		"validation-delay": "60",
@@ -550,9 +550,9 @@ func TestAcmePluginUpdate_SendsOnlyChangedFields(t *testing.T) {
 	recordJSON(f, "PUT /api2/json/config/acme/plugins/dns1", &rec, nil)
 
 	var buf bytes.Buffer
-	err := run(deps, &buf, newAcmePluginUpdateCmd(), "update", "dns1", "--api", "route53")
+	err := run(deps, &buf, newAcmePluginUpdateCmd(), "update", "dns1", "--api", "aws")
 	require.NoError(t, err)
-	require.Equal(t, "route53", rec.form.Get("api"))
+	require.Equal(t, "aws", rec.form.Get("api"))
 
 	for _, key := range []string{"data", "disable", "validation-delay", "digest", "delete"} {
 		_, present := rec.form[key]
@@ -597,7 +597,7 @@ func TestAcmePluginUpdate_EmptyIDRejected(t *testing.T) {
 	deps := depsFor(t, pc, output.FormatTable, false)
 
 	var buf bytes.Buffer
-	err := run(deps, &buf, newAcmePluginUpdateCmd(), "update", "", "--api", "route53")
+	err := run(deps, &buf, newAcmePluginUpdateCmd(), "update", "", "--api", "aws")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "must not be empty")
 }
@@ -611,7 +611,7 @@ func TestAcmePluginUpdate_ServerErrorSurfaced(t *testing.T) {
 	})
 
 	var buf bytes.Buffer
-	err := run(deps, &buf, newAcmePluginUpdateCmd(), "update", "dns1", "--api", "route53")
+	err := run(deps, &buf, newAcmePluginUpdateCmd(), "update", "dns1", "--api", "aws")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "digest mismatch")
 }
