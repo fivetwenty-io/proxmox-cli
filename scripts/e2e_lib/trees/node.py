@@ -334,6 +334,21 @@ def run(ctx: Ctx) -> None:
         # custom certificate is installed, and a plain message when only the
         # self-signed pve-ssl.pem exists — so no list-shape validation.
         ctx.check("cert acme list", "pve", "node", "cert", "acme", "list", node=n)
+
+        # cert acme status only reads: node config, the account and plugin
+        # lists, and the certificate info. A node without ACME configured
+        # still answers, with its problems listed, so only the shape is
+        # checked. --timer reaches the node over ssh, which the suite does not.
+        def has_acme_status(res: CmdResult) -> str | None:
+            doc = res.json()
+            if not isinstance(doc, dict):
+                return "expected a JSON object"
+            missing = [k for k in ("node", "account", "domains", "certificate", "renewal", "problems")
+                       if k not in doc]
+            return f"missing keys: {missing}" if missing else None
+
+        ctx.check("cert acme status", "pve", "node", "cert", "acme", "status", node=n,
+                  validate=has_acme_status)
         ctx.check("cert acme order --help", "pve", "node", "cert", "acme", "order", "--help", fmt="")
         ctx.check("cert custom upload --help", "pve", "node", "cert", "custom", "upload", "--help", fmt="")
 

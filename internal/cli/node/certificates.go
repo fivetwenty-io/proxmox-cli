@@ -77,7 +77,8 @@ func newCertAcmeCmd() *cobra.Command {
 		Short: "Manage the node's ACME certificate",
 		Long:  "Inspect, order, renew, or remove the ACME (Let's Encrypt) certificate for the resolved node.",
 	}
-	cmd.AddCommand(newCertAcmeListCmd(), newCertAcmeOrderCmd(), newCertAcmeRenewCmd(), newCertAcmeDeleteCmd())
+	cmd.AddCommand(newCertAcmeListCmd(), newCertAcmeStatusCmd(), newCertAcmeOrderCmd(), newCertAcmeRenewCmd(),
+		newCertAcmeDeleteCmd())
 	return cmd
 }
 
