@@ -60,13 +60,25 @@ func finishAcmeAsync(cmd *cobra.Command, deps *cli.Deps, raw json.RawMessage, ms
 
 var acmeAccountListColumns = []string{"name"}
 
+// acmeAccountRootOnlyHelp is appended to the Long help of every account verb
+// that reads or changes a single account. Proxmox restricts those endpoints
+// to root@pam itself, which an ACL cannot grant and an API token cannot
+// satisfy, so a token context fails with "Permission check failed
+// (user != root@pam)".
+const acmeAccountRootOnlyHelp = "Proxmox allows only root@pam, signed in with a password, to call this " +
+	"endpoint. API tokens are refused, including a token that root@pam owns, and no ACL role " +
+	"grants access, so run it through a context created with --auth-type password " +
+	"--username root@pam and select that context with --context."
+
 func newAcmeAccountCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "account",
 		Short: "Manage ACME accounts",
 		Long: "Manage the ACME certificate-authority accounts used to issue node " +
 			"certificates. Registering, updating, and deregistering an account contacts " +
-			"the ACME CA and runs asynchronously.",
+			"the ACME CA and runs asynchronously.\n\n" +
+			"Every verb except list requires root@pam with password authentication; " +
+			"API tokens are refused, including a token that root@pam owns.",
 	}
 	cmd.AddCommand(
 		newAcmeAccountListCmd(),
@@ -105,7 +117,7 @@ func newAcmeAccountGetCmd() *cobra.Command {
 		Use:   "get <name>",
 		Short: "Show a single ACME account",
 		Long: "Show the full registration details of a single ACME account, including its " +
-			"contact address, directory URL, and terms-of-service status.",
+			"contact address, directory URL, and terms-of-service status.\n\n" + acmeAccountRootOnlyHelp,
 		Example: `  pmx pve cluster acme account get default`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -139,10 +151,16 @@ func newAcmeAccountCreateCmd() *cobra.Command {
 		Short: "Register a new ACME account",
 		Long: "Register a new ACME account with the certificate authority. This " +
 			"contacts the ACME directory and runs as an asynchronous task. The " +
-			"optional positional name is the account config file name (default 'default').",
+			"optional positional name is the account config file name (default 'default').\n\n" +
+			acmeAccountRootOnlyHelp,
 		Example: `  pmx pve cluster acme account create --contact admin@example.com
   pmx pve cluster acme account create default --contact admin@example.com \
-  --directory https://acme-staging-v02.api.letsencrypt.org/directory`,
+  --directory https://acme-staging-v02.api.letsencrypt.org/directory
+
+  # Through a password-auth root@pam context; API tokens are refused
+  pmx context add pve-root --host pve.example.com --auth-type password \
+  --username root@pam --secret 'keychain:pve/root@pam'
+  pmx --context pve-root pve cluster acme account create --contact admin@example.com`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -193,7 +211,7 @@ func newAcmeAccountSetCmd() *cobra.Command {
 		Use:   "set <name>",
 		Short: "Update an ACME account contact",
 		Long: "Update the contact email address(es) of an ACME account. This contacts " +
-			"the ACME CA and runs as an asynchronous task.",
+			"the ACME CA and runs as an asynchronous task.\n\n" + acmeAccountRootOnlyHelp,
 		Example: `  pmx pve cluster acme account set default --contact admin@example.com`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -228,7 +246,7 @@ func newAcmeAccountDeleteCmd() *cobra.Command {
 		Use:   "delete <name>",
 		Short: "Deactivate and remove an ACME account",
 		Long: "Deactivate an ACME account at the CA and remove it locally. This " +
-			"contacts the ACME CA and runs as an asynchronous task.",
+			"contacts the ACME CA and runs as an asynchronous task.\n\n" + acmeAccountRootOnlyHelp,
 		Example: `  pmx pve cluster acme account delete default --yes`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

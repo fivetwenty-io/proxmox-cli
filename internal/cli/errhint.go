@@ -34,6 +34,23 @@ const forbiddenHint = `hint: permission denied (HTTP 403): the credentials authe
   API tokens have "Privilege Separation" enabled by default, so the token needs its
   OWN ACL entry; granting the owning user access is not enough.`
 
+// rootPamOnlyHint is printed after a 403 whose message reports
+// "user != root@pam". Proxmox raises that check on a handful of endpoints,
+// such as ACME account registration, that test the user itself rather than
+// an ACL, so the general advice to grant a role would send the operator the
+// wrong way.
+const rootPamOnlyHint = `hint: permission denied (HTTP 403): this endpoint accepts only root@pam signed in with a password.
+  Proxmox checks the user itself rather than an ACL, so no role grant helps, and it refuses
+  every API token, including a token that root@pam owns. Run the command through a
+  password-auth root@pam context instead:
+    pmx context add pve-root --host <host> --auth-type password --username root@pam \
+      --secret 'keychain:pve/root@pam'
+    pmx --context pve-root <the same command>`
+
+// rootPamOnlyMarker is the fragment of the 403 message Proxmox returns when
+// an endpoint is restricted to root@pam itself.
+const rootPamOnlyMarker = "user != root@pam"
+
 // AuthHint returns an actionable, multi-line hint for authentication and
 // authorisation failures, or "" when err is not an auth error. The auth
 // classification is shared with the process exit code via exitcode.FromError,
@@ -44,6 +61,10 @@ func AuthHint(err error) string {
 	}
 
 	if isForbidden(err) {
+		if strings.Contains(err.Error(), rootPamOnlyMarker) {
+			return rootPamOnlyHint
+		}
+
 		return forbiddenHint
 	}
 

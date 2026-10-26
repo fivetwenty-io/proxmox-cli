@@ -493,3 +493,22 @@ func TestAcmePlugin_ExamplesUseRealPluginIDs(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, create.Example, "--api cf ")
 }
+
+// TestAcmeAccount_HelpNamesRootPamRestriction checks that every account verb
+// Proxmox restricts to root@pam says so, and that list, which any user may
+// call, does not.
+func TestAcmeAccount_HelpNamesRootPamRestriction(t *testing.T) {
+	account, _, err := Group(&cli.Deps{}).Find([]string{"acme", "account"})
+	require.NoError(t, err)
+
+	for _, name := range []string{"get", "create", "set", "delete"} {
+		sub, _, err := account.Find([]string{name})
+		require.NoError(t, err)
+		require.Contains(t, sub.Long, "only root@pam, signed in with a password", "acme account %s", name)
+		require.Contains(t, sub.Long, "API tokens are refused", "acme account %s", name)
+	}
+
+	list, _, err := account.Find([]string{"list"})
+	require.NoError(t, err)
+	require.NotContains(t, list.Long, "root@pam")
+}

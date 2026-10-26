@@ -53,6 +53,26 @@ func TestAuthHint_Forbidden(t *testing.T) {
 	}
 }
 
+func TestAuthHint_RootPamOnly(t *testing.T) {
+	// The body Proxmox returns when an endpoint such as ACME account
+	// registration is called by anyone but root@pam with a ticket.
+	body := []byte(`{"data":null,"message":"Permission check failed (user != root@pam)\n"}`)
+	err := fmt.Errorf("create ACME account: %w",
+		fmt.Errorf("API request failed: %w", pveerrors.ParseAPIError(403, body)))
+
+	hint := cli.AuthHint(err)
+	require.Contains(t, hint, "HTTP 403")
+	require.Contains(t, hint, "only root@pam signed in with a password")
+	require.Contains(t, hint, "--auth-type password --username root@pam")
+	require.Contains(t, hint, "pmx --context pve-root")
+	require.NotContains(t, hint, "Privilege Separation",
+		"an ACL grant cannot satisfy a root@pam check, so the general 403 advice must not appear")
+
+	other := pveerrors.ParseAPIError(403, []byte(`{"data":null,"message":"Permission check failed (/vms/100, VM.Audit)\n"}`))
+	require.Contains(t, cli.AuthHint(other), "Privilege Separation",
+		"an ordinary ACL denial keeps the general advice")
+}
+
 func TestAuthHint_NonAuthErrorsReturnEmpty(t *testing.T) {
 	cases := []error{
 		nil,
