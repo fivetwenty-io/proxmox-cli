@@ -337,6 +337,7 @@ func newAcmePluginCreateCmd() *cobra.Command {
 		pluginType string
 		api        string
 		data       string
+		dataFile   string
 		nodes      string
 		disable    bool
 		valDelay   int64
@@ -344,20 +345,35 @@ func newAcmePluginCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create <id>",
 		Short: "Create an ACME challenge plugin",
-		Long: "Create an ACME challenge plugin. For dns-01 plugins, --api selects the " +
-			"DNS provider and --data carries its base64-encoded credential block.",
-		Example: `  pmx pve cluster acme plugin create my-dns --type dns --api cloudflare --data '${ACME_DNS_DATA}'`,
-		Args:    cobra.ExactArgs(1),
+		Long: "Create an ACME challenge plugin. For dns-01 plugins, --api selects the DNS " +
+			"provider by its acme.sh id (cf for Cloudflare; list them with 'pmx pve cluster acme " +
+			"challenge-schema') and the credentials go in --data-file or --data.\n\n" +
+			cli.ACMEPluginDataHelp,
+		Example: `  # Cloudflare credentials from a file of KEY=VALUE lines
+  pmx pve cluster acme plugin create cf-dns --type dns --api cf --data-file cf.env
+
+  # The same lines from standard input
+  printf 'CF_Token=%s\nCF_Account_ID=%s\n' "$CF_TOKEN" "$CF_ACCOUNT_ID" |
+    pmx pve cluster acme plugin create cf-dns --type dns --api cf --data-file -
+
+  # The base64-encoded block from the macOS keychain or an environment variable
+  pmx pve cluster acme plugin create cf-dns --type dns --api cf --data keychain:pmx-acme/cf-dns
+  pmx pve cluster acme plugin create cf-dns --type dns --api cf --data '${ACME_DNS_DATA}'`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
 			fl := cmd.Flags()
+			encoded, haveData, err := cli.ResolveACMEPluginData(cmd, data, dataFile)
+			if err != nil {
+				return fmt.Errorf("create acme plugin %q: %w", id, err)
+			}
 			params := &pvecluster.CreateAcmePluginsParams{Id: id, Type: pluginType}
 			if fl.Changed("api") {
 				params.Api = &api
 			}
-			if fl.Changed("data") {
-				params.Data = &data
+			if haveData {
+				params.Data = &encoded
 			}
 			if fl.Changed("nodes") {
 				params.Nodes = &nodes
@@ -377,8 +393,8 @@ func newAcmePluginCreateCmd() *cobra.Command {
 	}
 	f := cmd.Flags()
 	f.StringVar(&pluginType, "type", "", "ACME challenge type, e.g. dns or standalone (required)")
-	f.StringVar(&api, "api", "", "DNS API provider name (dns-01 plugins)")
-	f.StringVar(&data, "data", "", "base64-encoded DNS plugin credential data (sensitive)")
+	f.StringVar(&api, "api", "", "DNS API provider id, such as cf for Cloudflare (dns-01 plugins)")
+	cli.RegisterACMEPluginDataFlags(cmd, &data, &dataFile, false)
 	f.StringVar(&nodes, "nodes", "", "comma-separated list of nodes the plugin applies to")
 	f.BoolVar(&disable, "disable", false, "create the plugin in a disabled state")
 	f.Int64Var(&valDelay, "validation-delay", 0, "seconds to wait before requesting validation")
@@ -390,6 +406,7 @@ func newAcmePluginSetCmd() *cobra.Command {
 	var (
 		api      string
 		data     string
+		dataFile string
 		nodes    string
 		disable  bool
 		valDelay int64
@@ -397,24 +414,33 @@ func newAcmePluginSetCmd() *cobra.Command {
 		del      string
 	)
 	cmd := &cobra.Command{
-		Use:     "set <id>",
-		Short:   "Update an ACME challenge plugin",
-		Long:    "Update an ACME challenge plugin. Only flags that are passed are changed.",
-		Example: `  pmx pve cluster acme plugin set my-dns --data '${ACME_DNS_DATA}'`,
-		Args:    cobra.ExactArgs(1),
+		Use:   "set <id>",
+		Short: "Update an ACME challenge plugin",
+		Long: "Update an ACME challenge plugin. Only flags that are passed are changed.\n\n" +
+			cli.ACMEPluginDataHelp,
+		Example: `  # Rotate the Cloudflare credentials from a file of KEY=VALUE lines
+  pmx pve cluster acme plugin set cf-dns --data-file cf.env
+
+  # Or from the macOS keychain, which holds the base64-encoded block
+  pmx pve cluster acme plugin set cf-dns --data keychain:pmx-acme/cf-dns`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
 			fl := cmd.Flags()
-			if !anyFlagChanged(fl, "api", "data", "nodes", "disable", "validation-delay", "delete") {
+			if !anyFlagChanged(fl, "api", "data", "data-file", "nodes", "disable", "validation-delay", "delete") {
 				return fmt.Errorf("no changes requested: pass at least one field flag")
+			}
+			encoded, haveData, err := cli.ResolveACMEPluginData(cmd, data, dataFile)
+			if err != nil {
+				return fmt.Errorf("update acme plugin %q: %w", id, err)
 			}
 			params := &pvecluster.UpdateAcmePluginsParams{}
 			if fl.Changed("api") {
 				params.Api = &api
 			}
-			if fl.Changed("data") {
-				params.Data = &data
+			if haveData {
+				params.Data = &encoded
 			}
 			if fl.Changed("nodes") {
 				params.Nodes = &nodes
@@ -439,8 +465,8 @@ func newAcmePluginSetCmd() *cobra.Command {
 		},
 	}
 	f := cmd.Flags()
-	f.StringVar(&api, "api", "", "DNS API provider name (dns-01 plugins)")
-	f.StringVar(&data, "data", "", "base64-encoded DNS plugin credential data (sensitive)")
+	f.StringVar(&api, "api", "", "DNS API provider id, such as cf for Cloudflare (dns-01 plugins)")
+	cli.RegisterACMEPluginDataFlags(cmd, &data, &dataFile, false)
 	f.StringVar(&nodes, "nodes", "", "comma-separated list of nodes the plugin applies to")
 	f.BoolVar(&disable, "disable", false, "disable the plugin")
 	f.Int64Var(&valDelay, "validation-delay", 0, "seconds to wait before requesting validation")

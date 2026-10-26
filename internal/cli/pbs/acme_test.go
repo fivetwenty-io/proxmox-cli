@@ -2,7 +2,10 @@ package pbs
 
 import (
 	"bytes"
+	"encoding/base64"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -331,7 +334,7 @@ func TestAcmePluginLs_ListsPluginsSortedByPlugin(t *testing.T) {
 
 	var rec recordedRequest
 	recordJSON(f, "GET /api2/json/config/acme/plugins", &rec, []map[string]any{
-		{"plugin": "zzz", "type": "dns", "api": "cloudflare"},
+		{"plugin": "zzz", "type": "dns", "api": "cf"},
 		{"plugin": "aaa", "type": "dns", "api": "route53", "validation-delay": 30},
 	})
 
@@ -381,14 +384,14 @@ func TestAcmePluginShow_RendersPlugin(t *testing.T) {
 
 	var rec recordedRequest
 	recordJSON(f, "GET /api2/json/config/acme/plugins/dns1", &rec, map[string]any{
-		"plugin": "dns1", "type": "dns", "api": "cloudflare", "data": "base64data",
+		"plugin": "dns1", "type": "dns", "api": "cf", "data": "base64data",
 	})
 
 	var buf bytes.Buffer
 	err := run(deps, &buf, newAcmePluginShowCmd(), "show", "dns1")
 	require.NoError(t, err)
 	require.Equal(t, "/api2/json/config/acme/plugins/dns1", rec.path)
-	require.Contains(t, buf.String(), "cloudflare")
+	require.Contains(t, buf.String(), "cf")
 }
 
 func TestAcmePluginShow_EmptyIDRejected(t *testing.T) {
@@ -429,7 +432,7 @@ func TestAcmePluginAdd_AuditAllFlags(t *testing.T) {
 	var buf bytes.Buffer
 	err := run(deps, &buf, newAcmePluginAddCmd(), "add", "dns1",
 		"--type", "dns",
-		"--api", "cloudflare",
+		"--api", "cf",
 		"--data", "ZG5zLWFwaS10b2tlbj1zM2NyM3Q=",
 		"--disable",
 		"--validation-delay", "30",
@@ -440,7 +443,7 @@ func TestAcmePluginAdd_AuditAllFlags(t *testing.T) {
 	want := map[string]string{
 		"id":               "dns1",
 		"type":             "dns",
-		"api":              "cloudflare",
+		"api":              "cf",
 		"data":             "ZG5zLWFwaS10b2tlbj1zM2NyM3Q=",
 		"disable":          "1",
 		"validation-delay": "30",
@@ -460,7 +463,7 @@ func TestAcmePluginAdd_OmitsUnsetOptionalFields(t *testing.T) {
 
 	var buf bytes.Buffer
 	err := run(deps, &buf, newAcmePluginAddCmd(), "add", "dns1",
-		"--type", "dns", "--api", "cloudflare", "--data", "ZGF0YQ==")
+		"--type", "dns", "--api", "cf", "--data", "ZGF0YQ==")
 	require.NoError(t, err)
 	require.Equal(t, "dns1", rec.form.Get("id"))
 
@@ -485,7 +488,7 @@ func TestAcmePluginAdd_EmptyIDRejected(t *testing.T) {
 
 	var buf bytes.Buffer
 	err := run(deps, &buf, newAcmePluginAddCmd(), "add", "",
-		"--type", "dns", "--api", "cloudflare", "--data", "ZGF0YQ==")
+		"--type", "dns", "--api", "cf", "--data", "ZGF0YQ==")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "must not be empty")
 }
@@ -500,7 +503,7 @@ func TestAcmePluginAdd_ServerErrorSurfaced(t *testing.T) {
 
 	var buf bytes.Buffer
 	err := run(deps, &buf, newAcmePluginAddCmd(), "add", "dns1",
-		"--type", "dns", "--api", "cloudflare", "--data", "ZGF0YQ==")
+		"--type", "dns", "--api", "cf", "--data", "ZGF0YQ==")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "already exists")
 }
@@ -884,4 +887,35 @@ func TestNewAcmeCmd_RegistersAllSubcommands(t *testing.T) {
 	require.NotNil(t, findSubcommand(t, findSubcommand(t, cmd, "challenge-schema"), "ls"))
 	require.NotNil(t, findSubcommand(t, findSubcommand(t, cmd, "directories"), "ls"))
 	require.NotNil(t, findSubcommand(t, findSubcommand(t, cmd, "tos"), "show"))
+}
+
+// TestAcmePluginAdd_DataFileEncodes verifies --data-file satisfies the data
+// requirement and sends the file's KEY=VALUE lines base64-encoded with padding.
+func TestAcmePluginAdd_DataFileEncodes(t *testing.T) {
+	f, pc := newFakeClient(t)
+	deps := depsFor(t, pc, output.FormatTable, false)
+
+	var rec recordedRequest
+	recordJSON(f, "POST /api2/json/config/acme/plugins", &rec, nil)
+
+	path := filepath.Join(t.TempDir(), "cf.env")
+	require.NoError(t, os.WriteFile(path, []byte("CF_Token=tok\n"), 0o600))
+
+	var buf bytes.Buffer
+	err := run(deps, &buf, newAcmePluginAddCmd(), "add", "cf-dns",
+		"--type", "dns", "--api", "cf", "--data-file", path)
+	require.NoError(t, err)
+	require.Equal(t, base64.StdEncoding.EncodeToString([]byte("CF_Token=tok")), rec.form.Get("data"))
+}
+
+// TestAcmePluginAdd_RequiresDataOrDataFile verifies add refuses to run with
+// neither credential flag.
+func TestAcmePluginAdd_RequiresDataOrDataFile(t *testing.T) {
+	_, pc := newFakeClient(t)
+	deps := depsFor(t, pc, output.FormatTable, false)
+
+	var buf bytes.Buffer
+	err := run(deps, &buf, newAcmePluginAddCmd(), "add", "cf-dns", "--type", "dns", "--api", "cf")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "data-file")
 }

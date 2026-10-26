@@ -29,3 +29,13 @@ func SetShutdownJumps(f func(time.Duration)) (restore func()) {
 
 	return func() { shutdownJumps = orig }
 }
+
+// SetACMESecretResolver replaces the resolver ResolveACMEPluginData uses for
+// ${NAME} and keychain:PATH references, and returns a function that restores
+// the original.
+func SetACMESecretResolver(f func(string) (string, error)) (restore func()) {
+	orig := resolveACMESecretRef
+	resolveACMESecretRef = f
+
+	return func() { resolveACMESecretRef = orig }
+}

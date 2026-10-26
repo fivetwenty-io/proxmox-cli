@@ -858,7 +858,7 @@ def _defers(ctx: Ctx) -> None:
     ctx.defer("acme account delete", "deactivates the account at the certificate authority; covered by unit tests",
               "pmx pbs acme account delete pmx-cli-acme --yes")
     ctx.defer("acme plugin add", "creates an ACME challenge plugin (stores API credentials); covered by unit tests",
-              "pmx pbs acme plugin add pmx-cli-dns --type dns --api cloudflare")
+              "pmx pbs acme plugin add pmx-cli-dns --type dns --api cf --data-file cf.env")
     ctx.defer("acme plugin update", "modifies an ACME challenge plugin; covered by unit tests",
               "pmx pbs acme plugin update pmx-cli-dns --disable")
     ctx.defer("acme plugin delete", "removes an ACME challenge plugin; covered by unit tests",

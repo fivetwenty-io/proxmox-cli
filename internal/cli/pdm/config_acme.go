@@ -481,16 +481,18 @@ func newConfigAcmePluginShowCmd() *cobra.Command {
 type acmePluginArgs struct {
 	api             string
 	data            string
+	dataFile        string
 	disable         bool
 	validationDelay int64
 }
 
 // registerAcmePluginArgs binds the plugin attribute flags shared by add and
-// update onto cmd.
-func registerAcmePluginArgs(cmd *cobra.Command, a *acmePluginArgs) {
+// update onto cmd. dataRequired makes one of --data and --data-file
+// mandatory, which add needs and update does not.
+func registerAcmePluginArgs(cmd *cobra.Command, a *acmePluginArgs, dataRequired bool) {
 	f := cmd.Flags()
-	f.StringVar(&a.api, "api", "", "DNS API plugin ID")
-	f.StringVar(&a.data, "data", "", "DNS plugin configuration data, base64-encoded with padding")
+	f.StringVar(&a.api, "api", "", "DNS API plugin id, such as cf for Cloudflare")
+	cli.RegisterACMEPluginDataFlags(cmd, &a.data, &a.dataFile, dataRequired)
 	f.BoolVar(&a.disable, "disable", false, "disable this plugin configuration")
 	f.Int64Var(&a.validationDelay, "validation-delay", 0,
 		"extra seconds to wait before requesting validation, to cope with long DNS record TTLs")
@@ -507,18 +509,35 @@ func newConfigAcmePluginAddCmd() *cobra.Command {
 		Use:   "add <id>",
 		Short: "Create an ACME challenge plugin",
 		Long: "Create a new ACME DNS challenge-plugin configuration (POST " +
-			"/config/acme/plugins). --type, --api, and --data are required.",
-		Example: `  pmx pdm config acme plugin add cf-dns --type dns --api cf --data '${ACME_PLUGIN_DATA}'`,
-		Args:    cobra.ExactArgs(1),
+			"/config/acme/plugins). --type, --api, and one of --data-file or --data are required.\n\n" +
+			cli.ACMEPluginDataHelp,
+		Example: `  # Cloudflare credentials from a file of KEY=VALUE lines
+  pmx pdm config acme plugin add cf-dns --type dns --api cf --data-file cf.env
+
+  # The same lines from standard input
+  printf 'CF_Token=%s\nCF_Account_ID=%s\n' "$CF_TOKEN" "$CF_ACCOUNT_ID" |
+    pmx pdm config acme plugin add cf-dns --type dns --api cf --data-file -
+
+  # The base64-encoded block from the macOS keychain
+  pmx pdm config acme plugin add cf-dns --type dns --api cf --data keychain:pmx-acme/cf-dns`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
+
+			data, haveData, err := cli.ResolveACMEPluginData(cmd, a.data, a.dataFile)
+			if err != nil {
+				return fmt.Errorf("create acme plugin %q: %w", id, err)
+			}
+			if !haveData {
+				return fmt.Errorf("one of --data-file or --data is required")
+			}
 
 			params := &pdmconfig.CreateAcmePluginsParams{
 				Id:   id,
 				Type: pluginTy,
 				Api:  a.api,
-				Data: a.data,
+				Data: data,
 			}
 
 			fl := cmd.Flags()
@@ -529,7 +548,7 @@ func newConfigAcmePluginAddCmd() *cobra.Command {
 				params.ValidationDelay = new(a.validationDelay)
 			}
 
-			err := deps.PDM.Config.CreateAcmePlugins(cmd.Context(), params)
+			err = deps.PDM.Config.CreateAcmePlugins(cmd.Context(), params)
 			if err != nil {
 				return fmt.Errorf("create acme plugin %q: %w", id, err)
 			}
@@ -539,10 +558,9 @@ func newConfigAcmePluginAddCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&pluginTy, "type", "", "ACME challenge plugin type, e.g. 'dns' (required)")
-	registerAcmePluginArgs(cmd, &a)
+	registerAcmePluginArgs(cmd, &a, true)
 	cli.MustMarkRequired(cmd, "type")
 	cli.MustMarkRequired(cmd, "api")
-	cli.MustMarkRequired(cmd, "data")
 	return cmd
 }
 
@@ -561,8 +579,9 @@ func newConfigAcmePluginUpdateCmd() *cobra.Command {
 		Long: "Update an existing ACME DNS challenge-plugin configuration (PUT " +
 			"/config/acme/plugins/{id}). Only flags explicitly set are sent; use " +
 			"--delete to reset properties to their default instead. The plugin's " +
-			"--type cannot be changed after creation.",
-		Example: `  pmx pdm config acme plugin update cf-dns --validation-delay 30
+			"--type cannot be changed after creation.\n\n" + cli.ACMEPluginDataHelp,
+		Example: `  pmx pdm config acme plugin update cf-dns --data-file cf.env
+  pmx pdm config acme plugin update cf-dns --validation-delay 30
   pmx pdm config acme plugin update cf-dns --disable`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -580,12 +599,17 @@ func newConfigAcmePluginUpdateCmd() *cobra.Command {
 				}
 			}
 
+			data, haveData, err := cli.ResolveACMEPluginData(cmd, a.data, a.dataFile)
+			if err != nil {
+				return fmt.Errorf("update acme plugin %q: %w", id, err)
+			}
+
 			params := &pdmconfig.UpdateAcmePluginsParams{}
 			if fl.Changed("api") {
 				params.Api = new(a.api)
 			}
-			if fl.Changed("data") {
-				params.Data = new(a.data)
+			if haveData {
+				params.Data = new(data)
 			}
 			if fl.Changed("disable") {
 				params.Disable = new(a.disable)
@@ -600,7 +624,7 @@ func newConfigAcmePluginUpdateCmd() *cobra.Command {
 				params.Delete = del
 			}
 
-			err := deps.PDM.Config.UpdateAcmePlugins(cmd.Context(), id, params)
+			err = deps.PDM.Config.UpdateAcmePlugins(cmd.Context(), id, params)
 			if err != nil {
 				return fmt.Errorf("update acme plugin %q: %w", id, err)
 			}
@@ -609,7 +633,7 @@ func newConfigAcmePluginUpdateCmd() *cobra.Command {
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
-	registerAcmePluginArgs(cmd, &a)
+	registerAcmePluginArgs(cmd, &a, false)
 	cmd.Flags().StringVar(&digest, "digest", "", "only update if the current config digest matches")
 	cmd.Flags().StringArrayVar(&del, "delete", nil, "property name to reset to its default (repeatable)")
 	return cmd

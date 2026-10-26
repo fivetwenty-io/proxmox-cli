@@ -3,6 +3,8 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -50,13 +52,21 @@ func rawNormalizePath(path string) (string, error) {
 
 // rawParamsFromData parses repeated --data/-d KEY=VALUE flag values into the
 // map[string]interface{} shape pve.Client's GetCtx/PostCtx/PutCtx/DeleteCtx
-// methods accept. It returns a nil map (not an empty one) when data is empty
-// so the underlying request carries no body/query parameters at all, matching
-// what every generated binding does for a parameter-less call. Malformed
-// entries (no "=", empty key, or a key repeated in the same invocation) are
+// methods accept. An entry of the form @PATH, or @- for standard input,
+// stands for the KEY=VALUE lines of that file (see rawExpandDataFiles), so a
+// credential can reach the request without passing through argv. It returns
+// a nil map (not an empty one) when data is empty so the underlying request
+// carries no body/query parameters at all, matching what every generated
+// binding does for a parameter-less call. Malformed entries (no "=", empty
+// key, or a key repeated in the same invocation, across files included) are
 // rejected by the shared cli.ParseKeyValues parser.
-func rawParamsFromData(data []string) (map[string]any, error) {
-	kvs, err := cli.ParseKeyValues(data)
+func rawParamsFromData(data []string, stdin io.Reader) (map[string]any, error) {
+	expanded, err := rawExpandDataFiles(data, stdin)
+	if err != nil {
+		return nil, err
+	}
+
+	kvs, err := cli.ParseKeyValues(expanded)
 	if err != nil {
 		return nil, err
 	}
@@ -71,6 +81,101 @@ func rawParamsFromData(data []string) (map[string]any, error) {
 	}
 
 	return params, nil
+}
+
+// rawMaxDataFileBytes bounds what one -d @PATH reads, so a mistaken path such
+// as /dev/zero cannot read forever.
+const rawMaxDataFileBytes = 1 << 20
+
+// rawExpandDataFiles replaces every -d entry that starts with "@" by the
+// KEY=VALUE lines of the file it names, reading standard input for "@-",
+// in the style of curl's -d @file. No Proxmox parameter name starts with
+// "@", so no entry that worked before changes meaning. Blank lines and lines
+// starting with "#" are skipped, a trailing "\r" is dropped, and every other
+// line must hold "=" after a non-empty key. Errors name the file and line
+// number but never quote a line, because the point of a file is to keep
+// its values off the terminal and out of the log.
+func rawExpandDataFiles(data []string, stdin io.Reader) ([]string, error) {
+	out := make([]string, 0, len(data))
+	stdinRead := false
+
+	for _, entry := range data {
+		ref, isFile := strings.CutPrefix(entry, "@")
+		if !isFile {
+			out = append(out, entry)
+			continue
+		}
+
+		lines, err := rawReadDataFile(ref, stdin, &stdinRead)
+		if err != nil {
+			return nil, err
+		}
+
+		out = append(out, lines...)
+	}
+
+	return out, nil
+}
+
+// rawReadDataFile reads the KEY=VALUE lines of one -d @ref entry.
+func rawReadDataFile(ref string, stdin io.Reader, stdinRead *bool) ([]string, error) {
+	var (
+		src    io.Reader
+		source string
+	)
+
+	switch ref {
+	case "":
+		return nil, fmt.Errorf("-d @: name a file, or use @- for standard input")
+	case "-":
+		if *stdinRead {
+			return nil, fmt.Errorf("-d @-: standard input can only be read once")
+		}
+
+		if stdin == nil {
+			return nil, fmt.Errorf("-d @-: no standard input to read")
+		}
+
+		*stdinRead = true
+		src, source = stdin, "standard input"
+	default:
+		f, err := os.Open(ref) //nolint:gosec // operator-supplied parameter file
+		if err != nil {
+			return nil, fmt.Errorf("-d @%s: %w", ref, err)
+		}
+		defer func() { _ = f.Close() }()
+
+		src, source = f, ref
+	}
+
+	raw, err := io.ReadAll(io.LimitReader(src, rawMaxDataFileBytes+1))
+	if err != nil {
+		return nil, fmt.Errorf("-d @%s: read %s: %w", ref, source, err)
+	}
+
+	if len(raw) > rawMaxDataFileBytes {
+		return nil, fmt.Errorf("-d @%s: %s is larger than %d bytes", ref, source, rawMaxDataFileBytes)
+	}
+
+	var lines []string
+
+	for i, line := range strings.Split(string(raw), "\n") {
+		line = strings.TrimSuffix(line, "\r")
+		trimmed := strings.TrimSpace(line)
+
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+
+		key, _, ok := strings.Cut(line, "=")
+		if !ok || strings.TrimSpace(key) == "" {
+			return nil, fmt.Errorf("-d @%s: line %d of %s is not KEY=VALUE", ref, i+1, source)
+		}
+
+		lines = append(lines, line)
+	}
+
+	return lines, nil
 }
 
 // newRawGetCmd builds `pmx api get <path>`.
@@ -97,7 +202,7 @@ func newRawGetCmd() *cobra.Command {
 				return err
 			}
 
-			params, err := rawParamsFromData(data)
+			params, err := rawParamsFromData(data, cmd.InOrStdin())
 			if err != nil {
 				return err
 			}
@@ -110,7 +215,7 @@ func newRawGetCmd() *cobra.Command {
 			return rawRender(cmd, deps, "GET", path, resp)
 		},
 	}
-	cmd.Flags().StringArrayVarP(&data, "data", "d", nil, "query parameter as KEY=VALUE (repeatable)")
+	cmd.Flags().StringArrayVarP(&data, "data", "d", nil, "query parameter as KEY=VALUE, or @FILE / @- for KEY=VALUE lines from a file or stdin (repeatable)")
 	return cmd
 }
 
@@ -122,9 +227,14 @@ func newRawPostCmd() *cobra.Command {
 		Short: "Issue a raw POST request",
 		Long: "Issue a POST request to an arbitrary API path against the active context's " +
 			"Proxmox VE or Proxmox Backup Server API, sending any --data KEY=VALUE pairs as the " +
-			"form-encoded request body.",
+			"form-encoded request body. --data @FILE reads KEY=VALUE lines from a file, and " +
+			"--data @- reads them from standard input, which keeps a secret out of argv.",
 		Example: `  pmx api post /nodes/pve1/lxc/200/status/start
-  pmx api post /access/users -d userid=alice@pve -d password='${PMX_PASSWORD}'`,
+  pmx api post /access/users -d userid=alice@pve -d password="$PMX_PASSWORD"
+
+  # Keep a secret out of argv: read KEY=VALUE lines from a file or stdin
+  printf 'data=%s\n' "$(base64 < cf.env | tr -d '\n')" |
+    pmx api post /cluster/acme/plugins -d id=cf-dns -d type=dns -d api=cf -d @-`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -134,7 +244,7 @@ func newRawPostCmd() *cobra.Command {
 				return err
 			}
 
-			params, err := rawParamsFromData(data)
+			params, err := rawParamsFromData(data, cmd.InOrStdin())
 			if err != nil {
 				return err
 			}
@@ -147,7 +257,7 @@ func newRawPostCmd() *cobra.Command {
 			return rawRender(cmd, deps, "POST", path, resp)
 		},
 	}
-	cmd.Flags().StringArrayVarP(&data, "data", "d", nil, "request parameter as KEY=VALUE (repeatable)")
+	cmd.Flags().StringArrayVarP(&data, "data", "d", nil, "request parameter as KEY=VALUE, or @FILE / @- for KEY=VALUE lines from a file or stdin (repeatable)")
 	return cmd
 }
 
@@ -159,7 +269,8 @@ func newRawPutCmd() *cobra.Command {
 		Short: "Issue a raw PUT request",
 		Long: "Issue a PUT request to an arbitrary API path against the active context's " +
 			"Proxmox VE or Proxmox Backup Server API, sending any --data KEY=VALUE pairs as the " +
-			"form-encoded request body.",
+			"form-encoded request body. --data @FILE reads KEY=VALUE lines from a file, and " +
+			"--data @- reads them from standard input, which keeps a secret out of argv.",
 		Example: `  pmx api put /nodes/pve1/lxc/200/config -d cores=4
   pmx api put /access/domains/pve -d comment='local realm'`,
 		Args: cobra.ExactArgs(1),
@@ -171,7 +282,7 @@ func newRawPutCmd() *cobra.Command {
 				return err
 			}
 
-			params, err := rawParamsFromData(data)
+			params, err := rawParamsFromData(data, cmd.InOrStdin())
 			if err != nil {
 				return err
 			}
@@ -184,7 +295,7 @@ func newRawPutCmd() *cobra.Command {
 			return rawRender(cmd, deps, "PUT", path, resp)
 		},
 	}
-	cmd.Flags().StringArrayVarP(&data, "data", "d", nil, "request parameter as KEY=VALUE (repeatable)")
+	cmd.Flags().StringArrayVarP(&data, "data", "d", nil, "request parameter as KEY=VALUE, or @FILE / @- for KEY=VALUE lines from a file or stdin (repeatable)")
 	return cmd
 }
 
@@ -211,7 +322,7 @@ func newRawDeleteCmd() *cobra.Command {
 				return err
 			}
 
-			params, err := rawParamsFromData(data)
+			params, err := rawParamsFromData(data, cmd.InOrStdin())
 			if err != nil {
 				return err
 			}
@@ -224,7 +335,7 @@ func newRawDeleteCmd() *cobra.Command {
 			return rawRender(cmd, deps, "DELETE", path, resp)
 		},
 	}
-	cmd.Flags().StringArrayVarP(&data, "data", "d", nil, "query parameter as KEY=VALUE (repeatable)")
+	cmd.Flags().StringArrayVarP(&data, "data", "d", nil, "query parameter as KEY=VALUE, or @FILE / @- for KEY=VALUE lines from a file or stdin (repeatable)")
 	return cmd
 }
 

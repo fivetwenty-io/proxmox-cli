@@ -2,8 +2,11 @@ package cluster
 
 import (
 	"bytes"
+	"encoding/base64"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -406,4 +409,69 @@ func TestAcmeCommandTree(t *testing.T) {
 	for _, v := range []string{"list", "get", "create", "set", "delete"} {
 		require.Containsf(t, childCommands(plugin), v, "acme plugin must have a %s command", v)
 	}
+}
+
+// TestAcmePlugin_CreateDataFileEncodes verifies --data-file sends the file's
+// KEY=VALUE lines base64-encoded, the form the API stores.
+func TestAcmePlugin_CreateDataFileEncodes(t *testing.T) {
+	f, ac := newFakeClient(t)
+	var gotForm url.Values
+	f.HandleFunc("POST /api2/json/cluster/acme/plugins", func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		gotForm = r.Form
+		testhelper.WriteData(w, nil)
+	})
+
+	path := filepath.Join(t.TempDir(), "cf.env")
+	require.NoError(t, os.WriteFile(path, []byte("CF_Token=tok\nCF_Account_ID=acct\n"), 0o600))
+
+	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
+
+	var buf bytes.Buffer
+	require.NoError(t, run(deps, &buf, "acme", "plugin", "create", "cf-dns",
+		"--type", "dns", "--api", "cf", "--data-file", path))
+	require.Equal(t, base64.StdEncoding.EncodeToString([]byte("CF_Token=tok\nCF_Account_ID=acct")),
+		gotForm.Get("data"))
+}
+
+// TestAcmePlugin_SetDataEnvReference verifies set resolves a ${VAR} --data
+// reference instead of sending the reference text, which the help example
+// once implied it did.
+func TestAcmePlugin_SetDataEnvReference(t *testing.T) {
+	f, ac := newFakeClient(t)
+	var gotForm url.Values
+	f.HandleFunc("PUT /api2/json/cluster/acme/plugins/cf-dns", func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		gotForm = r.Form
+		testhelper.WriteData(w, nil)
+	})
+	t.Setenv("PMX_TEST_ACME_DNS_DATA", "Q0ZfVG9rZW49eA==")
+
+	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
+
+	var buf bytes.Buffer
+	require.NoError(t, run(deps, &buf, "acme", "plugin", "set", "cf-dns", "--data", "${PMX_TEST_ACME_DNS_DATA}"))
+	require.Equal(t, "Q0ZfVG9rZW49eA==", gotForm.Get("data"))
+}
+
+// TestAcmePlugin_CreateRejectsPlaintextData verifies plaintext passed to
+// --data fails before any request, without echoing the credential.
+func TestAcmePlugin_CreateRejectsPlaintextData(t *testing.T) {
+	f, ac := newFakeClient(t)
+	called := false
+	f.HandleFunc("POST /api2/json/cluster/acme/plugins", func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		testhelper.WriteData(w, nil)
+	})
+
+	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
+
+	var buf bytes.Buffer
+	err := run(deps, &buf, "acme", "plugin", "create", "cf-dns",
+		"--type", "dns", "--api", "cf", "--data", "CF_Token=plaintext-secret")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "not base64-encoded")
+	require.NotContains(t, err.Error(), "plaintext-secret")
+	require.NotContains(t, buf.String(), "plaintext-secret")
+	require.False(t, called)
 }

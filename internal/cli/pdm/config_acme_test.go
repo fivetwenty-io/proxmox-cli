@@ -2,8 +2,11 @@ package pdm
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -603,4 +606,21 @@ func TestNewConfigAcmeCmd_RegistersAllSubcommands(t *testing.T) {
 	for _, want := range []string{"account", "plugin", "directories", "challenge-schema", "tos"} {
 		require.True(t, names[want], "expected `acme %s` to be registered", want)
 	}
+}
+
+// TestConfigAcmePluginUpdate_DataFileEncodes verifies update sends the
+// --data-file lines base64-encoded.
+func TestConfigAcmePluginUpdate_DataFileEncodes(t *testing.T) {
+	f, pc := newFakeClient(t)
+	var rec recordedRequest
+	recordJSON(f, "PUT "+acmePluginsPath+"/cf-dns", &rec, nil)
+
+	path := filepath.Join(t.TempDir(), "cf.env")
+	require.NoError(t, os.WriteFile(path, []byte("CF_Token=tok\r\nCF_Zone_ID=zone\r\n"), 0o600))
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newConfigAcmePluginCmd(), "plugin", "update", "cf-dns", "--data-file", path)
+	require.NoError(t, err)
+	require.Equal(t, base64.StdEncoding.EncodeToString([]byte("CF_Token=tok\nCF_Zone_ID=zone")), rec.form.Get("data"))
 }

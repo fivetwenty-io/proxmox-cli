@@ -5,7 +5,10 @@ import (
 	"context"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 
 	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
@@ -565,13 +568,83 @@ func TestRawNormalizePath(t *testing.T) {
 }
 
 func TestRawParamsFromData_EmptyReturnsNilMap(t *testing.T) {
-	params, err := rawParamsFromData(nil)
+	params, err := rawParamsFromData(nil, nil)
 	require.NoError(t, err)
 	require.Nil(t, params)
 }
 
 func TestRawParamsFromData_BuildsMap(t *testing.T) {
-	params, err := rawParamsFromData([]string{"a=1", "b=two"})
+	params, err := rawParamsFromData([]string{"a=1", "b=two"}, nil)
 	require.NoError(t, err)
 	require.Equal(t, map[string]any{"a": "1", "b": "two"}, params)
+}
+
+// ---------------------------------------------------------------------------
+// -d @FILE and -d @-
+// ---------------------------------------------------------------------------
+
+func TestRawParamsFromData_FileAndStdin(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "params")
+	require.NoError(t, os.WriteFile(path,
+		[]byte("# plugin\r\nid=cf-dns\r\n\r\ntype=dns\r\n"), 0o600))
+
+	params, err := rawParamsFromData(
+		[]string{"api=cf", "@" + path, "@-"},
+		strings.NewReader("data=Q0ZfVG9rZW49eA==\n"))
+	require.NoError(t, err)
+	require.Equal(t, map[string]any{
+		"api": "cf", "id": "cf-dns", "type": "dns", "data": "Q0ZfVG9rZW49eA==",
+	}, params)
+}
+
+func TestRawParamsFromData_FileErrors(t *testing.T) {
+	dir := t.TempDir()
+	bad := filepath.Join(dir, "bad")
+	require.NoError(t, os.WriteFile(bad, []byte("id=ok\nsecret-without-a-key\n"), 0o600))
+
+	_, err := rawParamsFromData([]string{"@" + bad}, nil)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "line 2")
+	require.NotContains(t, err.Error(), "secret-without-a-key", "a file line must never be quoted")
+
+	_, err = rawParamsFromData([]string{"@-", "@-"}, strings.NewReader("a=1\n"))
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "only be read once")
+
+	_, err = rawParamsFromData([]string{"@"}, nil)
+	require.Error(t, err)
+
+	_, err = rawParamsFromData([]string{"@" + filepath.Join(dir, "missing")}, nil)
+	require.Error(t, err)
+
+	dup := filepath.Join(dir, "dup")
+	require.NoError(t, os.WriteFile(dup, []byte("id=a\n"), 0o600))
+	_, err = rawParamsFromData([]string{"id=b", "@" + dup}, nil)
+	require.Error(t, err, "a key set on the command line and in a file is a duplicate")
+}
+
+func TestAPIRawPost_DataFromStdin(t *testing.T) {
+	f, ac := newFakePVEClient(t)
+	deps := pveDepsFor(ac, output.FormatTable)
+
+	var gotData, gotID string
+	f.HandleFunc("POST /api2/json/cluster/acme/plugins", func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		gotData = r.PostFormValue("data")
+		gotID = r.PostFormValue("id")
+		testhelper.WriteData(w, nil)
+	})
+
+	cmd := &cobra.Command{Use: "api"}
+	cmd.AddCommand(newRawPostCmd())
+	cmd.SetContext(cli.WithDeps(context.Background(), deps))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	cmd.SetIn(strings.NewReader("data=Q0ZfVG9rZW49eA==\n"))
+	cmd.SetArgs([]string{"post", "/cluster/acme/plugins", "-d", "id=cf-dns", "-d", "@-"})
+
+	require.NoError(t, cmd.Execute())
+	require.Equal(t, "cf-dns", gotID)
+	require.Equal(t, "Q0ZfVG9rZW49eA==", gotData)
 }
