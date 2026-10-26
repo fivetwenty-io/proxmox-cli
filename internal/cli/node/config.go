@@ -2,6 +2,7 @@ package node
 
 import (
 	"fmt"
+	"net/url"
 
 	"github.com/spf13/cobra"
 
@@ -46,6 +47,20 @@ func newNodeConfigDescribeCmd() *cobra.Command {
 	})
 }
 
+// nodeConfigPath is the API path of a node's configuration.
+func nodeConfigPath(node string) string {
+	return "/nodes/" + url.PathEscape(node) + "/config"
+}
+
+// newNodeConfigGetCmd builds `pmx pve node config get`.
+//
+// The raw API response is read directly (deps.API.Raw.GetCtx) instead of
+// through nodes.ListConfig because the generated ListConfigResponse cannot
+// represent the indexed ACME domain keys: its field for them is tagged with
+// the literal placeholder json:"acmedomain[n]", which never matches a real
+// key such as "acmedomain0", so decoding into it silently drops every
+// configured ACME domain. Keys the struct does not know about at all would
+// be lost the same way.
 func newNodeConfigGetCmd() *cobra.Command {
 	var (
 		property     string
@@ -65,11 +80,11 @@ func newNodeConfigGetCmd() *cobra.Command {
 			if err := requireNode(deps); err != nil {
 				return err
 			}
-			params := &nodes.ListConfigParams{}
+			params := map[string]any{}
 			if cmd.Flags().Changed("property") {
-				params.Property = &property
+				params["property"] = property
 			}
-			resp, err := deps.API.Nodes.ListConfig(cmd.Context(), deps.Node, params)
+			resp, err := deps.API.Raw.GetCtx(cmd.Context(), nodeConfigPath(deps.Node), params)
 			if err != nil {
 				return fmt.Errorf("get config for node %q: %w", deps.Node, err)
 			}

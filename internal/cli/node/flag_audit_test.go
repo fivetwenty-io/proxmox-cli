@@ -190,6 +190,50 @@ func TestNodeConfigGet(t *testing.T) {
 	require.Contains(t, buf.String(), "hypervisor 1")
 }
 
+// TestNodeConfigGet_KeepsACMEDomains guards the indexed acmedomainN keys,
+// which the generated response struct cannot represent and used to drop, in
+// every output format.
+func TestNodeConfigGet_KeepsACMEDomains(t *testing.T) {
+	payload := map[string]any{
+		"acme":        "account=default",
+		"acmedomain0": "domain=pve1.example.com,plugin=cf-dns",
+		"acmedomain4": "domain=alt.example.com,plugin=cf-dns,alias=_acme.example.net",
+		"wakeonlan":   "aa:bb:cc:dd:ee:ff",
+	}
+
+	for _, format := range []output.Format{output.FormatTable, output.FormatJSON, output.FormatYAML} {
+		t.Run(string(format), func(t *testing.T) {
+			f := testhelper.NewFakePVE(t)
+			var rec recordedRequest
+			recordOn(f, "GET /api2/json/nodes/pve1/config", &rec, payload)
+
+			root, buf, prefix := newNodeRoot(t, f, format, exec.Fake())
+			root.SetArgs(append(prefix, "--node", "pve1", "node", "config", "get"))
+
+			require.NoError(t, root.Execute())
+			for _, want := range []string{
+				"acmedomain0", "domain=pve1.example.com,plugin=cf-dns",
+				"acmedomain4", "alias=_acme.example.net", "account=default",
+			} {
+				require.Contains(t, buf.String(), want)
+			}
+		})
+	}
+}
+
+func TestNodeConfigGet_ForwardsProperty(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	recordOn(f, "GET /api2/json/nodes/pve1/config", &rec, map[string]any{"acmedomain0": "domain=pve1.example.com"})
+
+	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "config", "get", "--property", "acmedomain0"))
+
+	require.NoError(t, root.Execute())
+	require.Equal(t, "property=acmedomain0", rec.query)
+	require.Contains(t, buf.String(), "domain=pve1.example.com")
+}
+
 func TestNodeConfigSet_Flags(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec recordedRequest
