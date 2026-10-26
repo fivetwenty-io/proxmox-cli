@@ -23,11 +23,13 @@ var trustTestPin = strings.TrimSuffix(strings.Repeat("AB:", 32), ":")
 
 const trustTestUPID = "UPID:pve1:00000001:00000002:AABBCCDD:acmeordercert::root@pam:"
 
-// trustFake serves an ACME order and renewal on pve1 and pve2 and a cluster
-// status in which servingNode answers the API.
+// trustFake serves an ACME order and renewal on pve1 and pve2, a cluster
+// status in which servingNode answers the API, and a pve1 config whose ACME
+// domain is localhost.
 func trustFake(t *testing.T, servingNode string) *testhelper.FakePVE {
 	t.Helper()
 	f := testhelper.NewFakePVE(t)
+	f.HandleJSON("GET /api2/json/nodes/pve1/config", map[string]any{"acmedomain0": "localhost,plugin=cf-dns"})
 	f.HandleJSON("GET /api2/json/cluster/status", []any{
 		map[string]any{"type": "cluster", "name": "lab", "quorate": 1},
 		map[string]any{"type": "node", "name": "pve1", "ip": "192.168.1.10", "local": boolInt(servingNode == "pve1")},
@@ -53,10 +55,19 @@ func boolInt(b bool) int {
 }
 
 // runTrustCmd runs args through a root whose single context "lab" points at
-// f with the given TLS block, and returns stdout and stderr apart.
+// f by the name localhost, which trustFake configures as pve1's ACME domain,
+// with the given TLS block, and returns stdout and stderr apart.
 func runTrustCmd(t *testing.T, f *testhelper.FakePVE, tls config.TLSBlock, env map[string]string, args ...string) (
 	string, string, error,
 ) {
+	t.Helper()
+	return runTrustCmdHost(t, f, "localhost", tls, env, args...)
+}
+
+// runTrustCmdHost is runTrustCmd with the context's host spelled as host.
+func runTrustCmdHost(
+	t *testing.T, f *testhelper.FakePVE, host string, tls config.TLSBlock, env map[string]string, args ...string,
+) (string, string, error) {
 	t.Helper()
 	t.Setenv("PMX_CONTEXT", "")
 	t.Setenv("PMX_NODE", "")
@@ -68,7 +79,7 @@ func runTrustCmd(t *testing.T, f *testhelper.FakePVE, tls config.TLSBlock, env m
 		t.Setenv(k, v)
 	}
 
-	host, portStr, err := net.SplitHostPort(f.Server.Listener.Addr().String())
+	_, portStr, err := net.SplitHostPort(f.Server.Listener.Addr().String())
 	require.NoError(t, err)
 	port, err := strconv.Atoi(portStr)
 	require.NoError(t, err)
@@ -190,4 +201,46 @@ func TestACMETrustHint_OverridePin(t *testing.T) {
 		map[string]string{"PMX_API_FINGERPRINT": trustTestPin}, orderPVE1...)
 	require.NoError(t, err)
 	require.Contains(t, stderr, "unset PMX_API_FINGERPRINT before the next command")
+}
+
+func TestACMETrustHint_IPHostSwitchesToACMEDomain(t *testing.T) {
+	f := trustFake(t, "pve1")
+	f.HandleJSON("GET /api2/json/nodes/pve1/config", map[string]any{
+		"acmedomain0": "*.example.com,plugin=cf-dns",
+		"acmedomain1": "pve1.example.com,plugin=cf-dns",
+		"acmedomain2": "alt.example.com,plugin=cf-dns",
+	})
+
+	_, stderr, err := runTrustCmdHost(t, f, "127.0.0.1", config.TLSBlock{Fingerprint: trustTestPin}, nil, orderPVE1...)
+	require.NoError(t, err)
+
+	require.Contains(t, stderr, "The context's host 127.0.0.1 is an IP address")
+	require.Contains(t, stderr, "a pin on it breaks at every renewal")
+	require.Contains(t, stderr, `pmx context update lab --host pve1.example.com --fingerprint ""`,
+		"the first domain that is not a wildcard becomes the host")
+	require.Contains(t, stderr, "pmx context validate lab --connect")
+	require.Contains(t, stderr, "Any other domain the certificate names works too: alt.example.com.")
+	require.NotContains(t, stderr, "Trusting the system CAs keeps working", "the IP host needs the switch")
+}
+
+func TestACMETrustHint_IPHostWithoutKnownDomain(t *testing.T) {
+	f := trustFake(t, "pve1")
+	f.HandleFunc("GET /api2/json/nodes/pve1/config", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteError(w, http.StatusForbidden, "Permission check failed (/, Sys.Audit)")
+	})
+
+	_, stderr, err := runTrustCmdHost(t, f, "127.0.0.1", config.TLSBlock{Tofu: true}, nil, orderPVE1...)
+	require.NoError(t, err)
+	require.Contains(t, stderr, "pmx context update lab --host <acme-domain> --tofu=false")
+	require.Contains(t, stderr, "Use a domain the certificate was ordered for")
+}
+
+func TestACMETrustHint_NameHostNotCovered(t *testing.T) {
+	f := trustFake(t, "pve1")
+	f.HandleJSON("GET /api2/json/nodes/pve1/config", map[string]any{"acmedomain0": "pve1.example.com"})
+
+	_, stderr, err := runTrustCmd(t, f, config.TLSBlock{Fingerprint: trustTestPin}, nil, orderPVE1...)
+	require.NoError(t, err)
+	require.Contains(t, stderr, "The context's host localhost is not one of the node's ACME domains (pve1.example.com)")
+	require.Contains(t, stderr, `pmx context update lab --host pve1.example.com --fingerprint ""`)
 }

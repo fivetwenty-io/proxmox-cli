@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -26,7 +27,9 @@ const sourceContextFingerprint = "tls.fingerprint"
 const acmeTrustHelp = "A context that pins the API certificate's fingerprint, verifies it against a " +
 	"private CA bundle, or trusts it on first use rejects the new certificate. When the node " +
 	"serves the invoking context's API, a hint on stderr shows the context update command that " +
-	"switches the context to the system CAs."
+	"switches the context to the system CAs. When the context's host is an IP address, which an ACME " +
+	"certificate never names, or a name the certificate does not cover, the command also points the " +
+	"context at the node's ACME domain."
 
 // acmeTrustPlan records, before an ACME order or renewal replaces a node's
 // certificate, how the invoking context and command verify that
@@ -51,6 +54,17 @@ type acmeTrustPlan struct {
 	// servingNode is the node that answers the API for this connection, and
 	// is empty when it could not be determined.
 	servingNode string
+
+	// host is the context's stored host without IPv6 brackets, and hostIsIP
+	// reports whether it is an IP literal, which no ACME certificate names.
+	host     string
+	hostIsIP bool
+
+	// domains are the ACME domains configured for the node whose
+	// certificate changes, read while the old certificate still verifies.
+	// domainsKnown is false when they could not be read.
+	domains      []string
+	domainsKnown bool
 }
 
 // planACMETrust inspects the context's stored trust settings and this
@@ -91,6 +105,24 @@ func planACMETrust(cmd *cobra.Command, deps *cli.Deps) *acmeTrustPlan {
 	}
 
 	plan.servingNode = servingNode(cmd.Context(), deps)
+
+	if deps.Ctx != nil && (plan.contextPin || plan.contextCA || plan.tofu) {
+		plan.host = cli.UnbracketHost(deps.Ctx.Host)
+		plan.hostIsIP = net.ParseIP(plan.host) != nil
+		cfg, err := readNodeACMEConfig(cmd.Context(), deps, deps.Node)
+		switch {
+		case err != nil:
+			if deps.Log != nil {
+				deps.Log.Debug("acme trust hint: node config", slog.String("error", err.Error()))
+			}
+		default:
+			plan.domainsKnown = true
+			for _, d := range cfg.Domains {
+				plan.domains = append(plan.domains, d.Domain)
+			}
+		}
+	}
+
 	return plan
 }
 
@@ -149,9 +181,13 @@ func (p *acmeTrustPlan) hint(node string, async bool) string {
 	}
 
 	if clears := p.systemTrustFlags(); len(clears) > 0 {
-		b.WriteString("  Trusting the system CAs keeps working across every renewal:\n")
-		fmt.Fprintf(&b, "    %s context update %s %s\n", p.prefix, p.ctxName, strings.Join(clears, " "))
-		fmt.Fprintf(&b, "    %s context validate %s --connect\n", p.prefix, p.ctxName)
+		if p.needsHostSwitch() {
+			p.writeHostSwitch(&b, clears)
+		} else {
+			b.WriteString("  Trusting the system CAs keeps working across every renewal:\n")
+			fmt.Fprintf(&b, "    %s context update %s %s\n", p.prefix, p.ctxName, strings.Join(clears, " "))
+			fmt.Fprintf(&b, "    %s context validate %s --connect\n", p.prefix, p.ctxName)
+		}
 	}
 
 	if p.contextPin {
@@ -162,6 +198,62 @@ func (p *acmeTrustPlan) hint(node string, async bool) string {
 	}
 
 	return strings.TrimRight(b.String(), "\n")
+}
+
+// needsHostSwitch reports whether the system CAs cannot verify the new
+// certificate under the context's host: the host is an IP literal, which an
+// ACME certificate never names, or a name that none of the node's ACME
+// domains covers.
+func (p *acmeTrustPlan) needsHostSwitch() bool {
+	if p.hostIsIP {
+		return true
+	}
+	return p.host != "" && p.domainsKnown && len(p.domains) > 0 && !certCovers(p.domains, p.host)
+}
+
+// writeHostSwitch writes the advice to point the context at an ACME domain
+// and trust the system CAs, for a host the new certificate does not name.
+func (p *acmeTrustPlan) writeHostSwitch(b *strings.Builder, clears []string) {
+	if p.hostIsIP {
+		fmt.Fprintf(b, "  The context's host %s is an IP address, and an ACME certificate names only domains,\n", p.host)
+		b.WriteString("  so the system CAs cannot verify it there, and a pin on it breaks at every renewal.\n")
+	} else {
+		fmt.Fprintf(b, "  The context's host %s is not one of the node's ACME domains (%s),\n",
+			p.host, strings.Join(p.domains, ", "))
+		b.WriteString("  so the system CAs cannot verify the certificate under that name.\n")
+	}
+
+	target, others := p.hostCandidates()
+	b.WriteString("  Point the context at the ACME domain and trust the system CAs, which keeps working\n")
+	b.WriteString("  across every renewal:\n")
+	fmt.Fprintf(b, "    %s context update %s --host %s %s\n", p.prefix, p.ctxName, target, strings.Join(clears, " "))
+	fmt.Fprintf(b, "    %s context validate %s --connect\n", p.prefix, p.ctxName)
+	switch {
+	case len(others) > 0:
+		fmt.Fprintf(b, "  Any other domain the certificate names works too: %s.\n", strings.Join(others, ", "))
+	case target == acmeDomainPlaceholder:
+		b.WriteString("  Use a domain the certificate was ordered for, one that resolves to this node.\n")
+	}
+}
+
+// acmeDomainPlaceholder stands in for the ACME domain when no usable one is
+// known.
+const acmeDomainPlaceholder = "<acme-domain>"
+
+// hostCandidates returns the ACME domain to suggest as the context's host
+// and the other usable ones. A wildcard domain cannot be a host, so it is
+// skipped, and the placeholder is returned when nothing is left.
+func (p *acmeTrustPlan) hostCandidates() (string, []string) {
+	var usable []string
+	for _, d := range p.domains {
+		if !strings.HasPrefix(d, "*.") {
+			usable = append(usable, d)
+		}
+	}
+	if len(usable) == 0 {
+		return acmeDomainPlaceholder, nil
+	}
+	return usable[0], usable[1:]
 }
 
 // trustDescription says how the context verifies the API certificate.
