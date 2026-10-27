@@ -1,7 +1,9 @@
 package node
 
 import (
+	"encoding/json"
 	"fmt"
+	"maps"
 	"net/url"
 
 	"github.com/spf13/cobra"
@@ -60,7 +62,8 @@ func nodeConfigPath(node string) string {
 // the literal placeholder json:"acmedomain[n]", which never matches a real
 // key such as "acmedomain0", so decoding into it silently drops every
 // configured ACME domain. Keys the struct does not know about at all would
-// be lost the same way.
+// be lost the same way. nodeConfigObject still decodes the response through
+// the struct, so the keys it does know keep their typed form.
 func newNodeConfigGetCmd() *cobra.Command {
 	var (
 		property     string
@@ -88,7 +91,11 @@ func newNodeConfigGetCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("get config for node %q: %w", deps.Node, err)
 			}
-			single, raw, err := objectToSingle(resp)
+			obj, err := nodeConfigObject(resp)
+			if err != nil {
+				return fmt.Errorf("get config for node %q: %w", deps.Node, err)
+			}
+			single, raw, err := objectToSingle(obj)
 			if err != nil {
 				return fmt.Errorf("get config for node %q: %w", deps.Node, err)
 			}
@@ -103,6 +110,49 @@ func newNodeConfigGetCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&withDefaults, "defaults", false,
 		"also list unset options with their built-in default values")
 	return cmd
+}
+
+// nodeConfigObject returns the node configuration in resp, the raw response
+// of GET /nodes/{node}/config, with every key it holds. PVE returns some
+// integer options, such as startall-onboot-delay and ballooning-target, as
+// JSON strings. The keys nodes.ListConfigResponse knows therefore take the
+// value it decodes, so an integer reaches JSON and YAML output as a number,
+// as it did when the command decoded through the struct alone. Every other
+// key, including the indexed acmedomainN keys the struct cannot hold, keeps
+// the value PVE sent. A nil response is an empty configuration.
+func nodeConfigObject(resp any) (map[string]any, error) {
+	if resp == nil {
+		return map[string]any{}, nil
+	}
+	obj, ok := resp.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("unexpected response shape %T", resp)
+	}
+
+	data, err := json.Marshal(obj)
+	if err != nil {
+		return nil, fmt.Errorf("encode response: %w", err)
+	}
+	var typed nodes.ListConfigResponse
+	if err := json.Unmarshal(data, &typed); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+	typedData, err := json.Marshal(typed)
+	if err != nil {
+		return nil, fmt.Errorf("encode typed response: %w", err)
+	}
+	var typedObj map[string]any
+	if err := json.Unmarshal(typedData, &typedObj); err != nil {
+		return nil, fmt.Errorf("decode typed response: %w", err)
+	}
+
+	merged := maps.Clone(obj)
+	for k, v := range typedObj {
+		if _, present := obj[k]; present {
+			merged[k] = v
+		}
+	}
+	return merged, nil
 }
 
 func newNodeConfigSetCmd() *cobra.Command {

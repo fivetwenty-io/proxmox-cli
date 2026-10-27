@@ -1,8 +1,10 @@
 package node_test
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -217,6 +219,43 @@ func TestNodeConfigGet_KeepsACMEDomains(t *testing.T) {
 			} {
 				require.Contains(t, buf.String(), want)
 			}
+		})
+	}
+}
+
+func TestNodeConfigGet_KeepsIntegerTypes(t *testing.T) {
+	payload := map[string]any{
+		"startall-onboot-delay": "30",
+		"ballooning-target":     "75",
+		"acmedomain0":           "domain=pve1.example.com",
+		"future-option":         "7",
+	}
+
+	for _, format := range []output.Format{output.FormatJSON, output.FormatYAML} {
+		t.Run(string(format), func(t *testing.T) {
+			f := testhelper.NewFakePVE(t)
+			var rec recordedRequest
+			recordOn(f, "GET /api2/json/nodes/pve1/config", &rec, payload)
+
+			root, buf, prefix := newNodeRoot(t, f, format, exec.Fake())
+			root.SetArgs(append(prefix, "--node", "pve1", "node", "config", "get"))
+			require.NoError(t, root.Execute())
+
+			out := buf.String()
+			if format == output.FormatYAML {
+				require.Contains(t, out, "startall-onboot-delay: 30\n", "a string integer renders as a number")
+				require.Contains(t, out, "ballooning-target: 75\n")
+				require.Contains(t, out, "acmedomain0: domain=pve1.example.com\n")
+				require.Contains(t, out, `future-option: "7"`, "a key the schema does not know keeps the value PVE sent")
+				return
+			}
+
+			var got map[string]any
+			require.NoError(t, json.Unmarshal([]byte(out[strings.Index(out, "{"):]), &got))
+			require.Equal(t, float64(30), got["startall-onboot-delay"], "a string integer renders as a number")
+			require.Equal(t, float64(75), got["ballooning-target"])
+			require.Equal(t, "domain=pve1.example.com", got["acmedomain0"])
+			require.Equal(t, "7", got["future-option"], "a key the schema does not know keeps the value PVE sent")
 		})
 	}
 }
