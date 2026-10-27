@@ -69,6 +69,20 @@ func runTrustCmdHost(
 	t *testing.T, f *testhelper.FakePVE, host string, tls config.TLSBlock, env map[string]string, args ...string,
 ) (string, string, error) {
 	t.Helper()
+	_, portStr, err := net.SplitHostPort(f.Server.Listener.Addr().String())
+	require.NoError(t, err)
+	port, err := strconv.Atoi(portStr)
+	require.NoError(t, err)
+	return runTrustCmdAt(t, "http", host, port, tls, env, args...)
+}
+
+// runTrustCmdAt runs args through a root whose single context "lab" reaches
+// protocol://host:port with the given TLS block, and returns stdout and
+// stderr apart.
+func runTrustCmdAt(
+	t *testing.T, protocol, host string, port int, tls config.TLSBlock, env map[string]string, args ...string,
+) (string, string, error) {
+	t.Helper()
 	t.Setenv("PMX_CONTEXT", "")
 	t.Setenv("PMX_NODE", "")
 	t.Setenv("PMX_OUTPUT", "")
@@ -79,15 +93,11 @@ func runTrustCmdHost(
 		t.Setenv(k, v)
 	}
 
-	_, portStr, err := net.SplitHostPort(f.Server.Listener.Addr().String())
-	require.NoError(t, err)
-	port, err := strconv.Atoi(portStr)
-	require.NoError(t, err)
 	cfg := &config.Config{
 		CurrentContext: "lab",
 		Contexts: map[string]*config.Context{
 			"lab": {
-				Host: host, Port: port, Protocol: "http",
+				Host: host, Port: port, Protocol: protocol,
 				Auth: config.AuthBlock{
 					Type: "token", Username: "root@pam", TokenID: "test",
 					Secret: "${PMX_TEST_TRUST_SECRET}",
@@ -108,7 +118,7 @@ func runTrustCmdHost(
 	root.SetOut(&stdout)
 	root.SetErr(&stderr)
 	root.SetArgs(append([]string{"--config", path}, args...))
-	err = root.Execute()
+	err := root.Execute()
 	return stdout.String(), stderr.String(), err
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"strings"
@@ -29,7 +30,9 @@ const acmeTrustHelp = "A context that pins the API certificate's fingerprint, ve
 	"serves the invoking context's API, a hint on stderr shows the context update command that " +
 	"switches the context to the system CAs. When the context's host is an IP address, which an ACME " +
 	"certificate never names, or a name the certificate does not cover, the command also points the " +
-	"context at the node's ACME domain."
+	"context at the node's ACME domain. When the wait for the task fails TLS verification, the node " +
+	"most likely already serves the new certificate, so the hint comes first and the verb still exits " +
+	"non-zero, because it could not confirm the task."
 
 // acmeTrustPlan records, before an ACME order or renewal replaces a node's
 // certificate, how the invoking context and command verify that
@@ -39,6 +42,10 @@ const acmeTrustHelp = "A context that pins the API certificate's fingerprint, ve
 type acmeTrustPlan struct {
 	prefix  string
 	ctxName string
+
+	// nodeCmd is the command path of the node group the verb runs under,
+	// such as "pmx pve node", or "" when the verb is not under one.
+	nodeCmd string
 
 	// contextPin, contextCA, and tofu are the context's own trust settings
 	// that reject a certificate from a public ACME CA.
@@ -78,6 +85,7 @@ func planACMETrust(cmd *cobra.Command, deps *cli.Deps) *acmeTrustPlan {
 	plan := &acmeTrustPlan{
 		prefix:  cli.CommandPrefix(cmd),
 		ctxName: deps.CtxName,
+		nodeCmd: nodeGroupPath(cmd),
 	}
 
 	var storedCA string
@@ -126,6 +134,18 @@ func planACMETrust(cmd *cobra.Command, deps *cli.Deps) *acmeTrustPlan {
 	return plan
 }
 
+// nodeGroupPath returns the command path of the "node" group above cmd, such
+// as "pmx pve node" or "pve node" under a persona binary, or "" when cmd is
+// not under one.
+func nodeGroupPath(cmd *cobra.Command) string {
+	for c := cmd; c != nil; c = c.Parent() {
+		if c.Name() == "node" {
+			return c.CommandPath()
+		}
+	}
+	return ""
+}
+
 // servingNode returns the name of the node that answers the API, which
 // /cluster/status marks with local=1, or "" when the lookup fails. A failure
 // only widens the hint to "this may affect you", so it is logged rather than
@@ -154,18 +174,50 @@ func servingNode(ctx context.Context, deps *cli.Deps) string {
 	return ""
 }
 
+// certChange says how far an ACME order or renewal got when the verb
+// reports it.
+type certChange int
+
+const (
+	// certChanged means the task finished, so the node serves the new
+	// certificate.
+	certChanged certChange = iota
+
+	// certPending means the verb returned under --async before the task
+	// finished, so the change is still to come.
+	certPending
+
+	// certLikelyChanged means the wait for the task failed TLS verification,
+	// which is what the swap does to a connection that trusted the old
+	// certificate, so the task most likely installed the new one.
+	certLikelyChanged
+)
+
+// certChangeState returns the certChange of a verb that started the task
+// whose response is raw and then rendered it without error.
+func certChangeState(deps *cli.Deps, raw json.RawMessage) certChange {
+	if certTaskPending(deps, raw) {
+		return certPending
+	}
+	return certChanged
+}
+
 // hint returns the advice to print after node's certificate changed, or ""
-// when the change does not touch this connection. async is true when the
-// verb returned before the task finished, so the change is still to come.
-func (p *acmeTrustPlan) hint(node string, async bool) string {
+// when the change does not touch this connection.
+func (p *acmeTrustPlan) hint(node string, state certChange) string {
 	if p == nil || (p.servingNode != "" && p.servingNode != node) {
 		return ""
 	}
 
 	var b strings.Builder
-	change := fmt.Sprintf("node %q now serves a new ACME certificate", node)
-	if async {
+	var change string
+	switch state {
+	case certPending:
 		change = fmt.Sprintf("node %q will serve a new ACME certificate once the task finishes", node)
+	case certLikelyChanged:
+		change = fmt.Sprintf("node %q most likely serves a new ACME certificate already", node)
+	default:
+		change = fmt.Sprintf("node %q now serves a new ACME certificate", node)
 	}
 
 	what := p.trustDescription()
@@ -174,6 +226,14 @@ func (p *acmeTrustPlan) hint(node string, async bool) string {
 		fmt.Fprintf(&b, "  so the next command through %q will fail to verify it.\n", p.ctxName)
 	} else {
 		fmt.Fprintf(&b, "hint: %s, so the trust this command used will not verify it.\n", change)
+	}
+	if state == certLikelyChanged {
+		b.WriteString("  Waiting for the task failed TLS verification, which is what the new certificate does\n")
+		b.WriteString("  to a connection that trusted the old one.\n")
+		if p.nodeCmd != "" {
+			fmt.Fprintf(&b, "  Once the context trusts it, confirm the certificate with %s cert acme status --node %s.\n",
+				p.nodeCmd, node)
+		}
 	}
 
 	if p.overrideSource != "" {
@@ -254,6 +314,24 @@ func (p *acmeTrustPlan) hostCandidates() (string, []string) {
 		return acmeDomainPlaceholder, nil
 	}
 	return usable[0], usable[1:]
+}
+
+// explainWaitFailure handles an error from waiting on node's certificate
+// task. When the wait failed TLS verification and the plan expects the new
+// certificate to break this connection, it prints the trust hint to w and
+// returns err with a note that the certificate most likely changed, because
+// the swap itself is the likely cause. Any other error, and any error when
+// the change does not touch this connection, comes back unchanged.
+func (p *acmeTrustPlan) explainWaitFailure(w io.Writer, node string, err error) error {
+	if err == nil || p == nil || !cli.IsCertVerificationError(err) {
+		return err
+	}
+	hint := p.hint(node, certLikelyChanged)
+	if hint == "" {
+		return err
+	}
+	_, _ = fmt.Fprintln(w, hint)
+	return fmt.Errorf("%w (node %q most likely installed the new certificate; see the hint above)", err, node)
 }
 
 // trustDescription says how the context verifies the API certificate.

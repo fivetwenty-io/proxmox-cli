@@ -177,9 +177,9 @@ func newCertAcmeOrderCmd() *cobra.Command {
 			raw := rawOrNil(resp)
 			if err := renderCertTask(cmd, deps, raw,
 				fmt.Sprintf("ACME certificate ordered on node %q.", deps.Node)); err != nil {
-				return err
+				return trust.explainWaitFailure(cmd.ErrOrStderr(), deps.Node, err)
 			}
-			if hint := trust.hint(deps.Node, certTaskPending(deps, raw)); hint != "" {
+			if hint := trust.hint(deps.Node, certChangeState(deps, raw)); hint != "" {
 				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), hint)
 			}
 			return nil
@@ -224,9 +224,9 @@ func newCertAcmeRenewCmd() *cobra.Command {
 			raw := rawOrNil(resp)
 			if err := renderCertTask(cmd, deps, raw,
 				fmt.Sprintf("ACME certificate renewed on node %q.", deps.Node)); err != nil {
-				return err
+				return trust.explainWaitFailure(cmd.ErrOrStderr(), deps.Node, err)
 			}
-			if hint := trust.hint(deps.Node, certTaskPending(deps, raw)); hint != "" {
+			if hint := trust.hint(deps.Node, certChangeState(deps, raw)); hint != "" {
 				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), hint)
 			}
 			return nil
