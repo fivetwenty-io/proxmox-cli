@@ -223,7 +223,7 @@ func (p *acmeTrustPlan) hint(node string, state certChange) string {
 	what := p.trustDescription()
 	if p.ctxName != "" && what != "" {
 		fmt.Fprintf(&b, "hint: context %q %s, and %s,\n", p.ctxName, what, change)
-		fmt.Fprintf(&b, "  so the next command through %q will fail to verify it.\n", p.ctxName)
+		fmt.Fprintf(&b, "  so the next command through %q %s.\n", p.ctxName, p.nextCommandOutcome())
 	} else {
 		fmt.Fprintf(&b, "hint: %s, so the trust this command used will not verify it.\n", change)
 	}
@@ -314,6 +314,16 @@ func (p *acmeTrustPlan) hostCandidates() (string, []string) {
 		return acmeDomainPlaceholder, nil
 	}
 	return usable[0], usable[1:]
+}
+
+// nextCommandOutcome says what the context's next command does with the new
+// certificate. A pin or a private CA bundle rejects it. A trust-on-first-use
+// context asks whether to trust it when it can prompt, and fails otherwise.
+func (p *acmeTrustPlan) nextCommandOutcome() string {
+	if p.tofu && !p.contextPin && !p.contextCA {
+		return "will ask you to trust the new certificate, or fail when it cannot prompt"
+	}
+	return "will fail to verify it"
 }
 
 // explainWaitFailure handles an error from waiting on node's certificate

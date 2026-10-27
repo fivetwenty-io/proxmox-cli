@@ -189,6 +189,9 @@ func TestACMETrustHint_TOFUAndCACert(t *testing.T) {
 	_, stderr, err := runTrustCmd(t, f, config.TLSBlock{Tofu: true}, nil, orderPVE1...)
 	require.NoError(t, err)
 	require.Contains(t, stderr, "trusts the API certificate it saw first (tls.tofu)")
+	require.Contains(t, stderr, "will ask you to trust the new certificate, or fail when it cannot prompt",
+		"an interactive TOFU context prompts rather than failing")
+	require.NotContains(t, stderr, "will fail to verify it")
 	require.Contains(t, stderr, "pmx context update lab --tofu=false")
 	require.NotContains(t, stderr, "openssl", "re-pinning applies to a fingerprint pin only")
 
@@ -197,6 +200,7 @@ func TestACMETrustHint_TOFUAndCACert(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, stderr, "verifies the API against its own CA bundle (tls.ca-cert)")
 	require.Contains(t, stderr, `pmx context update lab --ca-cert ""`)
+	require.Contains(t, stderr, "will fail to verify it", "a private CA bundle rejects the new certificate")
 }
 
 func TestACMETrustHint_OverridePin(t *testing.T) {
