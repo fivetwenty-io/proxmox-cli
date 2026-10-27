@@ -2560,14 +2560,17 @@ func TestSOCKSProxy_StalledTargetFailsAtTheConnectBound(t *testing.T) {
 func TestSOCKSProxy_BastionWaitIsNotCharged(t *testing.T) {
 	socks := testhelper.SOCKS5StandInWith(t, testhelper.SOCKS5Options{ConnectReply: 0x04})
 	script := testhelper.SSHStandIn(t, testhelper.SSHStandInOptions{
-		Mode: testhelper.SSHForward, StartDelay: 700 * time.Millisecond,
+		Mode: testhelper.SSHForward, StartDelay: 2700 * time.Millisecond,
 	})
 
-	// The first-byte timer is one second, the floor, and the SOCKS bound is
-	// 100ms + 100ms + 1s. Each ssh takes 700ms to answer, so a waiter that
-	// started its clock with the first dial would run out at 1.2s.
+	// The first-byte timer is 2s + 2s, and the SOCKS bound is 2s + 2s + 1s.
+	// Each ssh takes 2.7s to answer, so a waiter that started its clock with
+	// the first dial would run out at 5s, while each ssh keeps 1.3s of the
+	// first-byte timer for the stand-in's bash relay. On a busy macOS host
+	// that relay's few process starts can take well over half a second, and
+	// two waiters start theirs at once.
 	conn := mustResolve(t, labContext(), "--api-jump", "bastion", "--api-proxy", "socks5h://"+socks.Addr,
-		"--api-connect-timeout", "100ms", "--api-tls-handshake-timeout", "100ms")
+		"--api-connect-timeout", "2s", "--api-tls-handshake-timeout", "2s")
 	conn.Jump.Program = script.Program
 
 	apiclient.ReopenJumps()
