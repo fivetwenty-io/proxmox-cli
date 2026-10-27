@@ -91,8 +91,9 @@ const rawMaxDataFileBytes = 1 << 20
 // KEY=VALUE lines of the file it names, reading standard input for "@-",
 // in the style of curl's -d @file. No Proxmox parameter name starts with
 // "@", so no entry that worked before changes meaning. Blank lines and lines
-// starting with "#" are skipped, a trailing "\r" is dropped, and every other
-// line must hold "=" after a non-empty key. Errors name the file and line
+// starting with "#" are skipped, trailing spaces, tabs, and "\r" are dropped,
+// because an editor leaves them invisibly and no product reads them as part
+// of a value, and every other line must hold "=" after a non-empty key. Errors name the file and line
 // number but never quote a line, because the point of a file is to keep
 // its values off the terminal and out of the log.
 func rawExpandDataFiles(data []string, stdin io.Reader) ([]string, error) {
@@ -160,7 +161,7 @@ func rawReadDataFile(ref string, stdin io.Reader, stdinRead *bool) ([]string, er
 	var lines []string
 
 	for i, line := range strings.Split(string(raw), "\n") {
-		line = strings.TrimSuffix(line, "\r")
+		line = strings.TrimRight(line, " \t\r")
 		trimmed := strings.TrimSpace(line)
 
 		if trimmed == "" || strings.HasPrefix(trimmed, "#") {

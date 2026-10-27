@@ -597,6 +597,18 @@ func TestRawParamsFromData_FileAndStdin(t *testing.T) {
 	}, params)
 }
 
+func TestRawParamsFromData_FileTrimsTrailingBlanks(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "params")
+	require.NoError(t, os.WriteFile(path,
+		[]byte("id=cf-dns  \t\r\ntype=dns\t\n  api=cf \n\t\n"), 0o600))
+
+	params, err := rawParamsFromData([]string{"@" + path, "@-"}, strings.NewReader("data=Q0ZfVG9rZW49eA== \t\n"))
+	require.NoError(t, err)
+	require.Equal(t, map[string]any{
+		"id": "cf-dns", "type": "dns", "api": "cf", "data": "Q0ZfVG9rZW49eA==",
+	}, params, "trailing spaces and tabs never reach a value")
+}
+
 func TestRawParamsFromData_FileErrors(t *testing.T) {
 	dir := t.TempDir()
 	bad := filepath.Join(dir, "bad")
