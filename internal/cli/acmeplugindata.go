@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"unicode"
 
 	"github.com/spf13/cobra"
 
@@ -31,7 +32,9 @@ const ACMEPluginDataHelp = "The DNS provider credentials are KEY=VALUE lines nam
 	"acme.sh variables, such as CF_Token and CF_Account_ID for Cloudflare. Pass them with " +
 	"--data-file PATH, or --data-file - to read standard input; pmx base64-encodes the lines " +
 	"before sending them. --data takes the already base64-encoded block, either literally or as " +
-	"a reference that pmx resolves: ${ENV_VAR}, $ENV_VAR, or keychain:SERVICE[/ACCOUNT]. A literal " +
+	"a reference that pmx resolves: ${ENV_VAR}, $ENV_VAR, or keychain:SERVICE[/ACCOUNT]. pmx removes " +
+	"any line wrapping and sends the block as standard padded base64, converting a URL-safe or " +
+	"unpadded encoding. A literal " +
 	"--data value lands in shell history and the process list, so prefer --data-file or a reference."
 
 // resolveACMESecretRef resolves a ${NAME} or keychain:PATH reference. It is
@@ -66,9 +69,10 @@ func RegisterACMEPluginDataFlags(cmd *cobra.Command, data, dataFile *string, req
 //   - --data holding anything else is the literal value, and a warning goes
 //     to stderr because the credential is now in shell history.
 //
-// Either way the result must decode as base64, so plaintext passed to --data
-// fails before the API stores credentials no plugin can read. No error text
-// ever quotes the value.
+// A --data value must decode as base64, so plaintext passed to it fails
+// before the API stores credentials no plugin can read. It is sent as
+// standard padded base64 with no whitespace (see normalizeACMEPluginData).
+// No error text ever quotes the value.
 func ResolveACMEPluginData(cmd *cobra.Command, data, dataFile string) (string, bool, error) {
 	fl := cmd.Flags()
 	switch {
@@ -105,21 +109,23 @@ func resolveACMEPluginDataValue(stderr io.Writer, data string) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("--%s: %w", FlagACMEPluginData, err)
 		}
-		value = strings.TrimSpace(resolved)
+		value = resolved
 	} else if data != "" {
 		_, _ = fmt.Fprintf(stderr, "WARN: --%s carries the plugin credentials inline, where shell history "+
 			"and the process list can see them; prefer --%s, ${ENV_VAR}, or keychain:PATH\n",
 			FlagACMEPluginData, FlagACMEPluginDataFile)
 	}
 
+	value = stripWhitespace(value)
 	if value == "" {
 		return "", fmt.Errorf("--%s is empty", FlagACMEPluginData)
 	}
-	if !isBase64(value) {
+	normalized, ok := normalizeACMEPluginData(value)
+	if !ok {
 		return "", fmt.Errorf("--%s is not base64-encoded; pass the plaintext KEY=VALUE lines with --%s "+
 			"instead, which encodes them", FlagACMEPluginData, FlagACMEPluginDataFile)
 	}
-	return value, nil
+	return normalized, nil
 }
 
 // readACMEPluginDataFile reads --data-file, from stdin when path is "-", and
@@ -233,19 +239,37 @@ func looksBase64Encoded(line string) bool {
 	return false
 }
 
-// isBase64 reports whether s decodes in any of the four base64 alphabets and
-// padding styles. PVE decodes plugin data leniently, and PBS and PDM expect
-// standard padded base64, so accepting all four rejects only values that no
-// product could decode.
-func isBase64(s string) bool {
+// normalizeACMEPluginData decodes s, which holds no whitespace, in any of the
+// four base64 alphabets and padding styles, and returns it re-encoded as
+// standard padded base64, with ok false when no alphabet decodes it. PBS and
+// PDM require standard padded base64. PVE decodes the value with Perl's
+// MIME::Base64, which silently skips any character outside the standard
+// alphabet, so a URL-safe "-" or "_" would corrupt the credentials there
+// rather than fail. Re-encoding gives every product the one form it reads
+// correctly, and it loses nothing, because each accepted form decodes to the
+// same bytes.
+func normalizeACMEPluginData(s string) (string, bool) {
 	for _, enc := range []*base64.Encoding{
 		base64.StdEncoding, base64.RawStdEncoding, base64.URLEncoding, base64.RawURLEncoding,
 	} {
-		if _, err := enc.DecodeString(s); err == nil {
-			return true
+		if decoded, err := enc.DecodeString(s); err == nil && len(decoded) > 0 {
+			return base64.StdEncoding.EncodeToString(decoded), true
 		}
 	}
-	return false
+	return "", false
+}
+
+// stripWhitespace removes every whitespace character from s. A base64 block
+// wrapped at 76 columns, as GNU base64 writes it, or copied with stray
+// spaces, is still one value, and Go's decoders skip only "\r" and "\n"
+// while PBS and PDM reject any whitespace.
+func stripWhitespace(s string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsSpace(r) {
+			return -1
+		}
+		return r
+	}, s)
 }
 
 // isShellVarName reports whether name is a valid shell variable name: ASCII

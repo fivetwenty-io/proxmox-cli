@@ -137,6 +137,63 @@ func TestResolveACMEPluginData_LiteralWarns(t *testing.T) {
 	require.NotContains(t, stderr, encoded, "the warning must not quote the value")
 }
 
+func TestResolveACMEPluginData_DataIsNormalized(t *testing.T) {
+	// Long enough that GNU base64 wraps it, and with bytes that encode to
+	// "+" and "/" in the standard alphabet and "-" and "_" in the URL-safe one.
+	plain := "CF_Token=" + acmeDataSecret + "\nCF_Account_ID=" + strings.Repeat("0123456789abcdef", 4) +
+		"\nCF_Zone_ID=\xfb\xff\xfe>?"
+	want := base64.StdEncoding.EncodeToString([]byte(plain))
+	require.True(t, strings.ContainsAny(want, "+/"), "the fixture must exercise the alphabet difference")
+	require.Greater(t, len(want), 76, "the fixture must be long enough to wrap")
+
+	wrap := func(s, eol string) string {
+		var b strings.Builder
+		for len(s) > 76 {
+			b.WriteString(s[:76] + eol)
+			s = s[76:]
+		}
+		b.WriteString(s + eol)
+		return b.String()
+	}
+
+	for name, value := range map[string]string{
+		"standard":           want,
+		"wrapped at 76 (LF)": wrap(want, "\n"),
+		"wrapped at 76 CRLF": wrap(want, "\r\n"),
+		"inner spaces, tabs": want[:20] + " \t " + want[20:],
+		"unpadded":           base64.RawStdEncoding.EncodeToString([]byte(plain)),
+		"URL-safe":           base64.URLEncoding.EncodeToString([]byte(plain)),
+		"URL-safe, unpadded": base64.RawURLEncoding.EncodeToString([]byte(plain)),
+		"URL-safe, wrapped":  wrap(base64.URLEncoding.EncodeToString([]byte(plain)), "\n"),
+	} {
+		t.Run(name, func(t *testing.T) {
+			got, _, _, err := resolveACMEData(t, "", false, "--data", value)
+			require.NoError(t, err)
+			require.Equal(t, want, got, "every accepted form is sent as standard padded base64")
+		})
+
+		t.Run(name+" via reference", func(t *testing.T) {
+			t.Setenv("PMX_TEST_ACME_DATA", value)
+			got, _, _, err := resolveACMEData(t, "", false, "--data", "${PMX_TEST_ACME_DATA}")
+			require.NoError(t, err)
+			require.Equal(t, want, got)
+		})
+	}
+}
+
+func TestResolveACMEPluginData_DataRejectsMixedAlphabets(t *testing.T) {
+	for name, value := range map[string]string{
+		"both alphabets":   "Q0ZfVG9r+W4-YWJj",
+		"whitespace only":  " \n\t ",
+		"stray characters": "Q0ZfVG9rZW4*YWJj",
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, _, _, err := resolveACMEData(t, "", false, "--data", value)
+			require.Error(t, err)
+		})
+	}
+}
+
 func TestResolveACMEPluginData_PlaintextDataIsRejected(t *testing.T) {
 	_, _, stderr, err := resolveACMEData(t, "", false, "--data", "CF_Token="+acmeDataSecret)
 	require.Error(t, err)
