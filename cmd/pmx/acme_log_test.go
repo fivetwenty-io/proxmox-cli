@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -84,10 +85,23 @@ func TestMain_ACMEPluginDataNeverLogged(t *testing.T) {
 	encoded := base64.StdEncoding.EncodeToString([]byte(plaintext))
 
 	f := testhelper.NewFakePVE(t)
-	var gotData []string
+	// The fake server's handler goroutine writes gotData while the test
+	// goroutine reads it, and the race detector cannot see the ordering the
+	// child process's request and response give, so a mutex guards it.
+	var (
+		mu      sync.Mutex
+		gotData []string
+	)
+	received := func() []string {
+		mu.Lock()
+		defer mu.Unlock()
+		return append([]string(nil), gotData...)
+	}
 	record := func(w http.ResponseWriter, r *http.Request) {
 		_ = r.ParseForm()
+		mu.Lock()
 		gotData = append(gotData, r.PostFormValue("data"))
+		mu.Unlock()
 		testhelper.WriteData(w, nil)
 	}
 	f.HandleFunc("POST /api2/json/cluster/acme/plugins", record)
@@ -128,12 +142,14 @@ func TestMain_ACMEPluginDataNeverLogged(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			home := t.TempDir()
+			mu.Lock()
 			gotData = nil
+			mu.Unlock()
 
 			args := append([]string{"--config", cfg, "--trace"}, tc.args...)
 			stdout, stderr, code := runPMXHome(t, home, tc.stdin, tc.env, args...)
 			require.Equal(t, 0, code, stderr)
-			require.Equal(t, []string{encoded}, gotData, "the API receives the encoded block")
+			require.Equal(t, []string{encoded}, received(), "the API receives the encoded block")
 
 			logs := logTreeText(t, home)
 			require.Contains(t, logs, `"msg":"invocation"`, "the log tree must hold this invocation")
