@@ -2,7 +2,7 @@ module github.com/fivetwenty-io/proxmox-cli
 
 go 1.27.0
 
-toolchain go1.27.2
+toolchain go1.27.3
 
 require (
 	github.com/cpuguy83/go-md2man/v2 v2.0.7
