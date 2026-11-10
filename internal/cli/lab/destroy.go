@@ -29,7 +29,7 @@ import (
 //
 // It resolves the lab (peppi-guarding every identifier the config exposes),
 // classifies every live VM in the lab's pool by name (findLabVMs/
-// classifyLabVMName — the same classification start/stop/status use, not
+// classifyLabVMName — the same classification start/stop use, not
 // the single-VM assumption this command carried before multi-node labs
 // existed), peppi-guards each classified VM's VMID a second time, then —
 // after a confirmation gate and an optional --dry-run preview — stops each
@@ -58,9 +58,10 @@ func newDestroyCmd() *cobra.Command {
 			"VMs go in reverse start order (the QDevice first, if present, then node N-1 down " +
 			"to node 0), stopping each one that is running before deleting it.\n\n" +
 			"Every live VM in the lab's pool is classified by name against the node/QDevice " +
-			"naming convention, the same classification start, stop, and status use. A pool " +
+			"naming convention, the same classification start and stop use. A pool " +
 			"member whose name matches none of it refuses the whole command rather than " +
-			"guessing which VM it is.\n\n" +
+			"guessing which VM it is. The read-only list and status commands only warn " +
+			"about such a member.\n\n" +
 			"Destroying requires --yes/-y or an interactive 'y' confirmation. Pass --purge to " +
 			"remove the lab's resource pool and storage definition as well, or --dry-run to " +
 			"preview what would be destroyed without mutating anything or prompting.\n\n" +

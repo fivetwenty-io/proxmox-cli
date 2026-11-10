@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/netip"
 	"sort"
 	"strconv"
@@ -99,16 +100,61 @@ type classifiedLabVM struct {
 	Index     int // valid only when !IsQdevice
 }
 
-// findLabVMs returns every qemu guest in vms that belongs to pool,
+// labPoolProblem is one pool member that classifyLabPoolVMs could not place
+// in a lab's node/QDevice topology: a member whose name matches none of the
+// convention's patterns, or a second member claiming a role already taken.
+type labPoolProblem struct {
+	labName string
+	pool    string
+	vm      labVM
+	// role and first are set only for a role conflict: role is the contested
+	// role ("0".."4" or "q") and first is the member that claimed it first.
+	role  string
+	first *labVM
+}
+
+// err renders the problem as the error findLabVMs returns for it.
+func (p labPoolProblem) err() error {
+	if p.first != nil {
+		return fmt.Errorf(
+			"lab pool %q has two VMs claiming the same role %q: VM %d (%q) and VM %d (%q)",
+			p.pool, p.role, p.first.VMID, p.first.Name, p.vm.VMID, p.vm.Name)
+	}
+	return fmt.Errorf(
+		"lab pool %q member VM %d (name %q) does not match the node/QDevice naming convention "+
+			"for lab %q (expected lab-%s-<0..%d> or lab-%s-q)",
+		p.pool, p.vm.VMID, p.vm.Name, p.labName, p.labName, maxLabNodeIndex, p.labName)
+}
+
+// warning renders the problem as the one-line stderr warning the read-only
+// verbs (list, status) print instead of failing.
+func (p labPoolProblem) warning() string {
+	const refusal = "start, stop, destroy, scale, and qdevice will refuse until the VM is renamed " +
+		"or moved out of the pool"
+	if p.first != nil {
+		return fmt.Sprintf(
+			"warning: lab %q: pool %q VM %d (name %q) claims role %q, already claimed by VM %d (name %q); %s",
+			p.labName, p.pool, p.vm.VMID, p.vm.Name, p.role, p.first.VMID, p.first.Name, refusal)
+	}
+	return fmt.Sprintf(
+		"warning: lab %q: pool %q member VM %d (name %q) does not match the node/QDevice naming convention "+
+			"(expected lab-%s-<0..%d> or lab-%s-q); %s",
+		p.labName, p.pool, p.vm.VMID, p.vm.Name, p.labName, maxLabNodeIndex, p.labName, refusal)
+}
+
+// classifyLabPoolVMs returns every qemu guest in vms that belongs to pool,
 // classified by its live name against labName's node/QDevice naming
-// convention (classifyLabVMName). It errors when any pool member's name
-// matches none of the convention's patterns — an unclassifiable VM sharing
-// the lab's pool is a data problem the operator must resolve, not a case
-// lifecycle verbs can safely guess past — or when two members classify to
-// the same role (e.g. a legacy bare-named VM and an explicit "-0"-named VM
-// present in the pool at once), which is equally ambiguous.
-func findLabVMs(vms []labVM, pool, labName string) ([]classifiedLabVM, error) {
+// convention (classifyLabVMName), plus a problem for each member it could
+// not classify: a name matching none of the convention's patterns, or a
+// second member classifying to a role already claimed (e.g. a legacy
+// bare-named VM and an explicit "-0"-named VM present in the pool at once).
+// Neither kind of member appears in the classified result, so the first
+// claimant of a contested role is the one that stays. Problems are in pool
+// member order. Read-only callers report them; mutating callers refuse on
+// them via findLabVMs.
+func classifyLabPoolVMs(vms []labVM, pool, labName string) ([]classifiedLabVM, []labPoolProblem) {
 	var out []classifiedLabVM
+	var problems []labPoolProblem
 	seen := make(map[string]labVM)
 
 	for _, vm := range vms {
@@ -118,10 +164,8 @@ func findLabVMs(vms []labVM, pool, labName string) ([]classifiedLabVM, error) {
 
 		isQdevice, index, ok := classifyLabVMName(vm.Name, labName)
 		if !ok {
-			return nil, fmt.Errorf(
-				"lab pool %q member VM %d (name %q) does not match the node/QDevice naming convention "+
-					"for lab %q (expected lab-%s-<0..%d> or lab-%s-q)",
-				pool, vm.VMID, vm.Name, labName, labName, maxLabNodeIndex, labName)
+			problems = append(problems, labPoolProblem{labName: labName, pool: pool, vm: vm})
+			continue
 		}
 
 		key := "q"
@@ -129,16 +173,39 @@ func findLabVMs(vms []labVM, pool, labName string) ([]classifiedLabVM, error) {
 			key = strconv.Itoa(index)
 		}
 		if dup, exists := seen[key]; exists {
-			return nil, fmt.Errorf(
-				"lab pool %q has two VMs claiming the same role %q: VM %d (%q) and VM %d (%q)",
-				pool, key, dup.VMID, dup.Name, vm.VMID, vm.Name)
+			problems = append(problems, labPoolProblem{labName: labName, pool: pool, vm: vm, role: key, first: &dup})
+			continue
 		}
 		seen[key] = vm
 
 		out = append(out, classifiedLabVM{VM: vm, IsQdevice: isQdevice, Index: index})
 	}
 
-	return out, nil
+	return out, problems
+}
+
+// warnLabPoolProblems writes one warning line per problem to w.
+func warnLabPoolProblems(w io.Writer, problems []labPoolProblem) {
+	for _, p := range problems {
+		_, _ = fmt.Fprintln(w, p.warning())
+	}
+}
+
+// findLabVMs returns every qemu guest in vms that belongs to pool,
+// classified by its live name against labName's node/QDevice naming
+// convention (classifyLabVMName). It errors when any pool member's name
+// matches none of the convention's patterns — an unclassifiable VM sharing
+// the lab's pool is a data problem the operator must resolve, not a case
+// lifecycle verbs can safely guess past — or when two members classify to
+// the same role (e.g. a legacy bare-named VM and an explicit "-0"-named VM
+// present in the pool at once), which is equally ambiguous. Read-only verbs
+// use classifyLabPoolVMs instead and report the same problems as warnings.
+func findLabVMs(vms []labVM, pool, labName string) ([]classifiedLabVM, error) {
+	classified, problems := classifyLabPoolVMs(vms, pool, labName)
+	if len(problems) > 0 {
+		return nil, problems[0].err()
+	}
+	return classified, nil
 }
 
 // nodeLabVM returns the classified VM for node index idx among classified,
@@ -262,7 +329,9 @@ func newListCmd() *cobra.Command {
 			"`labs_dir`/`include` pulls in), beside the live state of its node-0 VM in the " +
 			"configured PVE cluster: present or absent, running or stopped, VMID, and node.\n\n" +
 			"A lab whose node-0 VM has not been created yet, or was destroyed, shows an absent " +
-			"state rather than an error.\n\n" +
+			"state rather than an error. A lab whose pool holds a VM that matches none of the " +
+			"node/QDevice naming convention, or two VMs claiming the same role, still gets its " +
+			"row, with one warning per such VM on stderr.\n\n" +
 			"For a full per-node and QDevice breakdown of a multi-node lab, use " +
 			"`pmx lab status <name>`.",
 		Example: `  pmx lab list
@@ -295,10 +364,8 @@ func newListCmd() *cobra.Command {
 				pool := labPoolID(l)
 				nodeCount := strconv.Itoa(config.EffectiveTopologyNodes(l.Topology))
 
-				classified, cerr := findLabVMs(vms, pool, l.Name)
-				if cerr != nil {
-					return fmt.Errorf("lab %q: %w", name, cerr)
-				}
+				classified, problems := classifyLabPoolVMs(vms, pool, l.Name)
+				warnLabPoolProblems(cmd.ErrOrStderr(), problems)
 
 				vmidStr, node, status := "", "", "absent"
 				if vm, found := nodeLabVM(classified, 0); found {
@@ -495,6 +562,10 @@ func newStatusCmd() *cobra.Command {
 			"  * configured vCPU and memory sizing\n\n" +
 			"A target whose VM has not been created yet is reported as absent, with its " +
 			"configured sizing shown in place of live values. It does not fail the command.\n\n" +
+			"A pool member that matches none of the node/QDevice naming convention, or that " +
+			"claims a role another VM already holds, is left out of the table and reported as " +
+			"a warning on stderr. Start, stop, destroy, scale, and qdevice refuse until it is " +
+			"renamed or moved out of the pool.\n\n" +
 			"Pass --node to show a single node index (0-4), or \"q\" for the QDevice.",
 		Example: `  pmx lab status wayne
   pmx lab status wayne --node 0
@@ -515,10 +586,8 @@ func newStatusCmd() *cobra.Command {
 			}
 
 			pool := labPoolID(l)
-			classified, err := findLabVMs(vms, pool, l.Name)
-			if err != nil {
-				return fmt.Errorf("lab %q: %w", name, err)
-			}
+			classified, problems := classifyLabPoolVMs(vms, pool, l.Name)
+			warnLabPoolProblems(cmd.ErrOrStderr(), problems)
 
 			targets, err := filterLifecycleTargets(lifecycleTargetsForLab(l), nodeFlag)
 			if err != nil {

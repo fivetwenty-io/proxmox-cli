@@ -381,6 +381,134 @@ func TestStatus_UnknownLab(t *testing.T) {
 	assert.ErrorContains(t, err, `lab "ghost" not found`)
 }
 
+// --- unclassifiable pool members ----------------------------------------
+
+// execLifecycleSplit is execLifecycle with stdout and stderr captured
+// separately, for tests asserting that warnings never reach stdout.
+func execLifecycleSplit(cmd *cobra.Command, deps *cli.Deps, args ...string) (stdout, stderr string, err error) {
+	var out, errBuf bytes.Buffer
+	cmd.SetContext(cli.WithDeps(context.Background(), deps))
+	cmd.SetOut(&out)
+	cmd.SetErr(&errBuf)
+	cmd.SetArgs(args)
+	err = cmd.Execute()
+	return out.String(), errBuf.String(), err
+}
+
+func TestClassifyLabPoolVMs_ReportsProblemsWithoutFailing(t *testing.T) {
+	vms := []labVM{
+		{VMID: 100, Node: "pve1", Pool: "lab-wayne", Name: "lab-wayne-0"},
+		{VMID: 122, Node: "pve1", Pool: "lab-wayne", Name: "lab-wayne-w0"},
+		{VMID: 101, Node: "pve1", Pool: "lab-wayne", Name: "lab-wayne"},
+	}
+
+	classified, problems := classifyLabPoolVMs(vms, "lab-wayne", "wayne")
+	require.Len(t, classified, 1)
+	assert.Equal(t, int64(100), classified[0].VM.VMID.Int(), "the first claimant of a contested role stays")
+	require.Len(t, problems, 2)
+	assert.ErrorContains(t, problems[0].err(), "122")
+	assert.ErrorContains(t, problems[1].err(), "same role")
+}
+
+func TestList_UnrecognizedMemberKeepsRowAndWarnsOnStderr(t *testing.T) {
+	f, ac := newLifecycleFakeClient(t)
+	handleClusterResources(f,
+		map[string]any{"vmid": 100, "node": "pve1", "pool": "lab-alpha", "name": "lab-alpha-0", "status": "running", "type": "qemu"},
+		map[string]any{"vmid": 122, "node": "pve1", "pool": "lab-alpha", "name": "lab-alpha-w0", "status": "running", "type": "qemu"},
+		map[string]any{"vmid": 200, "node": "pve1", "pool": "lab-beta", "name": "lab-beta-0", "status": "stopped", "type": "qemu"},
+	)
+
+	cfg := &config.Config{Labs: map[string]*config.Lab{"alpha": cleanLab("alpha"), "beta": cleanLab("beta")}}
+	deps := newLifecycleDeps(t, cfg, ac)
+
+	stdout, stderr, err := execLifecycleSplit(newListCmd(), deps)
+	require.NoError(t, err, "one lab's stray pool member must not fail the overview")
+
+	var table jsonTable
+	require.NoError(t, json.Unmarshal([]byte(stdout), &table), "stdout must stay valid JSON")
+	require.Len(t, table.Rows, 2)
+	assert.Equal(t, []string{"alpha", "lab-alpha", "1", "100", "pve1", "running"}, table.Rows[0])
+	assert.Equal(t, []string{"beta", "lab-beta", "1", "200", "pve1", "stopped"}, table.Rows[1])
+
+	assert.Contains(t, stderr, `warning: lab "alpha"`)
+	assert.Contains(t, stderr, "VM 122")
+	assert.Contains(t, stderr, `"lab-alpha-w0"`)
+	assert.Contains(t, stderr, "expected lab-alpha-<0..4> or lab-alpha-q")
+	assert.Contains(t, stderr, "start, stop, destroy, scale, and qdevice will refuse")
+	assert.NotContains(t, stderr, `lab "beta"`, "a clean lab prints no warning")
+	assert.NotContains(t, stdout, "warning")
+}
+
+func TestList_DuplicateRoleKeepsRowAndWarnsOnStderr(t *testing.T) {
+	f, ac := newLifecycleFakeClient(t)
+	handleClusterResources(f,
+		map[string]any{"vmid": 500, "node": "pve1", "pool": "lab-alpha", "name": "lab-alpha", "status": "running", "type": "qemu"},
+		map[string]any{"vmid": 501, "node": "pve1", "pool": "lab-alpha", "name": "lab-alpha-0", "status": "stopped", "type": "qemu"},
+	)
+
+	cfg := &config.Config{Labs: map[string]*config.Lab{"alpha": cleanLab("alpha")}}
+	deps := newLifecycleDeps(t, cfg, ac)
+
+	stdout, stderr, err := execLifecycleSplit(newListCmd(), deps)
+	require.NoError(t, err)
+
+	var table jsonTable
+	require.NoError(t, json.Unmarshal([]byte(stdout), &table))
+	require.Len(t, table.Rows, 1)
+	assert.Equal(t, []string{"alpha", "lab-alpha", "1", "500", "pve1", "running"}, table.Rows[0])
+
+	assert.Contains(t, stderr, `warning: lab "alpha"`)
+	assert.Contains(t, stderr, `claims role "0"`)
+	assert.Contains(t, stderr, "VM 501")
+	assert.Contains(t, stderr, "already claimed by VM 500")
+	assert.Contains(t, stderr, "will refuse")
+}
+
+func TestStatus_UnrecognizedMemberShowsClassifiedAndWarns(t *testing.T) {
+	f, ac := newLifecycleFakeClient(t)
+	handleClusterResources(f,
+		map[string]any{"vmid": 100, "node": "pve1", "pool": "lab-alpha", "name": "lab-alpha-0", "status": "stopped", "type": "qemu"},
+		map[string]any{"vmid": 122, "node": "pve1", "pool": "lab-alpha", "name": "lab-alpha-w0", "status": "running", "type": "qemu"},
+	)
+	f.HandleJSON("GET /api2/json/nodes/pve1/qemu/100/status/current", map[string]any{"status": "stopped", "vmid": 100})
+	f.HandleJSON("GET /api2/json/nodes/pve1/qemu/100/config", map[string]any{"cores": 4, "sockets": 1, "memory": "8192"})
+
+	cfg := &config.Config{Labs: map[string]*config.Lab{"alpha": cleanLab("alpha")}}
+	deps := newLifecycleDeps(t, cfg, ac)
+
+	stdout, stderr, err := execLifecycleSplit(newStatusCmd(), deps, "alpha")
+	require.NoError(t, err)
+
+	var table jsonTable
+	require.NoError(t, json.Unmarshal([]byte(stdout), &table))
+	require.Len(t, table.Rows, 2, "the classified node row plus the summary row")
+	assert.Equal(t, "100", table.Rows[0][1])
+	assert.Equal(t, "stopped", table.Rows[0][3])
+
+	assert.Contains(t, stderr, `warning: lab "alpha"`)
+	assert.Contains(t, stderr, "VM 122")
+	assert.Contains(t, stderr, "will refuse")
+	assert.NotContains(t, stdout, "warning:")
+}
+
+// TestStart_UnrecognizedMemberStillRefuses pins that the mutating verbs keep
+// refusing, with findLabVMs' exact error, where list and status only warn.
+func TestStart_UnrecognizedMemberStillRefuses(t *testing.T) {
+	f, ac := newLifecycleFakeClient(t)
+	handleClusterResources(f,
+		map[string]any{"vmid": 100, "node": "pve1", "pool": "lab-alpha", "name": "lab-alpha-0", "status": "stopped", "type": "qemu"},
+		map[string]any{"vmid": 122, "node": "pve1", "pool": "lab-alpha", "name": "lab-alpha-w0", "status": "running", "type": "qemu"},
+	)
+
+	cfg := &config.Config{Labs: map[string]*config.Lab{"alpha": cleanLab("alpha")}}
+	deps := newLifecycleDeps(t, cfg, ac)
+
+	_, err := execLifecycle(newStartCmd(), deps, "alpha")
+	require.Error(t, err)
+	assert.EqualError(t, err, `lab "alpha": lab pool "lab-alpha" member VM 122 (name "lab-alpha-w0") `+
+		`does not match the node/QDevice naming convention for lab "alpha" (expected lab-alpha-<0..4> or lab-alpha-q)`)
+}
+
 // --- start --------------------------------------------------------------
 
 func TestStart_StoppedVMStartsAndWaits(t *testing.T) {
