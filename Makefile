@@ -256,7 +256,7 @@ check-cask-steps: ## Self-test the Homebrew cask step injection that the release
 .PHONY: govulncheck
 govulncheck: ## Scan the module graph for reachable vulnerabilities with govulncheck (CI gate)
 	@command -v govulncheck >/dev/null 2>&1 || { \
-		echo "govulncheck: not found — install: go install golang.org/x/vuln/cmd/govulncheck@v1.7.0"; \
+		echo "govulncheck: not found — install: go install golang.org/x/vuln/cmd/govulncheck@v1.9.0"; \
 		exit 1; \
 	}
 	@govulncheck ./...

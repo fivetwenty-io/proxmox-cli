@@ -55,7 +55,7 @@ jobs:
       - name: Install golangci-lint
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
-          version: v2.14.0
+          version: v2.15.0
           install-only: true
           # Off for the same reason as setup-go's cache, and because a
           # restore untars into a Go cache that sibling jobs on this
@@ -145,7 +145,7 @@ jobs:
       # paths this binary actually calls.
       - name: govulncheck
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@v1.7.0
+          go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
           make govulncheck
 
       # Dependency CVEs (go.mod/go.sum), committed secrets, and workflow
@@ -154,12 +154,12 @@ jobs:
       #
       # The scan options live in `make trivy`, so CI and a local run execute
       # the same command. setup-trivy is the action trivy-action itself uses
-      # to install the binary, pinned to the same commit and to the Trivy
-      # version that trivy-action v0.36.0 defaults to.
+      # to install the binary, pinned by commit, with the Trivy version
+      # pinned below (`make trivy-install` reads the same pin).
       - name: Install Trivy
         uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
         with:
-          version: v0.70.0
+          version: v0.76.2
 
       - name: Trivy scan
         run: make trivy
