@@ -1083,6 +1083,7 @@ func createDatasetSSHFlags(deps *cli.Deps) sshcmd.Flags {
 		f.Identity = deps.Ctx.SSH.Identity
 	}
 	f.Jump = contextSSHJump(deps)
+	f.NoJump = f.Jump == ""
 	return f
 }
 
@@ -1508,6 +1509,9 @@ func buildCreatePlan(
 	case dryRun:
 		datasetStep = createStep{desc: datasetDesc + " (verified at apply time, not previewed)"}
 	default:
+		if perr := labDatasetProxyRefusal(deps, "lab create"); perr != nil {
+			return nil, perr
+		}
 		datasetHost, herr := createDatasetSSHHost(ctx, ac, node, deps.Log)
 		if herr != nil {
 			return nil, herr

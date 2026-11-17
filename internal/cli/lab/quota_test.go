@@ -69,7 +69,9 @@ func quotaFlagValues(t *testing.T, cmd *cobra.Command) (refquotaGB int, dryRun, 
 func wireQuotaDeps(t *testing.T, cmd *cobra.Command, stdin string, stdout, stderr *bytes.Buffer) *exec.FakeRunner {
 	t.Helper()
 
-	return wireQuotaDepsOn(t, cmd, testhelper.NewFakePVE(t), stdin, stdout, stderr)
+	f := testhelper.NewFakePVE(t)
+	registerNodeCertificates(f)
+	return wireQuotaDepsOn(t, cmd, f, stdin, stdout, stderr)
 }
 
 // wireQuotaDepsOn is wireQuotaDeps against a FakePVE the test has already
@@ -93,7 +95,7 @@ func wireQuotaDepsOn(
 		},
 	}
 	fake := exec.Fake()
-	deps.Runner = fake
+	deps.Runner = newIdentityRunner(fake)
 	deps.Out = output.New()
 	deps.Format = output.FormatPlain
 
@@ -243,6 +245,7 @@ func TestLabQuota_NodeFollowsTheVMs(t *testing.T) {
 		t.Helper()
 
 		f := testhelper.NewFakePVE(t)
+		registerNodeCertificates(f)
 		f.HandleJSON("GET /api2/json/cluster/status", twoNodes)
 		f.HandleJSON("GET /api2/json/cluster/resources", resources)
 
@@ -350,7 +353,7 @@ func TestQuotaSet_HappyPathWithYes_UsesConfigRefquota(t *testing.T) {
 	assert.Equal(t, "ssh", call.Name)
 	assert.False(t, call.Interactive)
 	assert.Equal(t, []string{
-		"-p", "2222",
+		"-p", "2222", "-o", "ProxyJump=none",
 		"-i", "/home/wayne/.ssh/lab_ed25519",
 		"root@" + quotaTestNodeIP,
 		"zfs", "set", "quota=50G", "refquota=50G", "tank/labs/alpha",

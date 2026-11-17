@@ -1,6 +1,7 @@
 package lab
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -9,6 +10,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/config"
 	"github.com/fivetwenty-io/proxmox-cli/internal/exec"
+	"github.com/fivetwenty-io/proxmox-cli/internal/sshcmd"
 	"github.com/fivetwenty-io/proxmox-cli/internal/testhelper"
 )
 
@@ -168,5 +170,41 @@ func TestCreate_ZfsDatasetEnsure_UsesContextSSHJump(t *testing.T) {
 	for _, call := range fake.Calls {
 		assert.Equal(t, []string{"-p", "22", "-J", "ops@bastion.example:2200", "root@" + createDatasetTestNodeIP},
 			call.Args[:5], "every dataset ssh call tunnels through the context's jump")
+	}
+}
+
+// TestSSHFlags_NoJumpPassesProxyJumpNone covers R5: with no jump, or the none
+// literal, the dataset and guest flags tell ssh not to use a ProxyJump from
+// ~/.ssh/config, so ssh takes the same path as the API. A real jump replaces it.
+func TestSSHFlags_NoJumpPassesProxyJumpNone(t *testing.T) {
+	deps := func(jump string) *cli.Deps {
+		return &cli.Deps{Ctx: &config.Context{Host: "pve-0", SSH: config.SSHBlock{Jump: jump}}}
+	}
+
+	for name, tc := range map[string]struct {
+		jump       string
+		wantNoJump bool
+	}{
+		"empty":     {"", true},
+		"none":      {"none", true},
+		"a bastion": {"ops@bastion", false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ds := createDatasetSSHFlags(deps(tc.jump))
+			gs, err := labGuestSSHFlags(deps(tc.jump))
+			require.NoError(t, err)
+
+			for label, f := range map[string]sshcmd.Flags{"dataset": ds, "guest": gs} {
+				args := sshcmd.OptionArgs(&f)
+				joined := strings.Join(args, " ")
+				if tc.wantNoJump {
+					assert.Contains(t, joined, "-o ProxyJump=none", label)
+					assert.NotContains(t, args, "-J", label)
+				} else {
+					assert.NotContains(t, joined, "ProxyJump=none", label)
+					assert.Contains(t, joined, "-J "+tc.jump, label)
+				}
+			}
+		})
 	}
 }

@@ -45,6 +45,7 @@ func destroyFakeClient(t *testing.T) (*testhelper.FakePVE, *apiclient.APIClient)
 
 	ac, err := apiclient.NewAPIClient(opts)
 	require.NoError(t, err)
+	registerNodeCertificates(f)
 	return f, ac
 }
 
@@ -614,7 +615,7 @@ func destroyWireSSH(t *testing.T, cmd *cobra.Command) (*cli.Deps, *exec.FakeRunn
 	deps := cli.GetDeps(cmd)
 	deps.Ctx = &config.Context{Host: "sm-0.lab.internal", SSH: config.SSHBlock{User: "root", Port: 22}}
 	fake := exec.Fake()
-	deps.Runner = fake
+	deps.Runner = newIdentityRunner(fake)
 	return deps, fake
 }
 
@@ -1051,7 +1052,7 @@ func TestDestroy_PurgeDataset_TargetsNodeAddress(t *testing.T) {
 			want []string
 		}{
 			"another bastion":   {"ops@other:2201", []string{"-p", "22", "-J", "ops@other:2201"}},
-			"none dials direct": {"none", []string{"-p", "22"}},
+			"none dials direct": {"none", []string{"-p", "22", "-o", "ProxyJump=none"}},
 		} {
 			t.Run(name, func(t *testing.T) {
 				f, ac := destroyFakeClient(t)

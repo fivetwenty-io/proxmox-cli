@@ -91,7 +91,7 @@ func buildNfsServerCmd(t *testing.T, configPath string, fake *exec.FakeRunner) *
 // every server-side ensure-phase call in this section carries, mirroring
 // create_test.go's own "-p", "22", "root@<ip>" assertions for the identical
 // createDatasetSSHFlags/createDatasetSSHArgs convention.
-var nfsServerSSHDest = []string{"-p", "22", "root@" + nfsServerTestNodeIP}
+var nfsServerSSHDest = []string{"-p", "22", "-o", "ProxyJump=none", "root@" + nfsServerTestNodeIP}
 
 func TestNfsAttach_DryRun_NoRunnerCalls(t *testing.T) {
 	lab := multiNodeTestLab("wayne", 1, "")

@@ -2819,11 +2819,11 @@ func TestCreate_ZfsDatasetEnsure_AbsentProbesThenCreatesWithRefquota(t *testing.
 	probe, create := fake.Calls[0], fake.Calls[1]
 	assert.Equal(t, "ssh", probe.Name)
 	assert.Equal(t, []string{
-		"-p", "22", "root@" + createDatasetTestNodeIP, "zfs", "list", "-H", "-o", "name", "tank/labs/wayne",
+		"-p", "22", "-o", "ProxyJump=none", "root@" + createDatasetTestNodeIP, "zfs", "list", "-H", "-o", "name", "tank/labs/wayne",
 	}, probe.Args)
 	assert.Equal(t, "ssh", create.Name)
 	assert.Equal(t, []string{
-		"-p", "22", "root@" + createDatasetTestNodeIP, "zfs", "create", "-p",
+		"-p", "22", "-o", "ProxyJump=none", "root@" + createDatasetTestNodeIP, "zfs", "create", "-p",
 		"-o", "quota=50G", "-o", "refquota=50G", "tank/labs/wayne",
 	}, create.Args)
 	assert.NotContains(t, probe.Args, "root@"+createDatasetTestWrongCtxHost)
@@ -2890,7 +2890,7 @@ func TestCreate_ZfsDatasetEnsure_NoRefquotaConfigured_OmitsRefquotaOption(t *tes
 
 	require.Len(t, fake.Calls, 2)
 	assert.Equal(t, []string{
-		"-p", "22", "root@" + createDatasetTestNodeIP, "zfs", "create", "-p", "tank/labs/wayne",
+		"-p", "22", "-o", "ProxyJump=none", "root@" + createDatasetTestNodeIP, "zfs", "create", "-p", "tank/labs/wayne",
 	}, fake.Calls[1].Args, "no refquota configured: no -o quota=/-o refquota=... options")
 }
 

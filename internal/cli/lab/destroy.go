@@ -74,6 +74,11 @@ func newDestroyCmd() *cobra.Command {
 			"address must be listed by the cluster the API reaches, and the command refuses " +
 			"rather than fall back to the bare node name. The ssh user, port, and identity come " +
 			"from the active context, and the ssh jump is the one the API connection uses. " +
+			"Before it deletes anything, the command connects to that address and checks that the " +
+			"machine's host name is the node's name and that its pve-ssl.pem fingerprint is the one " +
+			"the API reports for the node; any mismatch, an unreachable target, or a fingerprint the " +
+			"API will not return refuses the run. It also refuses outright when the API connection " +
+			"goes through a proxy, because ssh cannot follow one. --dry-run skips the check. " +
 			"Labs running Ceph should tear down the storage " +
 			"layer first (see the lab repo's Ceph teardown script); the OSD data is destroyed " +
 			"with the VMs either way.",
@@ -192,6 +197,16 @@ func newDestroyCmd() *cobra.Command {
 				return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 			}
 
+			// Prove the dataset's ssh target is the node the API described
+			// before the confirmation and before anything is deleted, so a
+			// target that is not refuses the run while every resource is intact.
+			if purgeDataset {
+				if err := verifyLabDatasetTarget(
+					ctx, deps, "lab destroy --purge-dataset", datasetNode, datasetFlags, datasetHost); err != nil {
+					return err
+				}
+			}
+
 			if !yes {
 				ok, err := confirmYesNo(cmd, fmt.Sprintf("Destroy lab %q (%s)?", name, summary))
 				if err != nil {
@@ -245,7 +260,7 @@ func newDestroyCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&purge, "purge", false,
 		"also remove the lab's resource pool and storage definition")
 	cmd.Flags().BoolVar(&purgeDataset, "purge-dataset", false,
-		"also destroy the lab's ZFS dataset on the context host (implies --purge; irreversible)")
+		"also destroy the lab's ZFS dataset on the node that hosts the lab's VMs (implies --purge; irreversible)")
 	cmd.Flags().BoolVar(&keepContext, "keep-context", false,
 		"do not remove the lab's pmx context and keychain secret on destroy")
 

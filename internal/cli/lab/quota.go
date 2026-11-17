@@ -70,7 +70,12 @@ or the context's default node. The node's own address is looked up from the
 cluster, because the context's host is only the API entrypoint and on a
 multi-node cluster may not be reachable by ssh at all. The ssh user, port,
 and identity come from the active context, and the ssh jump is the one the
-API connection uses, so a node behind a bastion is reached through it.
+API connection uses, so a node behind a bastion is reached through it. Before
+it changes anything, the command connects to that address and checks that the
+machine's host name is the node's name and that its pve-ssl.pem fingerprint is
+the one the API reports for the node, and it refuses on any mismatch. It also
+refuses when the API connection goes through a proxy, because ssh cannot follow
+one.
 
 The effective refquota is --refquota-gb when given, else the lab's
 storage.refquota_gb. At least one of the two must yield a positive value.
@@ -147,6 +152,12 @@ func runQuotaSet(cmd *cobra.Command, name string, refquotaFlagGB int, dryRun, ye
 		display := append([]string{"ssh"}, argv...)
 		res := output.Result{Message: strings.Join(display, " ")}
 		return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
+	}
+
+	// Prove the ssh target is the node the API described before the prompt and
+	// before zfs changes anything.
+	if err := verifyLabDatasetTarget(cmd.Context(), deps, "quota set", node, f, host); err != nil {
+		return err
 	}
 
 	if !yes {
