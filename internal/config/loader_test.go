@@ -361,6 +361,42 @@ func TestResolveLabs_ExplicitVnetIDWinsOverDerived(t *testing.T) {
 	require.Equal(t, "custom1", labs["wayneeseguin"].Network.VnetID)
 }
 
+// TestResolveLabs_NameWithNoDerivableVnetID_Errors covers a lab whose name
+// leaves no valid vnet ID once the characters PVE rejects are dropped and that
+// sets no network.vnet_id: ResolveLabs must refuse and name the lab and
+// network.vnet_id rather than hand PVE an empty or one-character vnet ID.
+func TestResolveLabs_NameWithNoDerivableVnetID_Errors(t *testing.T) {
+	dir := t.TempDir()
+	configPath := writeConfigFile(t, dir, "config.yml", 0o600)
+
+	cfg := &config.Config{
+		Labs: map[string]*config.Lab{
+			"1-2": {Mode: "nested"},
+		},
+	}
+
+	_, err := config.ResolveLabs(cfg, configPath)
+	require.Error(t, err)
+	require.ErrorContains(t, err, `"1-2"`)
+	require.ErrorContains(t, err, "network.vnet_id")
+}
+
+// TestResolveLabs_HyphenatedNameDerivesValidVnetID covers the lab name the
+// two-cluster walkthrough uses: the hyphen is dropped, so the lab resolves to
+// a valid vnet ID with no explicit network.vnet_id.
+func TestResolveLabs_HyphenatedNameDerivesValidVnetID(t *testing.T) {
+	dir := t.TempDir()
+	configPath := writeConfigFile(t, dir, "config.yml", 0o600)
+
+	cfg := &config.Config{
+		Labs: map[string]*config.Lab{"art-az1": {Mode: "nested"}},
+	}
+
+	labs, err := config.ResolveLabs(cfg, configPath)
+	require.NoError(t, err)
+	require.Equal(t, "artaz1", labs["art-az1"].Network.VnetID)
+}
+
 // TestResolveLabs_VnetIDCollisionAcrossLabs_Errors covers two labs whose
 // names truncate to the same 8-character vnet ID (both starting
 // "collide-"): ResolveLabs must refuse rather than silently letting two

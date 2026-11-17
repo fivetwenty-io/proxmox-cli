@@ -398,8 +398,9 @@ func ValidateNestedNetwork(name string, nn LabNestedNetwork) []string {
 
 // sdnIdentifierRE is the charset a nested SDN vnet identifier must match:
 // PVE's own SDN ID rule, at most MaxVnetIDLen alphanumeric characters with no
-// hyphen. A zone ID has its own, stricter rule (ZoneIDIssue). Identical to internal/cli/lab's configVnetIDPattern, which
-// enforces the same rule on the OUTER vnet IDs.
+// hyphen. A zone ID has its own, stricter rule (ZoneIDIssue). The OUTER vnet IDs
+// are held to the stricter ValidVnetID rule instead (a letter first, at
+// least 2 characters).
 var sdnIdentifierRE = regexp.MustCompile(`^[A-Za-z0-9]{1,8}$`)
 
 // MaxZoneIDLen and MinZoneIDLen bound a PVE SDN zone ID. The limits come from
@@ -1177,21 +1178,54 @@ func EffectiveNFSExport(lab *Lab) string {
 	return lab.Name
 }
 
-// MaxVnetIDLen is the Proxmox VE SDN vnet ID length limit: at most 8
-// alphanumeric characters, no hyphen.
-const MaxVnetIDLen = 8
+// MaxVnetIDLen and MinVnetIDLen bound a PVE SDN vnet ID. The limits come
+// from the vnet parameter of POST /cluster/sdn/vnets in the PVE API schema
+// the SDK ships (_data/apidoc.json): minLength 2, maxLength 8, pattern
+// "[a-zA-Z][a-zA-Z0-9]*[a-zA-Z0-9]", which PVE anchors at both ends.
+const (
+	MinVnetIDLen = 2
+	MaxVnetIDLen = 8
+)
 
-// DeriveVnetID returns the deterministic SDN vnet ID for a lab named name:
-// every hyphen stripped, then truncated to the first MaxVnetIDLen
-// characters. This is PVE's own vnet ID constraint (≤8 alphanumeric
-// characters, no hyphen), applied to the lab's name so a lab that does not
-// set network.vnet_id explicitly still gets a valid, deterministic vnet ID
-// (multi-node lab plan §14.1). Examples: "wayneeseguin" -> "wayneese",
-// "pve-cpi" -> "pvecpi", "krutten" -> "krutten" (already ≤8 chars).
+// VnetIDRule states PVE's vnet ID rule in words, for an error message that
+// has to tell the operator what a valid ID looks like.
+const VnetIDRule = "2-8 letters and digits, starting with a letter, with no hyphen or underscore"
+
+// vnetIDRE is the vnet ID pattern from the PVE schema, anchored: a letter,
+// then letters and digits. The length bounds are part of the expression.
+var vnetIDRE = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9]{1,7}$`)
+
+// ValidVnetID reports whether id is an outer SDN vnet ID PVE accepts.
+func ValidVnetID(id string) bool {
+	return vnetIDRE.MatchString(id)
+}
+
+// DeriveVnetID returns the deterministic SDN vnet ID for a lab named name,
+// or "" when the name holds too few usable characters to make one. It keeps
+// only ASCII letters and digits (a hyphen, underscore, dot, or any other
+// character is dropped), skips leading digits so the ID starts with a letter,
+// and truncates the result to the first MaxVnetIDLen characters. That is
+// PVE's own vnet ID rule (see VnetIDRule), applied to the lab's name so a lab
+// that does not set network.vnet_id explicitly still gets a valid,
+// deterministic vnet ID (multi-node lab plan §14.1). Examples:
+// "wayneeseguin" -> "wayneese", "pve-cpi" -> "pvecpi", "krutten" -> "krutten"
+// (already ≤8 chars), "art-az1" -> "artaz1", "7a-b" -> "ab". A caller must
+// treat "" as "no valid default exists" and ask for an explicit vnet ID.
 func DeriveVnetID(name string) string {
-	stripped := strings.ReplaceAll(name, "-", "")
-	if len(stripped) > MaxVnetIDLen {
-		return stripped[:MaxVnetIDLen]
+	var b strings.Builder
+	for _, r := range name {
+		if b.Len() == MaxVnetIDLen {
+			break
+		}
+		isLetter := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')
+		isDigit := r >= '0' && r <= '9'
+		if !isLetter && (!isDigit || b.Len() == 0) {
+			continue
+		}
+		b.WriteRune(r)
 	}
-	return stripped
+	if b.Len() < MinVnetIDLen {
+		return ""
+	}
+	return b.String()
 }

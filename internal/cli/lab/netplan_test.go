@@ -122,12 +122,12 @@ func TestLabNetworkPlanIssues_VnetIDCharsetAndUniqueness(t *testing.T) {
 		{
 			name:    "vnet id too long",
 			mutate:  func(n *config.LabNetwork) { n.Vnets[0].ID = "toolongvnetid" },
-			wantSub: `network.vnets[0].id "toolongvnetid" must be 1-8 alphanumeric characters with no hyphen`,
+			wantSub: `network.vnets[0].id "toolongvnetid" must be 2-8 letters and digits, starting with a letter, with no hyphen or underscore`,
 		},
 		{
 			name:    "vnet id has hyphen",
 			mutate:  func(n *config.LabNetwork) { n.Vnets[0].ID = "st-vnet" },
-			wantSub: `network.vnets[0].id "st-vnet" must be 1-8 alphanumeric characters with no hyphen`,
+			wantSub: `network.vnets[0].id "st-vnet" must be 2-8 letters and digits, starting with a letter, with no hyphen or underscore`,
 		},
 		{
 			name:    "vnet id collides with primary vnet_id",

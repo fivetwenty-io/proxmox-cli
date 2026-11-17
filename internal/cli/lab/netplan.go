@@ -287,9 +287,9 @@ func labVnetsPlanIssues(n config.LabNetwork, cidr *net.IPNet) []string {
 		if v.ID == "" {
 			issues = append(issues, fmt.Sprintf("network.vnets[%d].id is required", i))
 		} else {
-			if !configVnetIDPattern.MatchString(v.ID) {
+			if !config.ValidVnetID(v.ID) {
 				issues = append(issues, fmt.Sprintf(
-					"network.vnets[%d].id %q must be 1-8 alphanumeric characters with no hyphen", i, v.ID))
+					"network.vnets[%d].id %q must be %s", i, v.ID, config.VnetIDRule))
 			}
 			if seenIDs[v.ID] {
 				issues = append(issues, fmt.Sprintf(

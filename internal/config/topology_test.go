@@ -43,6 +43,53 @@ func TestDeriveVnetID_MultipleHyphensAllStripped(t *testing.T) {
 	assert.Equal(t, "abcdefgh", config.DeriveVnetID("ab-cd-efgh"))
 }
 
+// TestDeriveVnetID_DropsCharactersPVERejects covers a hyphenated name, a
+// name with other punctuation, a name that starts with digits, and a name
+// longer than the limit: every character PVE would refuse is dropped, the
+// result starts with a letter, and it is truncated to 8 characters.
+func TestDeriveVnetID_DropsCharactersPVERejects(t *testing.T) {
+	cases := map[string]string{
+		"art-az1":              "artaz1",
+		"art-az2":              "artaz2",
+		"my_lab.v2":            "mylabv2",
+		"9lives":               "lives",
+		"7a-b":                 "ab",
+		"a-very-long-lab-name": "averylon",
+		"Wayne":                "Wayne",
+		"lab-é-x":              "labx",
+	}
+	for name, want := range cases {
+		t.Run(name, func(t *testing.T) {
+			got := config.DeriveVnetID(name)
+			assert.Equal(t, want, got)
+			assert.True(t, config.ValidVnetID(got), "derived ID %q must satisfy the PVE rule", got)
+		})
+	}
+}
+
+// TestDeriveVnetID_NoUsableCharactersReturnsEmpty covers names that leave
+// fewer than the 2 characters PVE requires once the disallowed ones are
+// dropped: the function reports "no valid ID" with an empty string instead of
+// returning an ID PVE would reject.
+func TestDeriveVnetID_NoUsableCharactersReturnsEmpty(t *testing.T) {
+	for _, name := range []string{"", "-", "---", "123", "1-2-3", "a", "9a", "_._"} {
+		t.Run(name, func(t *testing.T) {
+			assert.Empty(t, config.DeriveVnetID(name))
+		})
+	}
+}
+
+// TestValidVnetID pins PVE's vnet ID rule: 2 to 8 letters and digits,
+// starting with a letter.
+func TestValidVnetID(t *testing.T) {
+	for _, id := range []string{"ab", "wayne", "artaz1", "a1234567", "A1"} {
+		assert.True(t, config.ValidVnetID(id), id)
+	}
+	for _, id := range []string{"", "a", "1ab", "art-az1", "art_az1", "toolongvnet", "a1234567x", "ab cd", "ab\n"} {
+		assert.False(t, config.ValidVnetID(id), id)
+	}
+}
+
 // --- ValidateTopology ----------------------------------------------------
 
 func TestValidateTopology_ZeroValueIsValid(t *testing.T) {

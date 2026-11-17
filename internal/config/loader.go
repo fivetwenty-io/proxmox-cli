@@ -647,7 +647,9 @@ func ResolveLabs(cfg *Config, configPath string) (map[string]*Lab, error) {
 		}
 	}
 
-	applyVnetIDDefaults(result)
+	if err := applyVnetIDDefaults(result); err != nil {
+		return nil, err
+	}
 
 	if err := validateVnetIDUniqueness(result); err != nil {
 		return nil, err
@@ -664,13 +666,30 @@ func ResolveLabs(cfg *Config, configPath string) (map[string]*Lab, error) {
 // config left it empty, using DeriveVnetID(name). A lab that sets
 // network.vnet_id explicitly keeps that value verbatim, even if it diverges
 // from what DeriveVnetID(name) would produce — explicit config always wins
-// over the derived default.
-func applyVnetIDDefaults(labs map[string]*Lab) {
-	for name, lab := range labs {
-		if lab.Network.VnetID == "" {
-			lab.Network.VnetID = DeriveVnetID(name)
-		}
+// over the derived default. A lab whose name yields no valid vnet ID is an
+// error naming the lab and network.vnet_id, so the operator knows which key
+// fixes it; labs are visited in name order so the error is deterministic.
+func applyVnetIDDefaults(labs map[string]*Lab) error {
+	names := make([]string, 0, len(labs))
+	for name := range labs {
+		names = append(names, name)
 	}
+	sort.Strings(names)
+
+	for _, name := range names {
+		lab := labs[name]
+		if lab.Network.VnetID != "" {
+			continue
+		}
+		derived := DeriveVnetID(name)
+		if derived == "" {
+			return fmt.Errorf(
+				"lab %q: no valid vnet ID can be derived from the name (a vnet ID is %s); "+
+					"set network.vnet_id explicitly", name, VnetIDRule)
+		}
+		lab.Network.VnetID = derived
+	}
+	return nil
 }
 
 // validateVnetIDUniqueness reports an error naming every colliding pair when

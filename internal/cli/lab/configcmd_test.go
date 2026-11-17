@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -565,6 +566,153 @@ func TestConfigAdd_RejectsVnetIDTooLong(t *testing.T) {
 		"--vnet-id", "waytoolongvnetid", "--vxlan-tag", "5012", "--cidr", "10.117.0.0/16")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "vnet-id")
+}
+
+// configAddResolvedVnetID reloads the config at cfgPath and returns the
+// resolved vnet ID of the named lab, so a test can check what `config add`
+// wrote through the same loader every other verb uses.
+func configAddResolvedVnetID(t *testing.T, cfgPath, lab string) string {
+	t.Helper()
+	cfg, err := config.Load(cfgPath)
+	require.NoError(t, err)
+	labs, err := config.ResolveLabs(cfg, cfgPath)
+	require.NoError(t, err)
+	require.Contains(t, labs, lab)
+	return labs[lab].Network.VnetID
+}
+
+// TestConfigAdd_DerivesValidVnetIDFromName covers the lab names that used to
+// write an invalid default: a hyphenated name and a name longer than 8
+// characters. Each must derive a valid ID, drop the disallowed characters,
+// truncate, and write it into the lab file.
+func TestConfigAdd_DerivesValidVnetIDFromName(t *testing.T) {
+	cases := []struct {
+		name string
+		want string
+	}{
+		{"art-az1", "artaz1"},
+		{"pve-cpi", "pvecpi"},
+		{"wayneeseguin", "wayneese"},
+		{"a-very-long-lab-name", "averylon"},
+	}
+	for i, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfgPath := writeConfigCmdYAML(t, &config.Config{LabsDir: "labs.d"})
+
+			_, err := runConfigCmd(t, cfgPath, "add", tc.name,
+				"--vxlan-tag", strconv.Itoa(5100+i), "--cidr", "10.140.0.0/16")
+			require.NoError(t, err)
+
+			got := configAddResolvedVnetID(t, cfgPath, tc.name)
+			assert.Equal(t, tc.want, got)
+			assert.True(t, config.ValidVnetID(got))
+		})
+	}
+}
+
+// TestConfigAdd_DerivedVnetIDCollidesWithAnotherLab_NamesFlag covers two lab
+// names that derive the same vnet ID ("art-az1" and "artaz1" both give
+// "artaz1"): the second add must refuse, name the lab that holds the ID, and
+// name --vnet-id, and passing --vnet-id must then succeed.
+func TestConfigAdd_DerivedVnetIDCollidesWithAnotherLab_NamesFlag(t *testing.T) {
+	cfgPath := writeConfigCmdYAML(t, &config.Config{LabsDir: "labs.d"})
+
+	_, err := runConfigCmd(t, cfgPath, "add", "art-az1", "--vxlan-tag", "5111", "--cidr", "10.211.0.0/16")
+	require.NoError(t, err)
+
+	_, err = runConfigCmd(t, cfgPath, "add", "artaz1", "--vxlan-tag", "5112", "--cidr", "10.212.0.0/16")
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "--vnet-id")
+	assert.ErrorContains(t, err, `"artaz1"`)
+	assert.ErrorContains(t, err, `"art-az1"`)
+
+	labsDir := filepath.Join(filepath.Dir(cfgPath), "labs.d")
+	_, statErr := os.Stat(filepath.Join(labsDir, "artaz1.yaml"))
+	assert.True(t, os.IsNotExist(statErr), "a refused add must not write the lab file")
+
+	_, err = runConfigCmd(t, cfgPath, "add", "artaz1",
+		"--vnet-id", "artaz9", "--vxlan-tag", "5112", "--cidr", "10.212.0.0/16")
+	require.NoError(t, err)
+	assert.Equal(t, "artaz9", configAddResolvedVnetID(t, cfgPath, "artaz1"))
+}
+
+// TestConfigAdd_ExplicitVnetIDCollides_NamesFlag covers an explicit --vnet-id
+// that another lab already uses: the refusal points at --vnet-id as the
+// source, not at the lab name.
+func TestConfigAdd_ExplicitVnetIDCollides_NamesFlag(t *testing.T) {
+	cfgPath := writeConfigCmdYAML(t, &config.Config{LabsDir: "labs.d"})
+
+	_, err := runConfigCmd(t, cfgPath, "add", "first", "--vxlan-tag", "5111", "--cidr", "10.211.0.0/16")
+	require.NoError(t, err)
+
+	_, err = runConfigCmd(t, cfgPath, "add", "second",
+		"--vnet-id", "first", "--vxlan-tag", "5112", "--cidr", "10.212.0.0/16")
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "from --vnet-id")
+	assert.ErrorContains(t, err, `lab "first"`)
+}
+
+// TestConfigAdd_ForceRewriteOfSameLabIsNotACollision covers re-adding a lab
+// with --force: the lab's own existing vnet ID is not another lab's.
+func TestConfigAdd_ForceRewriteOfSameLabIsNotACollision(t *testing.T) {
+	cfgPath := writeConfigCmdYAML(t, &config.Config{LabsDir: "labs.d"})
+
+	_, err := runConfigCmd(t, cfgPath, "add", "art-az1", "--vxlan-tag", "5111", "--cidr", "10.211.0.0/16")
+	require.NoError(t, err)
+
+	_, err = runConfigCmd(t, cfgPath, "add", "art-az1", "--force", "--vxlan-tag", "5111", "--cidr", "10.211.0.0/16")
+	require.NoError(t, err)
+	assert.Equal(t, "artaz1", configAddResolvedVnetID(t, cfgPath, "art-az1"))
+}
+
+// TestConfigAdd_NameWithNoDerivableVnetID_NamesFlag covers a lab name that
+// leaves fewer than 2 usable characters: there is no valid default, so the
+// error names --vnet-id and states the rule, and --vnet-id then works.
+func TestConfigAdd_NameWithNoDerivableVnetID_NamesFlag(t *testing.T) {
+	cfgPath := writeConfigCmdYAML(t, &config.Config{LabsDir: "labs.d"})
+
+	_, err := runConfigCmd(t, cfgPath, "add", "1-2", "--vxlan-tag", "5120", "--cidr", "10.150.0.0/16")
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "--vnet-id")
+	assert.ErrorContains(t, err, config.VnetIDRule)
+
+	_, err = runConfigCmd(t, cfgPath, "add", "1-2",
+		"--vnet-id", "lab12", "--vxlan-tag", "5120", "--cidr", "10.150.0.0/16")
+	require.NoError(t, err)
+	assert.Equal(t, "lab12", configAddResolvedVnetID(t, cfgPath, "1-2"))
+}
+
+// TestConfigAdd_ExplicitVnetIDValid_Kept covers an explicit --vnet-id on a
+// lab whose name would derive something else: the explicit value wins
+// verbatim.
+func TestConfigAdd_ExplicitVnetIDValid_Kept(t *testing.T) {
+	cfgPath := writeConfigCmdYAML(t, &config.Config{LabsDir: "labs.d"})
+
+	_, err := runConfigCmd(t, cfgPath, "add", "art-az1",
+		"--vnet-id", "artaz1x", "--vxlan-tag", "5111", "--cidr", "10.211.0.0/16")
+	require.NoError(t, err)
+	assert.Equal(t, "artaz1x", configAddResolvedVnetID(t, cfgPath, "art-az1"))
+}
+
+// TestConfigAdd_InvalidExplicitVnetID_NamesFlagAndRule covers each way an
+// explicit --vnet-id can break PVE's rule: a hyphen, a leading digit, one
+// character, and more than 8 characters. The error names the flag, quotes the
+// value, and states the rule, and no lab file is written.
+func TestConfigAdd_InvalidExplicitVnetID_NamesFlagAndRule(t *testing.T) {
+	for _, bad := range []string{"art-az1", "1abc", "a", "waytoolongvnetid", "ab_cd"} {
+		t.Run(bad, func(t *testing.T) {
+			cfgPath := writeConfigCmdYAML(t, &config.Config{LabsDir: "labs.d"})
+
+			_, err := runConfigCmd(t, cfgPath, "add", "wayne",
+				"--vnet-id", bad, "--vxlan-tag", "5130", "--cidr", "10.160.0.0/16")
+			require.Error(t, err)
+			assert.ErrorContains(t, err, "--vnet-id "+strconv.Quote(bad))
+			assert.ErrorContains(t, err, config.VnetIDRule)
+
+			_, statErr := os.Stat(filepath.Join(filepath.Dir(cfgPath), "labs.d", "wayne.yaml"))
+			assert.True(t, os.IsNotExist(statErr))
+		})
+	}
 }
 
 func TestConfigAdd_RejectsNonPositiveVCPU(t *testing.T) {

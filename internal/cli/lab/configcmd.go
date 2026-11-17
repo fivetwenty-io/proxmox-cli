@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net"
 	"path/filepath"
-	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -34,10 +34,6 @@ const (
 	configDefaultRefquotaGB  = 480
 	configDefaultAccessRole  = "PVEVMUser"
 )
-
-// configVnetIDPattern enforces the vnet ID constraint documented in the
-// design schema: at most 8 alphanumeric characters, no hyphen.
-var configVnetIDPattern = regexp.MustCompile(`^[A-Za-z0-9]{1,8}$`)
 
 // newConfigCmd builds the `pmx lab config` parent command and its
 // init/add/show sub-commands. Every sub-command is local-only: they read
@@ -88,7 +84,12 @@ func configSchemaDefaultLab(name string) *config.Lab {
 		Name: name,
 		Mode: configDefaultMode,
 		Network: config.LabNetwork{
-			VnetID:    name,
+			// DeriveVnetID is the same derivation the config loader applies to a
+			// lab that leaves network.vnet_id unset, so a lab written here
+			// without --vnet-id resolves to the same ID either way. It is ""
+			// when the name holds no usable characters, which
+			// validateConfigAddLab turns into an error naming --vnet-id.
+			VnetID:    config.DeriveVnetID(name),
 			VnetAlias: "lab-" + name,
 			// ZoneName/ZoneType are written explicitly, at the same values
 			// EffectiveZoneName/EffectiveZoneType would resolve them to, so a
@@ -434,11 +435,23 @@ func newConfigAddCmd() *cobra.Command {
 				return fmt.Errorf("lab config add %q: %w", name, err)
 			}
 
-			if !force {
-				labs, err := config.ResolveLabs(deps.Cfg, deps.ConfigPath)
-				if err != nil {
-					return fmt.Errorf("lab config add %q: resolve labs: %w", name, err)
+			// Resolve the existing labs once for both the name check and the
+			// vnet ID collision check. Under --force a config that no longer
+			// resolves (for example one that already carries a duplicate of
+			// this lab) must not block the overwrite, so the failure only stops
+			// a run without --force; the collision check then has nothing to
+			// compare against and is skipped.
+			labs, resolveErr := config.ResolveLabs(deps.Cfg, deps.ConfigPath)
+			if resolveErr != nil && !force {
+				return fmt.Errorf("lab config add %q: resolve labs: %w", name, resolveErr)
+			}
+			if resolveErr == nil {
+				if err := configVnetIDCollision(labs, name, lab.Network.VnetID, flags.Changed("vnet-id")); err != nil {
+					return fmt.Errorf("lab config add %q: %w", name, err)
 				}
+			}
+
+			if !force {
 				if _, exists := labs[name]; exists {
 					return fmt.Errorf(
 						"lab config add %q: a lab named %q already resolves via the current config; "+
@@ -467,7 +480,7 @@ func newConfigAddCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&force, "force", false,
 		"overwrite an existing file, or write despite the name already resolving")
 	cmd.Flags().StringVar(&vnetID, "vnet-id", "",
-		"SDN vnet ID, 1-8 alphanumeric characters, no hyphen (default: the lab name)")
+		"SDN vnet ID, "+config.VnetIDRule+" (default: derived from the lab name by dropping other characters and truncating to 8)")
 	cmd.Flags().IntVar(&vxlanTag, "vxlan-tag", 0,
 		"VXLAN tag for the lab's vnet (required; must be unique across labs)")
 	cmd.Flags().StringVar(&cidr, "cidr", "",
@@ -493,14 +506,50 @@ func newConfigAddCmd() *cobra.Command {
 	return cmd
 }
 
+// configVnetIDCollision reports an error when another lab in labs already
+// resolves to vnetID. Two labs sharing a vnet ID would silently share one PVE
+// vnet, and the config loader refuses such a pair on the next load, so config
+// add refuses it at write time and names the --vnet-id flag that resolves it.
+// The lab being written (name) is skipped, since --force may overwrite it.
+// explicit says whether the ID came from --vnet-id or from the lab name, so
+// the message points at the right source. Labs are scanned in name order so
+// the lab named in the error is deterministic.
+func configVnetIDCollision(labs map[string]*config.Lab, name, vnetID string, explicit bool) error {
+	others := make([]string, 0, len(labs))
+	for other := range labs {
+		if other != name {
+			others = append(others, other)
+		}
+	}
+	sort.Strings(others)
+
+	source := "derived from the lab name"
+	if explicit {
+		source = "from --vnet-id"
+	}
+	for _, other := range others {
+		if labs[other].Network.VnetID == vnetID {
+			return fmt.Errorf(
+				"vnet ID %q (%s) is already used by lab %q; pass --vnet-id with an ID no other lab uses (%s)",
+				vnetID, source, other, config.VnetIDRule)
+		}
+	}
+	return nil
+}
+
 // validateConfigAddLab checks the fields `config add` cannot safely leave at
 // a fleet-wide default or an unvalidated flag value: the vnet ID's format,
 // mode's enum, and every numeric/CIDR field that would otherwise silently
 // write a non-functional lab definition to disk.
 func validateConfigAddLab(lab *config.Lab) error {
-	if !configVnetIDPattern.MatchString(lab.Network.VnetID) {
+	if lab.Network.VnetID == "" {
 		return fmt.Errorf(
-			"vnet-id %q must be 1-8 alphanumeric characters with no hyphen", lab.Network.VnetID)
+			"no valid vnet ID can be derived from the lab name %q; pass --vnet-id (%s)",
+			lab.Name, config.VnetIDRule)
+	}
+	if !config.ValidVnetID(lab.Network.VnetID) {
+		return fmt.Errorf("--vnet-id %q is not a valid vnet ID; it must be %s",
+			lab.Network.VnetID, config.VnetIDRule)
 	}
 
 	if lab.Mode != "nested" && lab.Mode != "hardware" {
