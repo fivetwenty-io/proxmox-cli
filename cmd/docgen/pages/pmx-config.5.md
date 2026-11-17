@@ -603,10 +603,20 @@ those are documented on **pmx-lab-config-add(1)**, not repeated here.
   **wayne@pve**). Empty or **~** means no owner.
 
 **network.vnet_id**
-: SDN vnet identifier. Must be 1-8 alphanumeric characters with no hyphen;
-  this format is enforced by **pmx lab config add**, not by the loader
-  itself, so a hand-edited file with an invalid ID is only caught when a
-  lab verb that provisions SDN state runs.
+: SDN vnet identifier. Must be 2 to 8 letters and digits, starting with a
+  letter, with no hyphen or underscore. When the key is left out, pmx derives
+  the ID from the lab name by dropping every character PVE rejects (hyphens
+  and any leading digits), then truncating to 8 characters, so **art-az1**
+  becomes **artaz1** and **wayneeseguin** becomes **wayneese**. A name that
+  leaves fewer than 2 usable characters, such as **a**, **42**, or **9a**,
+  derives no ID. That lab still loads, but **pmx lab config add** and
+  **pmx lab create** refuse it and ask for **--vnet-id** or this key. The
+  format is enforced by **pmx lab config add**, not by the loader itself,
+  so a hand-edited file with an invalid ID is only caught when a lab verb
+  that provisions SDN state runs. PVE vnet IDs are unique cluster-wide, so
+  the loader refuses a config where the same ID appears twice, whether as
+  two labs' **network.vnet_id** values, as a **network.vnets[].id**, or
+  within one lab.
 
 **network.vnet_alias**
 : Human-readable label for the vnet.

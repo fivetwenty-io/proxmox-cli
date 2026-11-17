@@ -710,7 +710,9 @@ func TestLabWaitForSSH_ChangedHostKeyIsTerminal(t *testing.T) {
 		err := run(t, func(*cli.Deps) {})
 		assert.ErrorContains(t, err, "`ssh-keygen -R 10.10.1.10`")
 		assert.ErrorContains(t, err, "known_hosts")
-		assert.NotContains(t, err.Error(), "jump host")
+		assert.ErrorContains(t, err, "If ~/.ssh/config sets a ProxyJump for this host, the changed key might "+
+			"instead belong to that jump host")
+		assert.ErrorContains(t, err, "`ssh -G 10.10.1.10`")
 	})
 
 	t.Run("another port names the bracketed form", func(t *testing.T) {
@@ -723,6 +725,8 @@ func TestLabWaitForSSH_ChangedHostKeyIsTerminal(t *testing.T) {
 		assert.ErrorContains(t, err, "might instead belong to a jump host, in which case run "+
 			"`ssh-keygen -R '[bastion.example]:2200'` or `ssh-keygen -R inner.example`")
 		assert.ErrorContains(t, err, "`ssh-keygen -R 10.10.1.10`")
+		assert.NotContains(t, err.Error(), "~/.ssh/config",
+			"the context jump replaces the ssh config's ProxyJump, so that sentence is left out")
 	})
 
 	t.Run("an ssh:// jump hop is stripped to its host", func(t *testing.T) {

@@ -395,6 +395,12 @@ func guestAuthHint(kind sshAuthFailure, host string, f sshcmd.Flags) string {
 			hint += fmt.Sprintf(
 				". The changed key might instead belong to a jump host, in which case run %s",
 				strings.Join(cmds, " or "))
+		} else {
+			// With no context jump, ssh leaves ProxyJump to ~/.ssh/config, so the
+			// key that changed may be the jump host's rather than the guest's.
+			hint += ". If ~/.ssh/config sets a ProxyJump for this host, the changed key might instead " +
+				"belong to that jump host; `ssh -G " + host + "` shows the jump host in use, and " +
+				"`ssh-keygen -R` with that host's name clears its entry"
 		}
 		return hint
 	case sshDeniedKey:
