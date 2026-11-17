@@ -216,6 +216,9 @@ type preflightCase struct {
 	arrange func(t *testing.T, f *testhelper.FakePVE, deps *cli.Deps)
 	// want are the fragments the refusal must carry.
 	want []string
+	// sshExit says the refusal wraps ssh's own exit error, which the verb
+	// must therefore mark as captured.
+	sshExit bool
 }
 
 func preflightCases() []preflightCase {
@@ -243,7 +246,8 @@ func preflightCases() []preflightCase {
 					return "", &exec.ExitError{Code: 255}
 				}
 			},
-			want: []string{"could not be reached", `node "pve1"`, "root@192.168.1.10"},
+			want:    []string{"could not be reached", `node "pve1"`, "root@192.168.1.10"},
+			sshExit: true,
 		},
 		{
 			name: "remote command failure",
@@ -252,7 +256,8 @@ func preflightCases() []preflightCase {
 					return "", &exec.ExitError{Code: 1}
 				}
 			},
-			want: []string{"did not answer the identity check (exit 1)", `node "pve1"`},
+			want:    []string{"did not answer the identity check (exit 1)", `node "pve1"`},
+			sshExit: true,
 		},
 		{
 			name: "empty reply",
@@ -377,7 +382,7 @@ func TestDestroy_PurgeDataset_IdentityPreflight(t *testing.T) {
 			}
 			assert.Empty(t, *events, "nothing is deleted before the preflight passes")
 			assert.Empty(t, fake.Calls, "no zfs command is issued")
-			assertCapturedWhenSSHFailed(t, err)
+			assertCapturedWhenSSHFailed(t, err, tc.sshExit)
 		})
 	}
 
@@ -453,7 +458,7 @@ func TestLabQuota_IdentityPreflight(t *testing.T) {
 				assert.ErrorContains(t, err, want)
 			}
 			assert.Empty(t, fake.Calls, "zfs set never runs")
-			assertCapturedWhenSSHFailed(t, err)
+			assertCapturedWhenSSHFailed(t, err, tc.sshExit)
 		})
 	}
 
@@ -679,10 +684,12 @@ func TestDestroyHelp_PurgeDatasetFlagMatchesTheLongHelp(t *testing.T) {
 // exit error is marked as captured. The runner's stderr goes to a buffer, so
 // without the mark the top-level handler would treat the failure as already
 // shown and exit 255 with nothing on the terminal.
-func assertCapturedWhenSSHFailed(t *testing.T, err error) {
+func assertCapturedWhenSSHFailed(t *testing.T, err error, wantExit bool) {
 	t.Helper()
 
-	if _, ok := errors.AsType[*exec.ExitError](err); !ok {
+	_, hasExit := errors.AsType[*exec.ExitError](err)
+	require.Equal(t, wantExit, hasExit, "the refusal's ssh exit error is not what the case expects")
+	if !hasExit {
 		return
 	}
 
@@ -715,4 +722,18 @@ func TestDatasetSSHArgsDropSelfJump(t *testing.T) {
 
 	argv = createDatasetSSHArgs(f, "192.168.1.20", nil)
 	assert.Contains(t, argv, "-J")
+}
+
+// TestGuestAuthHintNamesTheJumpUsed checks that the changed-host-key hint
+// follows the jump ssh was given, after a jump that ends at the guest is
+// trimmed.
+func TestGuestAuthHintNamesTheJumpUsed(t *testing.T) {
+	f := sshcmd.Flags{User: "root", Port: 22, Jump: "root@bastion.example,root@10.0.0.5"}
+	hint := guestAuthHint(sshChangedHostKey, "10.0.0.5", f)
+	assert.Contains(t, hint, "bastion.example")
+	assert.NotContains(t, hint, "ssh-keygen -R 10.0.0.5` or")
+
+	self := sshcmd.Flags{User: "root", Port: 22, Jump: "root@10.0.0.5"}
+	hint = guestAuthHint(sshChangedHostKey, "10.0.0.5", self)
+	assert.NotContains(t, hint, "jump host", "a jump that was dropped is not named")
 }

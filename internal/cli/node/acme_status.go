@@ -21,6 +21,7 @@ import (
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli/remote"
+	"github.com/fivetwenty-io/proxmox-cli/internal/exec"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-cli/internal/propstr"
 	"github.com/fivetwenty-io/proxmox-cli/internal/sshcmd"
@@ -560,11 +561,11 @@ func readACMERenewalTimer(cmd *cobra.Command, deps *cli.Deps, f *sshFlags, node 
 	if err := deps.Runner.Run("ssh", argv, nil, nil, &stdout, &stderr); err != nil {
 		detail := strings.TrimSpace(stderr.String())
 		if detail != "" {
-			return nil, fmt.Errorf("read %s on node %q over ssh: %w: %s (run without --timer to skip it)",
-				acmeRenewalTimer, node, err, detail)
+			return nil, exec.NewCapturedError(fmt.Errorf("read %s on node %q over ssh: %w: %s (run without --timer to skip it)",
+				acmeRenewalTimer, node, err, detail))
 		}
-		return nil, fmt.Errorf("read %s on node %q over ssh: %w (run without --timer to skip it)",
-			acmeRenewalTimer, node, err)
+		return nil, exec.NewCapturedError(fmt.Errorf("read %s on node %q over ssh: %w (run without --timer to skip it)",
+			acmeRenewalTimer, node, err))
 	}
 	return parseTimerShow(stdout.String())
 }

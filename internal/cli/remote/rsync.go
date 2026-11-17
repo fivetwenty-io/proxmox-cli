@@ -180,7 +180,7 @@ func runRsync(cmd *cobra.Command, deps *cli.Deps, f *sshcmd.Flags, rsyncArgs []s
 	}
 
 	argv := make([]string, 0, len(rewritten)+2)
-	argv = append(argv, "-e", sshcmd.RemoteShell(f))
+	argv = append(argv, "-e", sshcmd.RemoteShell(f.ForHost(host)))
 	argv = append(argv, rewritten...)
 
 	if err := deps.Runner.Run("rsync", argv, nil, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr()); err != nil {

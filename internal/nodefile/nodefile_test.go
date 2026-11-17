@@ -199,3 +199,29 @@ func TestExec_ArgvMatchesWrite(t *testing.T) {
 	_, _, _ = Conn{Runner: execRunner, Flags: f, Host: testHost}.Exec("true")
 	require.Equal(t, want, execRunner.Calls[0].Args[:len(want)])
 }
+
+// TestSSHFailuresAreMarkedCaptured checks that an ssh failure, whose stderr went
+// to a buffer, carries the captured mark so the top-level handler prints it.
+func TestSSHFailuresAreMarkedCaptured(t *testing.T) {
+	fail := func() *exec.FakeRunner {
+		return exec.Fake(exec.FakeResponse{Stderr: "jumphost loop via 10.0.0.5", ExitCode: 255})
+	}
+
+	cases := map[string]func(Conn) error{
+		"read": func(c Conn) error { _, _, err := c.Read(testPath); return err },
+		"write": func(c Conn) error {
+			return c.Write(testPath, testContent, testSHA, testLock)
+		},
+		"exec": func(c Conn) error { _, _, err := c.Exec("true"); return err },
+	}
+	for name, run := range cases {
+		t.Run(name, func(t *testing.T) {
+			err := run(Conn{Runner: fail(), Flags: testFlags(), Host: testHost})
+			require.Error(t, err)
+
+			var captured *exec.CapturedError
+			require.ErrorAs(t, err, &captured)
+			require.Contains(t, err.Error(), "jumphost loop via 10.0.0.5")
+		})
+	}
+}

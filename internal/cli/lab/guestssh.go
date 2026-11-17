@@ -384,6 +384,9 @@ func splitJumpHop(hop string) (host string, port int) {
 func guestAuthHint(kind sshAuthFailure, host string, f sshcmd.Flags) string {
 	switch kind {
 	case sshChangedHostKey:
+		// Name the jump the connection actually used: a jump that ended at the
+		// guest itself was dropped, and ssh dialed direct.
+		f = *f.ForHost(host)
 		hint := fmt.Sprintf(
 			"the guest's host key differs from the one in known_hosts, which is usual after a lab is "+
 				"re-created on the same addresses; run `ssh-keygen -R %s` and retry", knownHostsName(host, f.Port))
@@ -395,7 +398,7 @@ func guestAuthHint(kind sshAuthFailure, host string, f sshcmd.Flags) string {
 			hint += fmt.Sprintf(
 				". The changed key might instead belong to a jump host, in which case run %s",
 				strings.Join(cmds, " or "))
-		} else {
+		} else if !f.NoJump {
 			// With no context jump, ssh leaves ProxyJump to ~/.ssh/config, so the
 			// key that changed may be the jump host's rather than the guest's.
 			hint += ". If ~/.ssh/config sets a ProxyJump for this host, the changed key might instead " +

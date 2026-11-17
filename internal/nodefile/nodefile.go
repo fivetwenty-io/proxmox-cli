@@ -70,7 +70,10 @@ func (c Conn) Read(path string) (content, sha string, err error) {
 	var out, errBuf bytes.Buffer
 	runErr := c.Runner.Run("ssh", argv, nil, nil, &out, &errBuf)
 	if runErr != nil {
-		return "", "", fmt.Errorf("read %s over ssh: %w%s", path, runErr, stderrSuffix(errBuf.String()))
+		// ssh's stderr went to a buffer, so mark the error for the top-level
+		// handler to print it.
+		return "", "", exec.NewCapturedError(
+			fmt.Errorf("read %s over ssh: %w%s", path, runErr, stderrSuffix(errBuf.String())))
 	}
 	if out.Len() > MaxFileSize {
 		return "", "", fmt.Errorf("read %s over ssh: %w (%d bytes)", path, ErrTooLarge, out.Len())
@@ -113,7 +116,8 @@ func (c Conn) Write(path, content, expectSHA, lockPath string) error {
 	case exitNotFound:
 		return ErrNotFound
 	default:
-		return fmt.Errorf("write %s over ssh: %w%s", path, runErr, stderrSuffix(errBuf.String()))
+		return exec.NewCapturedError(
+			fmt.Errorf("write %s over ssh: %w%s", path, runErr, stderrSuffix(errBuf.String())))
 	}
 }
 
@@ -129,7 +133,7 @@ func (c Conn) Exec(script string) (stdout, stderr string, err error) {
 	runErr := c.Runner.Run("ssh", argv, nil, nil, &out, &errBuf)
 	if runErr != nil {
 		return out.String(), errBuf.String(),
-			fmt.Errorf("exec over ssh: %w%s", runErr, stderrSuffix(errBuf.String()))
+			exec.NewCapturedError(fmt.Errorf("exec over ssh: %w%s", runErr, stderrSuffix(errBuf.String())))
 	}
 	return out.String(), errBuf.String(), nil
 }
