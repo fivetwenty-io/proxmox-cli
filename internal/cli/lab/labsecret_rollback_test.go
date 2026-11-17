@@ -52,29 +52,31 @@ func TestSyncLabContext_RefusesOperatorOwnedContextBeforeAnyChange(t *testing.T)
 func TestSyncLabContext_FailureAfterStoreRollsBack(t *testing.T) {
 	cases := []struct {
 		name string
-		// existingRef is the lab-demo context's secret before the run, or ""
-		// for no context.
-		existingRef string
-		wantDeleted []string
-		wantNote    string
+		// existingRef returns the lab-demo context's secret before the run, or
+		// nil for no context.
+		existingRef func(t *testing.T, deps *cli.Deps) string
+		wantDeleted bool
 	}{
 		{
 			name:        "fresh context",
-			wantDeleted: []string{"pmx-lab.fleet.demo/pmx@pve!pmx"},
-			wantNote:    "removed the keychain item pmx-lab.fleet.demo/pmx@pve!pmx it had just written",
+			wantDeleted: true,
 		},
 		{
-			name:        "context moving off the legacy item",
-			existingRef: "keychain:pmx-lab-demo/pmx@pve!pmx",
-			wantDeleted: []string{"pmx-lab.fleet.demo/pmx@pve!pmx"},
-			wantNote:    "removed the keychain item pmx-lab.fleet.demo/pmx@pve!pmx it had just written",
+			name: "context moving off the legacy item",
+			existingRef: func(*testing.T, *cli.Deps) string {
+				return "keychain:pmx-lab-demo/pmx@pve!pmx"
+			},
+			wantDeleted: true,
 		},
 		{
 			// The persisted context already references the namespaced item,
 			// which the rotation overwrote in place: it now holds the only
 			// valid secret and the persisted context still points at it.
-			name:        "context already referencing the namespaced item",
-			existingRef: "keychain:pmx-lab.fleet.demo/pmx@pve!pmx",
+			name: "context already referencing the namespaced item",
+			existingRef: func(t *testing.T, deps *cli.Deps) string {
+				t.Helper()
+				return labTestRef(t, deps, "demo")
+			},
 		},
 	}
 
@@ -84,9 +86,14 @@ func TestSyncLabContext_FailureAfterStoreRollsBack(t *testing.T) {
 			stored := recordKeychainStores(t)
 			deleted := recordKeychainDeletes(t)
 
+			// The config path is fixed before the namespace is computed: the
+			// save fails because a directory sits where the file belongs.
+			deps.ConfigPath = t.TempDir()
+			item := labTestService(t, deps, "demo") + "/pmx@pve!pmx"
+
 			var before config.Context
-			if tc.existingRef != "" {
-				ctx := labTokenContext(tc.existingRef)
+			if tc.existingRef != nil {
+				ctx := labTokenContext(tc.existingRef(t, deps))
 				ctx.Host = "10.10.1.99"
 				before = *ctx
 				deps.Cfg.Contexts["lab-demo"] = ctx
@@ -101,9 +108,6 @@ func TestSyncLabContext_FailureAfterStoreRollsBack(t *testing.T) {
 					return nil
 				}
 			}
-			// A directory where the config file belongs makes the save fail.
-			deps.ConfigPath = t.TempDir()
-
 			lab := multiNodeTestLab("demo", 1, "never")
 			lab.Name = "demo"
 
@@ -112,17 +116,17 @@ func TestSyncLabContext_FailureAfterStoreRollsBack(t *testing.T) {
 			assert.True(t, res.Rotated)
 			assert.Contains(t, err.Error(), "save config")
 			assert.Contains(t, err.Error(), "already removed", "the rotation note still applies")
-			assert.Equal(t, []string{"pmx-lab.fleet.demo/pmx@pve!pmx"}, *stored)
+			assert.Equal(t, []string{item}, *stored)
 
-			if tc.wantDeleted == nil {
+			if tc.wantDeleted {
+				assert.Equal(t, []string{item}, *deleted)
+				assert.Contains(t, err.Error(), "removed the keychain item "+item+" it had just written")
+			} else {
 				assert.Empty(t, *deleted, "an item a context references must be kept")
 				assert.NotContains(t, err.Error(), "removed the keychain item")
-			} else {
-				assert.Equal(t, tc.wantDeleted, *deleted)
-				assert.Contains(t, err.Error(), tc.wantNote)
 			}
 
-			if tc.existingRef == "" {
+			if tc.existingRef == nil {
 				_, present := deps.Cfg.Contexts["lab-demo"]
 				assert.False(t, present, "a context the failed run added must be removed from memory")
 			} else {
@@ -141,26 +145,26 @@ func TestRemoveUnreferencedLabSecret(t *testing.T) {
 	deleted := recordKeychainDeletes(t)
 
 	cfg := &config.Config{Contexts: map[string]*config.Context{
-		"other": labTokenContext("keychain:pmx-lab.fleet.demo/pmx@pve!pmx"),
+		"other": labTokenContext("keychain:pmx-lab.fleet-0a1b2c3d.demo/pmx@pve!pmx"),
 	}}
-	removed, err := removeUnreferencedLabSecret(cfg, "pmx-lab.fleet.demo", "pmx@pve!pmx")
+	removed, err := removeUnreferencedLabSecret(cfg, "pmx-lab.fleet-0a1b2c3d.demo", "pmx@pve!pmx")
 	require.NoError(t, err)
 	assert.False(t, removed)
 	assert.Empty(t, *deleted)
 
 	delete(cfg.Contexts, "other")
-	removed, err = removeUnreferencedLabSecret(cfg, "pmx-lab.fleet.demo", "pmx@pve!pmx")
+	removed, err = removeUnreferencedLabSecret(cfg, "pmx-lab.fleet-0a1b2c3d.demo", "pmx@pve!pmx")
 	require.NoError(t, err)
 	assert.True(t, removed)
-	assert.Equal(t, []string{"pmx-lab.fleet.demo/pmx@pve!pmx"}, *deleted)
+	assert.Equal(t, []string{"pmx-lab.fleet-0a1b2c3d.demo/pmx@pve!pmx"}, *deleted)
 
 	labDeleteSecretFn = func(string, string) error { return config.ErrKeychainUnsupported }
-	removed, err = removeUnreferencedLabSecret(cfg, "pmx-lab.fleet.demo", "pmx@pve!pmx")
+	removed, err = removeUnreferencedLabSecret(cfg, "pmx-lab.fleet-0a1b2c3d.demo", "pmx@pve!pmx")
 	require.NoError(t, err)
 	assert.False(t, removed)
 
 	labDeleteSecretFn = func(string, string) error { return errors.New("keychain locked") }
-	_, err = removeUnreferencedLabSecret(cfg, "pmx-lab.fleet.demo", "pmx@pve!pmx")
+	_, err = removeUnreferencedLabSecret(cfg, "pmx-lab.fleet-0a1b2c3d.demo", "pmx@pve!pmx")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "keychain locked")
 }
@@ -181,7 +185,8 @@ func TestSyncLabContext_RollbackFailureIsReported(t *testing.T) {
 	_, err := syncLabContext(cmd, deps, lab, labSyncOptions{WaitSSH: false})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "save config")
-	assert.Contains(t, err.Error(), "remove the unreferenced keychain item pmx-lab.fleet.demo/pmx@pve!pmx")
+	assert.Contains(t, err.Error(),
+		"remove the unreferenced keychain item "+labTestService(t, deps, "demo")+"/pmx@pve!pmx")
 	assert.Contains(t, err.Error(), "keychain locked")
 }
 
@@ -199,5 +204,5 @@ func TestSyncLabContext_ProbeFailureAfterSaveKeepsItem(t *testing.T) {
 	_, err := syncLabContext(cmd, deps, lab, labSyncOptions{WaitSSH: false})
 	require.Error(t, err)
 	assert.Empty(t, *deleted)
-	assert.Equal(t, "keychain:pmx-lab.fleet.demo/pmx@pve!pmx", deps.Cfg.Contexts["lab-demo"].Auth.Secret)
+	assert.Equal(t, labTestRef(t, deps, "demo"), deps.Cfg.Contexts["lab-demo"].Auth.Secret)
 }

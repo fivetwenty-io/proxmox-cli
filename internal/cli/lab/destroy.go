@@ -67,11 +67,14 @@ func newDestroyCmd() *cobra.Command {
 			"preview what would be destroyed without mutating anything or prompting.\n\n" +
 			"Unless --keep-context is given, destroy also removes the lab's `lab-<name>` pmx " +
 			"context. It deletes a keychain secret only when that context's own secret reference " +
-			"names one of this lab's token items and no other context references the same item. " +
-			"With no `lab-<name>` context in the active config, the keychain is left untouched, so " +
-			"destroying a lab never removes the secret of a same-named lab reached through another " +
-			"outer context or config. The --dry-run preview reports exactly which secret, if any, " +
-			"would be removed.\n\n" +
+			"names this lab's `pmx-lab.<outer-context>-<config-hash>.<name>` item for the active " +
+			"outer context and this config file, and no other context references the same item. " +
+			"An older `pmx-lab-<name>` item is kept and the command that removes it is printed. " +
+			"When the context's item belongs to another outer context or config file, destroy " +
+			"keeps both the context and the item and names the commands that would remove them. " +
+			"With no `lab-<name>` context in the active config, the keychain is left untouched. " +
+			"Removing the context needs --yes/-y or an interactive 'y' even when the lab has no " +
+			"VMs left. The --dry-run preview reports exactly what would be removed or kept.\n\n" +
 			"Pass --purge-dataset to also destroy the lab's ZFS dataset (implies --purge; " +
 			"irreversible). The dataset is destroyed over ssh on the node that hosts it, reached " +
 			"the way \"pmx lab create\" reaches it. That node is the one the lab's VMs live on, " +
@@ -181,11 +184,25 @@ func newDestroyCmd() *cobra.Command {
 			if len(plan) == 0 {
 				msg := fmt.Sprintf(
 					"lab %q: nothing to destroy, no VM found in pool %q", name, poolID)
-				if dryRun {
+				switch {
+				case dryRun:
 					// --dry-run must not mutate: preview the context/keychain
 					// cleanup instead of performing it.
 					msg = "[dry-run] " + msg + destroyContextCleanupPreview(deps, keepContext, name)
-				} else if !keepContext {
+				case !keepContext:
+					// Removing the context (and possibly its keychain item)
+					// is the only mutation left, and it is gated the same way
+					// a VM teardown is.
+					if plan := planLabContextCleanup(deps, name); plan.removesContext() && !yes {
+						ok, err := confirmYesNo(cmd, fmt.Sprintf("Clean up lab %q (%s)?", name, plan.describe(true)))
+						if err != nil {
+							return err
+						}
+						if !ok {
+							res := output.Result{Message: "Aborted."}
+							return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
+						}
+					}
 					msg += destroyContextCleanupOutcome(deps, name)
 				}
 				res := output.Result{Message: msg}
@@ -213,7 +230,8 @@ func newDestroyCmd() *cobra.Command {
 			}
 
 			if !yes {
-				ok, err := confirmYesNo(cmd, fmt.Sprintf("Destroy lab %q (%s)?", name, summary))
+				ok, err := confirmYesNo(cmd, fmt.Sprintf("Destroy lab %q (%s%s)?",
+					name, summary, destroyContextCleanupPreview(deps, keepContext, name)))
 				if err != nil {
 					return err
 				}
@@ -278,7 +296,7 @@ func destroyContextCleanupPreview(deps *cli.Deps, keepContext bool, name string)
 	if keepContext {
 		return ""
 	}
-	return "; " + planLabContextCleanup(deps.Cfg, name).describe(true)
+	return "; " + planLabContextCleanup(deps, name).describe(true)
 }
 
 // destroyContextCleanupOutcome runs the lab's context cleanup for a real
@@ -293,14 +311,36 @@ func destroyContextCleanupOutcome(deps *cli.Deps, name string) string {
 	return "; " + plan.describe(false)
 }
 
+// labSecretKind classifies the keychain secret a lab-<name> context references.
+type labSecretKind int
+
+const (
+	// labSecretNone: the context references no token item of this lab (an env
+	// reference, a literal, another item, or nothing).
+	labSecretNone labSecretKind = iota
+	// labSecretCurrent: a namespaced item of this lab under the namespace of
+	// the outer context and config this invocation runs against. Only this
+	// kind is ever deleted.
+	labSecretCurrent
+	// labSecretLegacy: this lab's legacy "pmx-lab-<name>" item, which a
+	// same-named lab in another config may share. It is kept.
+	labSecretLegacy
+	// labSecretForeign: a namespaced item of this lab under another namespace
+	// (another outer context, another config, a config that moved, or an
+	// invocation whose namespace cannot be determined). The context and the
+	// item are both kept, because the context belongs to that other lab.
+	labSecretForeign
+)
+
 // labContextCleanup is the plan for removing a lab's lab-<name> pmx context
-// and the keychain secret it references. Only the keychain item the context's
-// own stored secret reference names is ever deleted, and only when that item
-// is one of this lab's token secrets (legacy or namespaced service, lab token
-// account) that no other context in the config also references. With no
-// context, or a context referencing anything else, the keychain is left alone:
-// a lab name alone does not identify a keychain item, because a same-named lab
-// reached through another outer context or config may own it.
+// and the keychain secret it references. The context's own stored reference
+// is the only thing that ever names a keychain item to delete, and only a
+// namespaced item of this lab under the current namespace (see
+// labCurrentKeychainService) that no other context references is deleted. A
+// legacy item is kept and its removal command printed. A namespaced item under
+// another namespace means the context was registered through another outer
+// context or config, so neither it nor the item is touched. With no context,
+// the keychain is left alone: a lab name alone does not identify an item.
 type labContextCleanup struct {
 	// labName is the base lab name.
 	labName string
@@ -309,9 +349,16 @@ type labContextCleanup struct {
 	// ctxPresent reports whether the context exists in config (a nil-valued
 	// map entry counts as present and is removed).
 	ctxPresent bool
+	// kind classifies the item the context references.
+	kind labSecretKind
 	// service and account name the lab-owned keychain item the context
-	// references; both are empty when it references none.
+	// references; both are empty when kind is labSecretNone.
 	service, account string
+	// currentService is the namespaced service this invocation would use, or
+	// "" when currentErr explains why it cannot be determined. It is reported
+	// when a foreign item is kept.
+	currentService string
+	currentErr     error
 	// sharedWith names another context that also references the item, in
 	// which case the item is kept.
 	sharedWith string
@@ -326,15 +373,22 @@ type labContextCleanup struct {
 // package var so tests can exercise the unsupported-platform plan on macOS.
 var labKeychainSupported = config.KeychainSupported
 
-// deletesSecret reports whether executing the plan deletes a keychain item.
-func (p labContextCleanup) deletesSecret() bool {
-	return p.ctxPresent && p.service != "" && p.sharedWith == "" && !p.keychainUnsupported
+// removesContext reports whether executing the plan removes the context.
+func (p labContextCleanup) removesContext() bool {
+	return p.ctxPresent && p.kind != labSecretForeign
 }
 
-// planLabContextCleanup inspects cfg and returns what removing the lab named
-// name's context would do. It reads only config, never the keychain.
-func planLabContextCleanup(cfg *config.Config, name string) labContextCleanup {
+// deletesSecret reports whether executing the plan deletes a keychain item.
+func (p labContextCleanup) deletesSecret() bool {
+	return p.ctxPresent && p.kind == labSecretCurrent && p.sharedWith == "" && !p.keychainUnsupported
+}
+
+// planLabContextCleanup inspects the config and returns what removing the lab
+// named name's context would do. It reads only config and the invocation's
+// outer context and config path, never the keychain.
+func planLabContextCleanup(deps *cli.Deps, name string) labContextCleanup {
 	p := labContextCleanup{labName: name, ctxName: labContextName(name)}
+	cfg := deps.Cfg
 	if cfg == nil || cfg.Contexts == nil {
 		return p
 	}
@@ -351,6 +405,17 @@ func planLabContextCleanup(cfg *config.Config, name string) labContextCleanup {
 		return p
 	}
 	p.service, p.account = service, account
+	p.currentService, p.currentErr = labCurrentKeychainService(deps, name)
+
+	switch {
+	case labLegacyKeychainServiceOf(service, name):
+		p.kind = labSecretLegacy
+	case p.currentErr == nil && service == p.currentService:
+		p.kind = labSecretCurrent
+	default:
+		p.kind = labSecretForeign
+		return p
+	}
 	p.sharedWith = labKeychainItemReferencedBy(cfg, p.ctxName, service, account)
 	p.keychainUnsupported = !labKeychainSupported()
 	return p
@@ -366,37 +431,56 @@ func (p labContextCleanup) describe(dryRun bool) string {
 		return did
 	}
 	item := p.service + "/" + p.account
+	removeCtx := pick("would remove", "removed")
 
 	switch {
 	case !p.ctxPresent:
 		return fmt.Sprintf("context %q not found, so %s", p.ctxName,
 			pick("no keychain secret would be removed", "no keychain secret was removed"))
-	case p.service == "":
+	case p.kind == labSecretNone:
 		return fmt.Sprintf("%s context %q; it references no keychain secret of lab %q, so %s",
-			pick("would remove", "removed"), p.ctxName, p.labName,
+			removeCtx, p.ctxName, p.labName,
 			pick("no keychain secret would be removed", "no keychain secret was removed"))
+	case p.kind == labSecretForeign:
+		return fmt.Sprintf("%s context %q and its keychain secret %s, because the secret belongs to "+
+			"another outer context or config (%s); to remove them, run `pmx lab context rm %s` "+
+			"with the outer context and config that registered it, or remove them by hand with "+
+			"`pmx context rm %s` and `%s`",
+			pick("would keep", "kept"), p.ctxName, item, p.foreignReason(), p.labName,
+			p.ctxName, labKeychainDeleteCommand(p.service, p.account))
 	case p.sharedWith != "":
 		return fmt.Sprintf("%s context %q but %s its keychain secret %s, which context %q also references",
-			pick("would remove", "removed"), p.ctxName, pick("keep", "kept"), item, p.sharedWith)
+			removeCtx, p.ctxName, pick("keep", "kept"), item, p.sharedWith)
+	case p.kind == labSecretLegacy:
+		return fmt.Sprintf("%s context %q but %s its legacy keychain secret %s, since a same-named lab "+
+			"in another config may use it; if nothing uses it, remove it with: %s",
+			removeCtx, p.ctxName, pick("keep", "kept"), item, labKeychainDeleteCommand(p.service, p.account))
 	case p.keychainUnsupported:
 		return fmt.Sprintf("%s context %q; keychain secret %s %s because this platform has no keychain",
-			pick("would remove", "removed"), p.ctxName, item,
-			pick("would not be removed", "was not removed"))
+			removeCtx, p.ctxName, item, pick("would not be removed", "was not removed"))
 	default:
-		return fmt.Sprintf("%s context %q and its keychain secret %s",
-			pick("would remove", "removed"), p.ctxName, item)
+		return fmt.Sprintf("%s context %q and its keychain secret %s", removeCtx, p.ctxName, item)
 	}
+}
+
+// foreignReason explains, for a foreign item, which namespace this invocation
+// would have used instead.
+func (p labContextCleanup) foreignReason() string {
+	if p.currentErr != nil {
+		return fmt.Sprintf("this invocation's namespace cannot be determined: %v", p.currentErr)
+	}
+	return "this invocation's lab secrets use " + p.currentService
 }
 
 // cleanupLabContext removes the lab-<name> pmx context from config, deletes
 // the keychain secret that context references when planLabContextCleanup
 // allows it, and persists the config. It returns the executed plan so callers
-// render the same outcome a dry-run previewed. The keychain item is deleted
-// before the context, so a failed delete leaves the context (and its reference)
-// in place for a retry.
+// render the same outcome a dry-run previewed. A plan that keeps the context
+// changes nothing. The keychain item is deleted before the context, so a
+// failed delete leaves the context (and its reference) in place for a retry.
 func cleanupLabContext(deps *cli.Deps, name string) (labContextCleanup, error) {
-	plan := planLabContextCleanup(deps.Cfg, name)
-	if !plan.ctxPresent {
+	plan := planLabContextCleanup(deps, name)
+	if !plan.removesContext() {
 		return plan, nil
 	}
 

@@ -4,6 +4,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -19,10 +21,12 @@ import (
 //     share a name on different outer clusters (or in different configs)
 //     shared one item. pmx no longer writes this form, but contexts that
 //     already reference it keep working unchanged.
-//   - Namespaced, "pmx-lab.<outer>.<name>": <outer> is derived from the name
-//     of the outer pmx context the lab was reached through (see
-//     labKeychainNamespace), so same-named labs on different outer contexts
-//     never share an item.
+//   - Namespaced, "pmx-lab.<outer>-<config>.<name>": <outer> is derived from
+//     the name of the outer pmx context the lab was reached through (see
+//     labKeychainNamespace) and <config> is a short hash of the config file's
+//     absolute path (see labConfigHash), so same-named labs on different outer
+//     contexts, or in different configs that reuse an outer context name such
+//     as the `pmx init config` template's "lab", never share an item.
 //
 // Every reader finds the secret through the lab context's stored
 // "keychain:<service>/<account>" reference, never by recomputing a service
@@ -44,6 +48,11 @@ const labKeychainNamespaceMaxLen = 64
 // sanitized namespace segment before its hash suffix.
 const labKeychainNamespaceSanitizedPrefixLen = 32
 
+// labConfigHashLen is the number of hex digits of the config path's SHA-256
+// that labConfigHash keeps. The suffix has a fixed length, so the namespace
+// segment before it is recovered by length alone.
+const labConfigHashLen = 8
+
 // labKeychainNamespaceVerbatimRE is the charset a context name must match to
 // be used verbatim as the namespace segment. It excludes "_", which only the
 // sanitized form emits, so a verbatim segment can never equal a sanitized one.
@@ -52,8 +61,9 @@ const labKeychainNamespaceSanitizedPrefixLen = 32
 // `security -i` tokenizer unchanged (see config.StoreKeychainSecret).
 var labKeychainNamespaceVerbatimRE = regexp.MustCompile(`^[A-Za-z0-9-]+$`)
 
-// labKeychainNamespaceSegmentRE matches any namespace segment
-// labKeychainNamespace can produce, verbatim or sanitized.
+// labKeychainNamespaceSegmentRE matches any namespace segment of a namespaced
+// service: the "<outer>-<config>" segment pmx writes, and the bare "<outer>"
+// segment of items written before the config hash was added.
 var labKeychainNamespaceSegmentRE = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
 // errNoOuterContext is returned when no outer pmx context is active to
@@ -61,6 +71,11 @@ var labKeychainNamespaceSegmentRE = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 var errNoOuterContext = errors.New(
 	"no active pmx context to namespace the lab's keychain secret under; " +
 		"select the outer context with --context/-c")
+
+// errNoConfigPath is returned when the invocation has no config file path to
+// namespace a lab secret under.
+var errNoConfigPath = errors.New(
+	"no config file path to namespace the lab's keychain secret under; pass --config")
 
 // labLegacyKeychainService returns the legacy keychain service of a lab's
 // token secret, "pmx-lab-" + name. pmx never writes it any more; it is used
@@ -71,12 +86,58 @@ func labLegacyKeychainService(name string) string {
 
 // labKeychainService returns the keychain service a new token secret for the
 // lab named name is stored under when the lab is reached through the outer
-// pmx context named outerCtx: "pmx-lab.<namespace>.<name>". Lab names are
+// pmx context named outerCtx in the config file whose labConfigHash is
+// configHash: "pmx-lab.<namespace>-<configHash>.<name>". Lab names are
 // limited to lowercase letters, digits, and hyphens (validateLabNameCharset),
 // and the namespace segment never contains ".", so the service splits back
-// into its parts unambiguously.
-func labKeychainService(outerCtx, name string) string {
-	return labKeychainServicePrefix + labKeychainNamespace(outerCtx) + "." + name
+// into its parts unambiguously; configHash has a fixed length, so the segment
+// splits back into namespace and hash too.
+func labKeychainService(outerCtx, configHash, name string) string {
+	return labKeychainServicePrefix + labKeychainNamespace(outerCtx) + "-" + configHash + "." + name
+}
+
+// labConfigHash returns the first labConfigHashLen hex digits of the SHA-256
+// of configPath made absolute and cleaned. It ties a lab secret to the config
+// file whose context references it: two configs that both name their outer
+// context "lab" still get distinct items. Symlinks are not resolved, so the
+// hash depends only on the path the operator passed (or the default path),
+// not on the file existing. A config that moves gets a new hash; an item
+// written under the old one then no longer matches and is kept by destroy and
+// rm rather than deleted.
+func labConfigHash(configPath string) (string, error) {
+	if configPath == "" {
+		return "", errNoConfigPath
+	}
+	abs, err := filepath.Abs(configPath)
+	if err != nil {
+		return "", fmt.Errorf("resolve config path %q: %w", configPath, err)
+	}
+	sum := sha256.Sum256([]byte(abs))
+	return hex.EncodeToString(sum[:])[:labConfigHashLen], nil
+}
+
+// labCurrentKeychainService returns the namespaced keychain service this
+// invocation stores, and may delete, the lab named name's token secret under:
+// the outer context from labOuterContextName and the config path from
+// deps.ConfigPath. An error means the namespace cannot be determined, in
+// which case callers neither store a new secret nor delete a namespaced one.
+func labCurrentKeychainService(deps *cli.Deps, name string) (string, error) {
+	outer, err := labOuterContextName(deps)
+	if err != nil {
+		return "", err
+	}
+	hash, err := labConfigHash(deps.ConfigPath)
+	if err != nil {
+		return "", err
+	}
+	return labKeychainService(outer, hash, name), nil
+}
+
+// labKeychainDeleteCommand returns the `security` command that removes the
+// keychain item (service, account) by hand. pmx prints it wherever it leaves
+// an item in place that the operator may want gone.
+func labKeychainDeleteCommand(service, account string) string {
+	return fmt.Sprintf("security delete-generic-password -s %s -a '%s'", service, account)
 }
 
 // labKeychainNamespace maps an outer context name onto a keychain-safe
@@ -132,9 +193,19 @@ func labOuterContextName(deps *cli.Deps) (string, error) {
 // stores the lab named name's token secret under, in either the legacy or the
 // namespaced form.
 func labOwnsKeychainService(service, name string) bool {
-	if service == labLegacyKeychainService(name) {
-		return true
-	}
+	return labLegacyKeychainServiceOf(service, name) || labNamespacedKeychainServiceOf(service, name)
+}
+
+// labLegacyKeychainServiceOf reports whether service is the lab named name's
+// legacy "pmx-lab-<name>" service.
+func labLegacyKeychainServiceOf(service, name string) bool {
+	return service == labLegacyKeychainService(name)
+}
+
+// labNamespacedKeychainServiceOf reports whether service is a namespaced
+// "pmx-lab.<namespace>.<name>" service of the lab named name, under any
+// namespace.
+func labNamespacedKeychainServiceOf(service, name string) bool {
 	rest, ok := strings.CutPrefix(service, labKeychainServicePrefix)
 	if !ok {
 		return false

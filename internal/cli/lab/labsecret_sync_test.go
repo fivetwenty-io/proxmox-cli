@@ -2,6 +2,7 @@ package lab
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -45,43 +46,69 @@ func recordKeychainStores(t *testing.T) *[]string {
 	return &stored
 }
 
+// createWayneUnder runs `lab create wayne --start` from a fresh config file
+// whose outer context is outer, and returns the single "service/account" the
+// run stored, the reference the lab-wayne context records, and the config
+// file's path.
+func createWayneUnder(t *testing.T, outer string) (store, ref, path string) {
+	t.Helper()
+	f := testhelper.NewFakePVE(t)
+	lab := createTestLab("wayne")
+	lab.Network.Mgmt.Subnet = "10.10.1.0/24"
+	createRegisterContextHookFreshVMRoutes(f, t, lab)
+	createRegisterContextHookStartRoutes(f)
+
+	path = writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+	cmd, _ := buildCreateCmdWithSSH(t, path, f, "node1")
+	deps := cli.GetDeps(cmd)
+	deps.CtxName = outer
+	stored := recordKeychainStores(t)
+
+	out, err := runCreateCmd(t, cmd, "wayne", "--start")
+	require.NoError(t, err)
+	assert.Contains(t, out, "context lab-wayne ready")
+
+	require.Len(t, *stored, 1, "create must store exactly one secret")
+	require.NotNil(t, deps.Cfg.Contexts["lab-wayne"])
+	assert.Equal(t, labTestService(t, deps, "wayne")+"/pmx@pve!pmx", (*stored)[0])
+	return (*stored)[0], deps.Cfg.Contexts["lab-wayne"].Auth.Secret, path
+}
+
 // TestCreate_SameNamedLabsUnderDifferentOuterContextsDoNotCollide runs
 // `lab create wayne --start` twice, from two configs whose outer contexts
 // differ. Each run must store its secret in its own keychain item, and neither
 // may write the legacy name-only item both used to share.
 func TestCreate_SameNamedLabsUnderDifferentOuterContextsDoNotCollide(t *testing.T) {
-	refs := map[string]string{}
-	var stores []string
+	eastStore, eastRef, eastPath := createWayneUnder(t, "fleet-east")
+	westStore, westRef, westPath := createWayneUnder(t, "fleet-west")
 
-	for _, outer := range []string{"fleet-east", "fleet-west"} {
-		f := testhelper.NewFakePVE(t)
-		lab := createTestLab("wayne")
-		lab.Network.Mgmt.Subnet = "10.10.1.0/24"
-		createRegisterContextHookFreshVMRoutes(f, t, lab)
-		createRegisterContextHookStartRoutes(f)
-
-		path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
-		cmd, _ := buildCreateCmdWithSSH(t, path, f, "node1")
-		deps := cli.GetDeps(cmd)
-		deps.CtxName = outer
-		stored := recordKeychainStores(t)
-
-		out, err := runCreateCmd(t, cmd, "wayne", "--start")
-		require.NoError(t, err)
-		assert.Contains(t, out, "context lab-wayne ready")
-
-		require.Len(t, *stored, 1, "create must store exactly one secret")
-		stores = append(stores, (*stored)[0])
-		require.NotNil(t, deps.Cfg.Contexts["lab-wayne"])
-		refs[outer] = deps.Cfg.Contexts["lab-wayne"].Auth.Secret
-	}
-
-	assert.Equal(t, []string{"pmx-lab.fleet-east.wayne/pmx@pve!pmx", "pmx-lab.fleet-west.wayne/pmx@pve!pmx"}, stores)
-	assert.NotEqual(t, refs["fleet-east"], refs["fleet-west"], "the two labs must not share a keychain item")
-	assert.Equal(t, "keychain:pmx-lab.fleet-east.wayne/pmx@pve!pmx", refs["fleet-east"],
-		"the context records the full service and account it uses")
-	for _, s := range stores {
+	eastHash, err := labConfigHash(eastPath)
+	require.NoError(t, err)
+	westHash, err := labConfigHash(westPath)
+	require.NoError(t, err)
+	assert.Equal(t, "pmx-lab.fleet-east-"+eastHash+".wayne/pmx@pve!pmx", eastStore)
+	assert.Equal(t, "pmx-lab.fleet-west-"+westHash+".wayne/pmx@pve!pmx", westStore)
+	assert.NotEqual(t, eastRef, westRef, "the two labs must not share a keychain item")
+	assert.Equal(t, "keychain:"+eastStore, eastRef, "the context records the full service and account it uses")
+	for _, s := range []string{eastStore, westStore} {
 		assert.NotEqual(t, "pmx-lab-wayne/pmx@pve!pmx", s, "create must never write the legacy item")
+	}
+}
+
+// TestCreate_SameOuterContextNameInDifferentConfigsDoesNotCollide covers the
+// default path: two config files at different paths that both keep the
+// `pmx init config` template's outer context name "lab" and define the same
+// lab. The config hash in the namespace keeps their items apart.
+func TestCreate_SameOuterContextNameInDifferentConfigsDoesNotCollide(t *testing.T) {
+	firstStore, firstRef, firstPath := createWayneUnder(t, "lab")
+	secondStore, secondRef, secondPath := createWayneUnder(t, "lab")
+
+	require.NotEqual(t, firstPath, secondPath)
+	assert.NotEqual(t, firstStore, secondStore, "configs at different paths must not share a keychain item")
+	assert.NotEqual(t, firstRef, secondRef)
+	for _, s := range []string{firstStore, secondStore} {
+		assert.True(t, strings.HasPrefix(s, "pmx-lab.lab-"), "service %q must carry the outer context name", s)
+		assert.True(t, strings.HasSuffix(s, ".wayne/pmx@pve!pmx"), "service %q must carry the lab name", s)
 	}
 }
 
@@ -93,7 +120,7 @@ func TestSyncLabContext_RefusesToOverwriteItemAnotherContextReferences(t *testin
 	fake := mintingFake()
 	cmd, deps := syncTestDeps(t, fake)
 	stored := recordKeychainStores(t)
-	deps.Cfg.Contexts["ops-copy"] = labTokenContext("keychain:pmx-lab.fleet.demo/pmx@pve!pmx")
+	deps.Cfg.Contexts["ops-copy"] = labTokenContext(labTestRef(t, deps, "demo"))
 
 	lab := multiNodeTestLab("demo", 1, "never")
 	lab.Name = "demo"
@@ -180,9 +207,9 @@ func TestSyncLabContext_RotationOffLegacyItemLeavesItAndNotes(t *testing.T) {
 	res, err := syncLabContext(cmd, deps, lab, labSyncOptions{WaitSSH: false})
 	require.NoError(t, err)
 	assert.True(t, res.Rotated)
-	assert.Equal(t, []string{"pmx-lab.fleet.demo/pmx@pve!pmx"}, *stored)
+	assert.Equal(t, []string{labTestService(t, deps, "demo") + "/pmx@pve!pmx"}, *stored)
 	assert.Empty(t, *deleted, "sync never deletes a keychain item")
-	assert.Equal(t, "keychain:pmx-lab.fleet.demo/pmx@pve!pmx", deps.Cfg.Contexts["lab-demo"].Auth.Secret)
+	assert.Equal(t, labTestRef(t, deps, "demo"), deps.Cfg.Contexts["lab-demo"].Auth.Secret)
 	assert.Contains(t, stderr.String(), "the previous item pmx-lab-demo/pmx@pve!pmx is no longer referenced")
 	assert.Contains(t, stderr.String(), "security delete-generic-password -s pmx-lab-demo -a 'pmx@pve!pmx'")
 }
@@ -196,7 +223,7 @@ func TestSyncLabContext_RotationKeepsNamespacedItemQuiet(t *testing.T) {
 	var stderr bytes.Buffer
 	cmd.SetErr(&stderr)
 	stored := recordKeychainStores(t)
-	deps.Cfg.Contexts["lab-demo"] = labTokenContext("keychain:pmx-lab.fleet.demo/pmx@pve!pmx")
+	deps.Cfg.Contexts["lab-demo"] = labTokenContext(labTestRef(t, deps, "demo"))
 
 	probeCalls := 0
 	labProbeContextVersion = func(*cobra.Command, *cli.Deps, string) error {
@@ -212,7 +239,7 @@ func TestSyncLabContext_RotationKeepsNamespacedItemQuiet(t *testing.T) {
 
 	_, err := syncLabContext(cmd, deps, lab, labSyncOptions{WaitSSH: false})
 	require.NoError(t, err)
-	assert.Equal(t, []string{"pmx-lab.fleet.demo/pmx@pve!pmx"}, *stored,
+	assert.Equal(t, []string{labTestService(t, deps, "demo") + "/pmx@pve!pmx"}, *stored,
 		"the item the context itself references may be rewritten")
 	assert.NotContains(t, stderr.String(), "NOTE:")
 }
@@ -235,7 +262,9 @@ func TestSyncLabContext_SanitizesOuterContextName(t *testing.T) {
 	service, account, ok := config.ParseKeychainRef(deps.Cfg.Contexts["lab-demo"].Auth.Secret)
 	require.True(t, ok)
 	assert.Equal(t, "pmx@pve!pmx", account)
-	assert.Equal(t, labKeychainService("ops/east lab", "demo"), service)
+	hash, err := labConfigHash(deps.ConfigPath)
+	require.NoError(t, err)
+	assert.Equal(t, labKeychainService("ops/east lab", hash, "demo"), service)
 	assert.True(t, keychainServiceSafe(service), "service %q must be keychain-safe", service)
 	assert.True(t, labOwnsKeychainService(service, "demo"))
 }

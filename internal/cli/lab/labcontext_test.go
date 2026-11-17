@@ -941,8 +941,8 @@ func TestSyncLabContext_FreshMintsAndWritesContext(t *testing.T) {
 	ctx := deps.Cfg.Contexts["lab-demo"]
 	require.NotNil(t, ctx)
 	assert.Equal(t, "10.10.1.10", ctx.Host)
-	assert.Equal(t, "keychain:pmx-lab.fleet.demo/pmx@pve!pmx", ctx.Auth.Secret,
-		"a fresh secret is namespaced by the outer context")
+	assert.Equal(t, labTestRef(t, deps, "demo"), ctx.Auth.Secret,
+		"a fresh secret is namespaced by the outer context and config")
 	assert.Equal(t, fp, ctx.TLS.Fingerprint)
 	assert.Equal(t, "lab-demo-0", ctx.DefaultNode)
 
@@ -1024,7 +1024,7 @@ func TestSyncLabContext_RefusesReuseWhenIdentityDiffers(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, res.Rotated, "a foreign identity must force a fresh mint, not reuse")
 	assert.True(t, mintedAToken(fake), "must mint when the stored context is not the lab's own identity")
-	assert.Equal(t, "keychain:pmx-lab.fleet.demo/pmx@pve!pmx", deps.Cfg.Contexts["lab-demo"].Auth.Secret)
+	assert.Equal(t, labTestRef(t, deps, "demo"), deps.Cfg.Contexts["lab-demo"].Auth.Secret)
 }
 
 func TestSyncLabContext_ReusesOnTransportProbeFailure(t *testing.T) {
@@ -1162,10 +1162,12 @@ func TestContextSyncCommand_WritesContextAndRenders(t *testing.T) {
 	assert.NotNil(t, deps.Cfg.Contexts["lab-demo"])
 }
 
-// contextRmDeps builds a *cli.Deps carrying a persisted config.yml. When
-// withContext is true it pre-seeds a lab-<name> pmx token context whose secret
-// is a keychain reference, mirroring what auto-registration writes; when false
-// the config has no context, exercising the orphaned-secret cleanup path.
+// contextRmDeps builds a *cli.Deps carrying a persisted config.yml, run under
+// the outer context "fleet". When withContext is true it pre-seeds a
+// lab-<name> pmx token context whose secret references this invocation's
+// namespaced keychain item, mirroring what auto-registration writes; when
+// false the config has no context, exercising the orphaned-secret cleanup
+// path.
 func contextRmDeps(t *testing.T, name string, withContext bool) *cli.Deps {
 	t.Helper()
 	dir := t.TempDir()
@@ -1173,6 +1175,7 @@ func contextRmDeps(t *testing.T, name string, withContext bool) *cli.Deps {
 	require.NoError(t, os.WriteFile(cfgPath, []byte("contexts: {}\n"), 0o600))
 	cfg, err := config.Load(cfgPath)
 	require.NoError(t, err)
+	deps := &cli.Deps{Cfg: cfg, ConfigPath: cfgPath, CtxName: "fleet", Out: output.New(), Format: output.FormatPlain}
 	if withContext {
 		cfg.Contexts["lab-"+name] = &config.Context{
 			Host:     "10.10.1.10",
@@ -1183,11 +1186,11 @@ func contextRmDeps(t *testing.T, name string, withContext bool) *cli.Deps {
 				Type:     "token",
 				Username: "pmx@pve",
 				TokenID:  "pmx",
-				Secret:   "keychain:pmx-lab-" + name + "/pmx@pve!pmx",
+				Secret:   labTestRef(t, deps, name),
 			},
 		}
 	}
-	return &cli.Deps{Cfg: cfg, ConfigPath: cfgPath, Out: output.New(), Format: output.FormatPlain}
+	return deps
 }
 
 func TestContextRm_RemovesContextAndSecret(t *testing.T) {
@@ -1207,7 +1210,7 @@ func TestContextRm_RemovesContextAndSecret(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Nil(t, deps.Cfg.Contexts["lab-demo"], "context must be removed from config")
-	assert.Equal(t, "pmx-lab-demo", svc)
+	assert.Equal(t, labTestService(t, deps, "demo"), svc)
 	assert.Equal(t, "pmx@pve!pmx", acct)
 	assert.Contains(t, out, `removed context "lab-demo" and its keychain secret`)
 

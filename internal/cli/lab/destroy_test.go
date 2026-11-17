@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -108,9 +109,12 @@ func destroyHandleClusterResources(f *testhelper.FakePVE, entries ...map[string]
 // config.Load's lenient validation) plus a clean lab config, and registers an
 // empty cluster/resources pool so the run resolves to "nothing to destroy" —
 // the no-op path that still must trigger context/keychain cleanup on success.
+// The run uses the outer context "fleet", and the context's secret references
+// that invocation's namespaced keychain item.
 func buildDestroyCmdWithContext(t *testing.T, name string) (*cobra.Command, *cli.Deps) {
 	t.Helper()
 
+	path := filepath.Join(t.TempDir(), "config.yml")
 	cfg := &config.Config{
 		Labs: map[string]*config.Lab{name: cleanLab(name)},
 		Contexts: map[string]*config.Context{
@@ -123,17 +127,18 @@ func buildDestroyCmdWithContext(t *testing.T, name string) (*cobra.Command, *cli
 					Type:     "token",
 					Username: "pmx@pve",
 					TokenID:  "pmx",
-					Secret:   "keychain:pmx-lab-" + name + "/pmx@pve!pmx",
+					Secret:   labTestRef(t, &cli.Deps{CtxName: "fleet", ConfigPath: path}, name),
 				},
 			},
 		},
 	}
-	path := writeConfig(t, cfg)
+	require.NoError(t, config.SaveForce(path, cfg))
 	f, ac := destroyFakeClient(t)
 	f.HandleJSON("GET /api2/json/cluster/resources", []any{})
 
 	cmd := destroyTestCmd(t, path, ac, "pve1")
 	deps := cli.GetDeps(cmd)
+	deps.CtxName = "fleet"
 	return cmd, deps
 }
 
@@ -151,7 +156,7 @@ func TestDestroy_RemovesContextAndSecret(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Nil(t, deps.Cfg.Contexts["lab-demo"], "context must be removed")
-	assert.Equal(t, "pmx-lab-demo", deletedService)
+	assert.Equal(t, labTestService(t, deps, "demo"), deletedService)
 	assert.Equal(t, "pmx@pve!pmx", deletedAccount)
 }
 

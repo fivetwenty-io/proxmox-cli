@@ -365,16 +365,17 @@ var labDeleteSecretFn = config.DeleteKeychainSecret
 
 // labSecretStoreTarget returns the keychain item a freshly minted token secret
 // for the lab named name is stored under: the namespaced service for the
-// outer context this invocation runs against, and the lab token account. It
+// outer context and config file this invocation runs against (see
+// labCurrentKeychainService), and the lab token account. It
 // refuses when any context other than ctxName (the one being written) still
 // references that item, since storing would overwrite a credential that
 // context depends on.
 func labSecretStoreTarget(deps *cli.Deps, ctxName, name string) (service, account string, err error) {
-	outer, err := labOuterContextName(deps)
+	service, err = labCurrentKeychainService(deps, name)
 	if err != nil {
 		return "", "", err
 	}
-	service, account = labKeychainService(outer, name), labCtxAccount()
+	account = labCtxAccount()
 	if other := labKeychainItemReferencedBy(deps.Cfg, ctxName, service, account); other != "" {
 		return "", "", fmt.Errorf(
 			"refusing to store the token secret for context %q in keychain item %s/%s: "+
@@ -408,8 +409,8 @@ func warnUnreferencedLabSecret(cmd *cobra.Command, deps *cli.Deps, ctxName, name
 	_, _ = fmt.Fprintf(cmd.ErrOrStderr(),
 		"NOTE: context %q now uses keychain item %s/%s; the previous item %s/%s is no longer referenced "+
 			"by this config and was left in place, since a same-named lab in another config may use it. "+
-			"If nothing uses it, remove it with: security delete-generic-password -s %s -a '%s'\n",
-		ctxName, newService, newAccount, service, account, service, account)
+			"If nothing uses it, remove it with: %s\n",
+		ctxName, newService, newAccount, service, account, labKeychainDeleteCommand(service, account))
 }
 
 // snapshotLabContext records the in-memory state of the context named name in
@@ -622,10 +623,12 @@ func newContextCmd() *cobra.Command {
 			"nested Proxmox VE API, minting a dedicated admin token over ssh and storing its " +
 			"secret in the macOS keychain.\n\n" +
 			"A newly minted secret is stored under the keychain service " +
-			"`pmx-lab.<outer-context>.<name>` with account `pmx@pve!pmx`, where " +
+			"`pmx-lab.<outer-context>-<config-hash>.<name>` with account `pmx@pve!pmx`, where " +
 			"<outer-context> is the pmx context the lab was reached through (a name outside " +
-			"letters, digits, and hyphens is sanitized and given a hash suffix). Same-named labs " +
-			"on different outer contexts therefore never share a keychain item. The context " +
+			"letters, digits, and hyphens is sanitized and given a hash suffix) and <config-hash> " +
+			"is a short hash of the config file's absolute path. Same-named labs on different " +
+			"outer contexts, or in different config files that reuse an outer context name, " +
+			"therefore never share a keychain item. The context " +
 			"records the full `keychain:<service>/<account>` reference, and everything that reads " +
 			"the secret follows that reference. Contexts written before namespacing reference the " +
 			"older `pmx-lab-<name>` service and keep working unchanged until their token is " +
@@ -655,11 +658,14 @@ func newContextRmCmd() *cobra.Command {
 		Long: "Remove the `lab-<name>` pmx context from config and delete the token secret it " +
 			"references from the macOS keychain.\n\n" +
 			"Only the keychain item named by the context's own `keychain:<service>/<account>` " +
-			"reference is deleted, and only when it is one of this lab's token items " +
-			"(`pmx-lab.<outer-context>.<name>`, or the older `pmx-lab-<name>`) that no other " +
-			"context references. When `lab-<name>` is not in the active config, nothing is " +
-			"removed from the keychain, because a same-named lab reached through another outer " +
-			"context or config may own the item.\n\n" +
+			"reference is deleted, and only when it is this lab's " +
+			"`pmx-lab.<outer-context>-<config-hash>.<name>` item for the active outer context and " +
+			"this config file, and no other context references it. An older `pmx-lab-<name>` " +
+			"item is kept, because a same-named lab in another config may use it, and rm prints " +
+			"the command that removes it. When the item belongs to another outer context or " +
+			"config file (including this config before it moved), rm keeps both the context and " +
+			"the item and names the commands that would remove them. When `lab-<name>` is not in " +
+			"the active config, nothing is removed from the keychain.\n\n" +
 			"Unlike `pmx lab destroy` this touches no VMs and does not need the lab to still " +
 			"be defined, so it cleans up a context left orphaned by removing its lab. If " +
 			"`lab-<name>` is the active context, it is unset.\n\n" +
@@ -703,7 +709,8 @@ func newContextSyncCmd() *cobra.Command {
 			"Requires an active pmx context (--context/-c) as the source of ssh connection " +
 			"defaults, and the lab's node 0 to be running.\n\n" +
 			"A rotated secret is stored in the keychain under service " +
-			"`pmx-lab.<outer-context>.<name>`, named for that active context, and the context " +
+			"`pmx-lab.<outer-context>-<config-hash>.<name>`, named for that active context and " +
+			"this config file, and the context " +
 			"records the full reference. Sync refuses before rotating when another context " +
 			"already references that keychain item. A reused secret keeps the reference the " +
 			"context already has, including the older `pmx-lab-<name>` form. When a rotation " +

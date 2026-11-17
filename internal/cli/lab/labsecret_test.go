@@ -1,6 +1,7 @@
 package lab
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 	"unicode"
@@ -12,19 +13,89 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/config"
 )
 
-func TestLabKeychainService_NamespacesByOuterContext(t *testing.T) {
-	assert.Equal(t, "pmx-lab.fleet.demo", labKeychainService("fleet", "demo"))
-	assert.Equal(t, "pmx-lab.fleet-b.test-lab", labKeychainService("fleet-b", "test-lab"))
-	assert.NotEqual(t, labKeychainService("fleet-a", "demo"), labKeychainService("fleet-b", "demo"),
+// testConfigHash is a fixed config hash for tests that exercise naming only.
+const testConfigHash = "0a1b2c3d"
+
+// labTestService returns the namespaced service the invocation behind deps
+// stores, and may delete, the lab named name's token secret under.
+func labTestService(t *testing.T, deps *cli.Deps, name string) string {
+	t.Helper()
+	service, err := labCurrentKeychainService(deps, name)
+	require.NoError(t, err)
+	return service
+}
+
+// labTestRef returns the keychain reference to the lab token item of the lab
+// named name under the namespace of the invocation behind deps.
+func labTestRef(t *testing.T, deps *cli.Deps, name string) string {
+	t.Helper()
+	return config.KeychainRef(labTestService(t, deps, name), labCtxAccount())
+}
+
+func TestLabKeychainService_NamespacesByOuterContextAndConfig(t *testing.T) {
+	assert.Equal(t, "pmx-lab.fleet-0a1b2c3d.demo", labKeychainService("fleet", testConfigHash, "demo"))
+	assert.Equal(t, "pmx-lab.fleet-b-0a1b2c3d.test-lab", labKeychainService("fleet-b", testConfigHash, "test-lab"))
+	assert.NotEqual(t, labKeychainService("fleet-a", testConfigHash, "demo"),
+		labKeychainService("fleet-b", testConfigHash, "demo"),
 		"same-named labs on different outer contexts must not share a service")
-	assert.NotEqual(t, labLegacyKeychainService("demo"), labKeychainService("fleet", "demo"))
+	assert.NotEqual(t, labKeychainService("lab", testConfigHash, "demo"),
+		labKeychainService("lab", "ffffffff", "demo"),
+		"same-named labs under same-named outer contexts in different configs must not share a service")
+	assert.NotEqual(t, labLegacyKeychainService("demo"), labKeychainService("fleet", testConfigHash, "demo"))
 }
 
 // TestLabKeychainService_DisambiguatesHyphenSplits pins the reason the
 // namespace separator is "." rather than "-": with "-", outer "a-b" plus lab
-// "c" and outer "a" plus lab "b-c" would both produce "pmx-lab-a-b-c".
+// "c" and outer "a" plus lab "b-c" would both produce "pmx-lab-a-b-c". The
+// fixed-length config hash likewise keeps an outer name ending in "-<hex>"
+// from colliding with a shorter outer name under another config.
 func TestLabKeychainService_DisambiguatesHyphenSplits(t *testing.T) {
-	assert.NotEqual(t, labKeychainService("a-b", "c"), labKeychainService("a", "b-c"))
+	assert.NotEqual(t, labKeychainService("a-b", testConfigHash, "c"), labKeychainService("a", testConfigHash, "b-c"))
+	assert.NotEqual(t, labKeychainService("a-"+testConfigHash, "ffffffff", "c"),
+		labKeychainService("a", testConfigHash, "c"))
+}
+
+func TestLabConfigHash(t *testing.T) {
+	dir := t.TempDir()
+	a := filepath.Join(dir, "a", "config.yaml")
+	b := filepath.Join(dir, "b", "config.yaml")
+
+	ha, err := labConfigHash(a)
+	require.NoError(t, err)
+	assert.Len(t, ha, labConfigHashLen)
+	assert.Regexp(t, `^[0-9a-f]+$`, ha)
+
+	again, err := labConfigHash(filepath.Join(dir, "a", ".", "x", "..", "config.yaml"))
+	require.NoError(t, err)
+	assert.Equal(t, ha, again, "the path is cleaned before hashing")
+
+	hb, err := labConfigHash(b)
+	require.NoError(t, err)
+	assert.NotEqual(t, ha, hb, "configs at different paths hash differently")
+
+	t.Chdir(dir)
+	rel, err := labConfigHash(filepath.Join("a", "config.yaml"))
+	require.NoError(t, err)
+	assert.Equal(t, ha, rel, "a relative path is made absolute before hashing")
+
+	_, err = labConfigHash("")
+	require.ErrorIs(t, err, errNoConfigPath)
+}
+
+func TestLabCurrentKeychainService(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	hash, err := labConfigHash(path)
+	require.NoError(t, err)
+
+	got, err := labCurrentKeychainService(&cli.Deps{CtxName: "fleet", ConfigPath: path, Cfg: &config.Config{}}, "demo")
+	require.NoError(t, err)
+	assert.Equal(t, "pmx-lab.fleet-"+hash+".demo", got)
+	assert.True(t, labOwnsKeychainService(got, "demo"))
+
+	_, err = labCurrentKeychainService(&cli.Deps{ConfigPath: path, Cfg: &config.Config{}}, "demo")
+	require.ErrorIs(t, err, errNoOuterContext)
+	_, err = labCurrentKeychainService(&cli.Deps{CtxName: "fleet", Cfg: &config.Config{}}, "demo")
+	require.ErrorIs(t, err, errNoConfigPath)
 }
 
 // keychainServiceSafe reports whether s survives `security -i` and the
@@ -62,7 +133,7 @@ func TestLabKeychainNamespace_SanitizesUnsafeContextNames(t *testing.T) {
 			assert.Contains(t, ns, "_", "a sanitized namespace always carries the _ marker")
 			assert.Regexp(t, labKeychainNamespaceSegmentRE, ns)
 
-			svc := labKeychainService(name, "demo")
+			svc := labKeychainService(name, testConfigHash, "demo")
 			assert.True(t, keychainServiceSafe(svc))
 			assert.True(t, labOwnsKeychainService(svc, "demo"), "a sanitized service still belongs to its lab")
 		})
@@ -92,7 +163,8 @@ func TestLabOwnsKeychainService(t *testing.T) {
 	}{
 		{"pmx-lab-demo", true},
 		{"pmx-lab.fleet.demo", true},
-		{"pmx-lab.ops_east_0123456789ab.demo", true},
+		{"pmx-lab.fleet-0a1b2c3d.demo", true},
+		{"pmx-lab.ops_east_0123456789ab-0a1b2c3d.demo", true},
 		{"pmx-lab-demo2", false},
 		{"pmx-lab.fleet.demo2", false},
 		{"pmx-lab.fleet.demo.extra", false},
