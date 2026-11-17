@@ -281,6 +281,7 @@ func TestNetApplyDriftUpdatesVnetNotCreate(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	lab := netTestLab("wayne")
 	lab.Network.ZoneType = "vxlan"
+	lab.Network.ZonePeers = "192.0.2.10"
 	var order []string
 	var zoneRec, vnetRec, subnetRec, dryRunRec, applyRec []netRecordedRequest
 
@@ -324,7 +325,7 @@ func TestNetApplyDriftUpdatesVnetNotCreate(t *testing.T) {
 }
 
 // TestNetApplyTagCapableZoneStillSendsTagOnCreate covers a lab whose zone is
-// a tag-capable type (here "vlan"): the vnet-create body must still carry
+// a tag-capable type (here "vxlan"): the vnet-create body must still carry
 // the config's tag, exactly as before sdnZoneAllowsVnetTag was introduced —
 // the fix that omits tag for a "simple"-type zone (see
 // TestNetApplyFreshCreatesZoneVnetSubnet) must not affect any other zone
@@ -332,7 +333,8 @@ func TestNetApplyDriftUpdatesVnetNotCreate(t *testing.T) {
 func TestNetApplyTagCapableZoneStillSendsTagOnCreate(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	lab := netTestLab("wayne")
-	lab.Network.ZoneType = "vlan"
+	lab.Network.ZoneType = "vxlan"
+	lab.Network.ZonePeers = "192.0.2.10"
 	var order []string
 	var zoneRec, vnetRec, subnetRec, dryRunRec, applyRec []netRecordedRequest
 
