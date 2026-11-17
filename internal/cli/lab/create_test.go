@@ -209,6 +209,22 @@ func createHandleTaskStatus(f *testhelper.FakePVE) {
 // context (for guest-ssh defaults), and stubbed context-hook seams so the
 // end-of-create context registration never touches a real keychain or the
 // network. It returns the fake ssh runner for response pre-loading.
+// createIdentityRunner wraps fake so the dataset step's identity preflight is
+// answered as node would answer it, without consuming any of fake's scripted
+// responses, and registers the certificate listing the preflight compares
+// against on f. Tests that exercise a refusal replace Reply on the result.
+func createIdentityRunner(f *testhelper.FakePVE, fake *exec.FakeRunner, node string) *identityRunner {
+	f.HandleJSON("GET /api2/json/nodes/"+node+"/certificates/info", []any{
+		map[string]any{"filename": "pve-ssl.pem", "fingerprint": preflightFingerprint(node)},
+	})
+
+	r := newIdentityRunner(fake)
+	r.Reply = func(string) (string, error) {
+		return node + "\nsha256 Fingerprint=" + strings.ToLower(preflightFingerprint(node)) + "\n", nil
+	}
+	return r
+}
+
 func buildCreateCmdWithSSH(
 	t *testing.T, configPath string, f *testhelper.FakePVE, node string,
 ) (*cobra.Command, *exec.FakeRunner) {
@@ -227,7 +243,7 @@ func buildCreateCmdWithSSH(
 		exec.FakeResponse{}, // token remove
 		exec.FakeResponse{Stdout: `{"value":"the-secret"}`}, // token add
 	)
-	deps.Runner = fake
+	deps.Runner = createIdentityRunner(f, fake, node)
 	deps.Ctx = &config.Context{SSH: config.SSHBlock{User: "root", Port: 22}}
 
 	origProbe, origStore := labProbeContextVersion, labStoreSecretFn
@@ -375,7 +391,7 @@ func createStartWaitDeps(
 	deps := cli.GetDeps(cmd)
 
 	fake := exec.Fake(responses...)
-	deps.Runner = fake
+	deps.Runner = createIdentityRunner(f, fake, "node1")
 	deps.Ctx = &config.Context{SSH: config.SSHBlock{User: "root", Port: 22}}
 
 	origProbe, origStore := labProbeContextVersion, labStoreSecretFn
@@ -2776,7 +2792,7 @@ func buildCreateCmdWithZFSFake(
 	createRegisterDatasetNodeAddr(f)
 	cmd := buildCreateCmd(t, configPath, f, node)
 	deps := cli.GetDeps(cmd)
-	deps.Runner = fake
+	deps.Runner = createIdentityRunner(f, fake, node)
 	deps.Ctx = &config.Context{Host: createDatasetTestWrongCtxHost, SSH: config.SSHBlock{User: "root", Port: 22}}
 	return cmd
 }

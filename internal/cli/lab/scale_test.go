@@ -902,7 +902,7 @@ func TestScale_Grow_RemovesStaleQdeviceBeforeJoin_2PlusQTo3(t *testing.T) {
 		exec.FakeResponse{Stdout: sampleCorosyncCfgtoolAllUp},
 		exec.FakeResponse{Stdout: samplePvesmStatusAllActive},
 	)
-	cli.GetDeps(cmd).Runner = fake
+	cli.GetDeps(cmd).Runner = createIdentityRunner(f, fake, "node1")
 
 	out, err := runGuestCmd(t, cmd, "wayne", "--nodes", "3", "--node", "node1", "--yes")
 	require.NoError(t, err)
@@ -992,7 +992,7 @@ func TestScale_Grow_ReRunJoinsAlreadyExistingShells(t *testing.T) {
 		exec.FakeResponse{Stdout: sampleCorosyncCfgtoolAllUp},
 		exec.FakeResponse{Stdout: samplePvesmStatusAllActive},
 	)
-	cli.GetDeps(cmd).Runner = fake
+	cli.GetDeps(cmd).Runner = createIdentityRunner(f, fake, "node1")
 
 	out, err := runGuestCmd(t, cmd, "wayne", "--nodes", "3", "--node", "node1", "--yes")
 	require.NoError(t, err)
@@ -1069,7 +1069,7 @@ func TestScale_QdeviceAdd_ReRunWiresAlreadyExistingShell(t *testing.T) {
 		exec.FakeResponse{Stdout: sampleCorosyncCfgtoolAllUp},
 		exec.FakeResponse{Stdout: samplePvesmStatusAllActive},
 	)
-	cli.GetDeps(cmd).Runner = fake
+	cli.GetDeps(cmd).Runner = createIdentityRunner(f, fake, "node1")
 
 	out, err := runGuestCmd(t, cmd, "wayne", "--nodes", "2", "--node", "node1", "--yes")
 	require.NoError(t, err)
@@ -1338,7 +1338,7 @@ func TestScale_DeferredGrow_ExitsZeroDespiteIncompleteFinalValidation(t *testing
 		// created, but it was never even probed for join reachability).
 		exec.FakeResponse{ExitCode: 255},
 	)
-	cli.GetDeps(cmd).Runner = fake
+	cli.GetDeps(cmd).Runner = createIdentityRunner(f, fake, "node1")
 
 	out, err := runGuestCmd(t, cmd, "wayne", "--nodes", "3", "--node", "node1", "--yes")
 	require.NoError(t, err, "a deferred (not-yet-complete) transition must exit 0")
@@ -1443,7 +1443,7 @@ func TestScale_Grow_RefreshesContextFingerprintAfterClusterInit(t *testing.T) {
 		// created, but it was never even probed for join reachability).
 		exec.FakeResponse{ExitCode: 255},
 	)
-	deps.Runner = fake
+	deps.Runner = createIdentityRunner(f, fake, "node1")
 
 	out, err := runGuestCmd(t, cmd, "wayne", "--nodes", "3", "--node", "node1", "--yes")
 	require.NoError(t, err, "a deferred (not-yet-complete) transition must exit 0")
@@ -1642,7 +1642,7 @@ func TestScaleGrow_MultiNIC(t *testing.T) {
 		exec.FakeResponse{Stdout: sampleCorosyncCfgtoolAllUp},
 		exec.FakeResponse{Stdout: samplePvesmStatusAllActive},
 	)
-	cli.GetDeps(cmd).Runner = fake
+	cli.GetDeps(cmd).Runner = createIdentityRunner(f, fake, "node1")
 
 	out, err := runGuestCmd(t, cmd, "wayne", "--nodes", "3", "--node", "node1", "--yes")
 	require.NoError(t, err)

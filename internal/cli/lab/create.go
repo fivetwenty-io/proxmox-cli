@@ -1521,6 +1521,15 @@ func buildCreatePlan(
 		if herr != nil {
 			return nil, herr
 		}
+		// Prove the ssh target is the node the API described before the first
+		// ssh command reaches it, so neither the probe below nor the zfs create
+		// can land on another cluster's machine that shares the address. This
+		// runs while the plan is still being built, before any step applies.
+		if verr := verifyLabDatasetTarget(
+			ctx, deps, "lab create", node, createDatasetSSHFlags(deps), datasetHost); verr != nil {
+			return nil, fmt.Errorf("%w; lab create had not applied any step (SDN, storage, pool, or VM) "+
+				"when it stopped, so there is nothing to undo", verr)
+		}
 		exists, perr := createZfsDatasetExists(deps, datasetHost, dataset)
 		if perr != nil {
 			return nil, perr

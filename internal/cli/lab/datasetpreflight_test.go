@@ -536,6 +536,128 @@ func TestCreate_DatasetStep_RefusesAProxiedRoute(t *testing.T) {
 	assert.Empty(t, fake.Calls)
 }
 
+// TestCreate_DatasetStep_IdentityPreflight covers the check create makes before
+// its first ssh command reaches the dataset target. A target that is the node
+// passes and the probe and the zfs create follow it over the same options. A
+// target that is not the node stops create before any step, and so before any
+// API mutation, with no zfs command issued. A dry run connects to nothing.
+func TestCreate_DatasetStep_IdentityPreflight(t *testing.T) {
+	const node = "node1"
+
+	// wire builds create against a lab whose shared resources exist and whose
+	// VM does not, so the only mutating API call a run can make is the VM
+	// create, which every test here either allows or forbids.
+	wire := func(t *testing.T, allowVM bool, responses ...exec.FakeResponse) (*testhelper.FakePVE, *cobra.Command, *cli.Deps, *exec.FakeRunner) {
+		t.Helper()
+
+		f := testhelper.NewFakePVE(t)
+		lab := createTestLab("wayne")
+		createSharedResourcesExist(f, t, lab, "wayne", lab.Access.Pool)
+		f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
+		f.HandleJSON("GET /api2/json/cluster/nextid", "9500")
+		if allowVM {
+			f.HandleJSON("POST /api2/json/nodes/node1/qemu", createTestUPID)
+			createHandleTaskStatus(f)
+		} else {
+			createForbid(f, t, "POST /api2/json/nodes/node1/qemu")
+		}
+
+		path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+		fake := exec.Fake(responses...)
+		cmd := buildCreateCmdWithZFSFake(t, path, f, node, fake)
+		return f, cmd, cli.GetDeps(cmd), fake
+	}
+
+	t.Run("a target that is the node passes before the probe, over the dataset step's own options", func(t *testing.T) {
+		_, cmd, deps, fake := wire(t, true,
+			exec.FakeResponse{ExitCode: 1}, // remote "zfs list": dataset absent
+			exec.FakeResponse{},            // zfs create
+		)
+
+		_, err := runCreateCmd(t, cmd, "wayne", "--node", node)
+		require.NoError(t, err)
+
+		probes := identityProbes(t, deps)
+		require.Len(t, probes, 1)
+		require.Len(t, fake.Calls, 2, "the zfs probe and the zfs create still run")
+		probe := probes[0].Args
+		assert.Equal(t, []string{"-o", "ConnectTimeout=10", "root@" + createDatasetTestNodeIP, datasetIdentityCommand},
+			probe[len(probe)-4:])
+		assert.Equal(t, fake.Calls[0].Args[:3], probe[:3], "the same port and ProxyJump option as the dataset ssh calls")
+	})
+
+	t.Run("an FQDN kernel hostname passes on its first label", func(t *testing.T) {
+		_, cmd, deps, fake := wire(t, true, exec.FakeResponse{ExitCode: 1}, exec.FakeResponse{})
+		replyIdentity(deps, "NODE1.lab.example.net", strings.ToLower(preflightFingerprint(node)))
+
+		_, err := runCreateCmd(t, cmd, "wayne", "--node", node)
+		require.NoError(t, err)
+		assert.Len(t, fake.Calls, 2)
+	})
+
+	for _, tc := range []struct {
+		name    string
+		arrange func(t *testing.T, f *testhelper.FakePVE, deps *cli.Deps)
+		want    []string
+	}{
+		{
+			name: "hostname mismatch",
+			arrange: func(_ *testing.T, _ *testhelper.FakePVE, deps *cli.Deps) {
+				replyIdentity(deps, "pve7", preflightFingerprint(node))
+			},
+			want: []string{`reached a machine named "pve7", not node "node1"`, "another cluster"},
+		},
+		{
+			name: "fingerprint mismatch",
+			arrange: func(_ *testing.T, _ *testhelper.FakePVE, deps *cli.Deps) {
+				replyIdentity(deps, node, preflightFingerprint("somewhere else"))
+			},
+			want: []string{preflightFingerprint("somewhere else"), preflightFingerprint(node)},
+		},
+		{
+			name: "unreachable target",
+			arrange: func(_ *testing.T, _ *testhelper.FakePVE, deps *cli.Deps) {
+				deps.Runner.(*identityRunner).Reply = func(string) (string, error) {
+					return "", &exec.ExitError{Code: 255}
+				}
+			},
+			want: []string{"could not be reached", "root@" + createDatasetTestNodeIP},
+		},
+		{
+			name: "API reports no pve-ssl.pem",
+			arrange: func(_ *testing.T, f *testhelper.FakePVE, _ *cli.Deps) {
+				f.HandleJSON("GET /api2/json/nodes/node1/certificates/info", []any{
+					map[string]any{"filename": "pve-root-ca.pem", "fingerprint": "00:11"},
+				})
+			},
+			want: []string{`did not report a pve-ssl.pem fingerprint for node "node1"`},
+		},
+	} {
+		t.Run("refuses on "+tc.name+" before any step and before any zfs command", func(t *testing.T) {
+			f, cmd, deps, fake := wire(t, false)
+			tc.arrange(t, f, deps)
+
+			_, err := runCreateCmd(t, cmd, "wayne", "--node", node)
+			require.Error(t, err)
+			for _, want := range tc.want {
+				assert.ErrorContains(t, err, want)
+			}
+			assert.ErrorContains(t, err, "lab create had not applied any step")
+			assert.ErrorContains(t, err, "nothing to undo")
+			assert.Empty(t, fake.Calls, "no zfs command is issued")
+		})
+	}
+
+	t.Run("a dry run connects to nothing", func(t *testing.T) {
+		_, cmd, deps, fake := wire(t, false)
+
+		_, err := runCreateCmd(t, cmd, "wayne", "--node", node, "--dry-run")
+		require.NoError(t, err)
+		assert.Empty(t, identityProbes(t, deps))
+		assert.Empty(t, fake.Calls)
+	})
+}
+
 // TestDestroyHelp_PurgeDatasetFlagMatchesTheLongHelp keeps the flag from
 // pointing at the context host, which the verb no longer uses.
 func TestDestroyHelp_PurgeDatasetFlagMatchesTheLongHelp(t *testing.T) {

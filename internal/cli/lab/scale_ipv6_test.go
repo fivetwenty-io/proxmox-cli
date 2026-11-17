@@ -92,7 +92,7 @@ func TestScale_ReconcilesNestedHostNetworkIPv6(t *testing.T) {
 		exec.FakeResponse{Stdout: sampleCorosyncCfgtoolAllUp},
 		exec.FakeResponse{Stdout: samplePvesmStatusAllActive},
 	)
-	cli.GetDeps(cmd).Runner = fake
+	cli.GetDeps(cmd).Runner = createIdentityRunner(f, fake, "node1")
 
 	out, err := runGuestCmd(t, cmd, "wayne", "--nodes", "2", "--node", "node1", "--yes")
 	require.NoError(t, err)
