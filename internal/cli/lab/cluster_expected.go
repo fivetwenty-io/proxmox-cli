@@ -2,6 +2,7 @@ package lab
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -236,42 +237,69 @@ func clusterExpectedProbe(deps *cli.Deps, idx int, nodeIP string) (bool, error) 
 	return true, nil
 }
 
-// sshTransportMarkers are the lowercase fragments of the messages ssh prints
-// to stderr when it cannot reach or authenticate to a host.
-var sshTransportMarkers = []string{
-	"connection refused",
-	"connection timed out",
-	"operation timed out",
-	"stdio forwarding failed",
+// sshClientLinePrefixes are the lowercase openings of the diagnostics the ssh
+// client itself prints to stderr when it cannot reach or authenticate to a
+// host. Only a line that opens this way counts: a remote command's own text
+// can say "connection refused" too, and pmxcfs does when pve-cluster is down
+// ("ipcc_send_rec[1] failed: Connection refused"), and that is the remote
+// command failing, not ssh.
+var sshClientLinePrefixes = []string{
+	"ssh:", // "ssh: connect to host X port 22: ..." and "ssh: Could not resolve hostname X: ..."
+	"connect to host ",
+	"ssh_exchange_identification:",
+	"ssh_dispatch_run_fatal:",
 	"kex_exchange_identification",
-	"connection reset",
-	"connection closed",
-	"no route to host",
-	"network is unreachable",
-	"permission denied",
-	"could not resolve hostname",
+	"connection closed by ",
+	"connection reset by ",
+	"received disconnect from ",
+	"client_loop:",
+	"timeout, server ",
+	"stdio forwarding failed",
 	"host key verification failed",
+	"permission denied, please try again",
+}
+
+// sshClientLineREs match the forms of ssh client diagnostics that do not open
+// with a fixed word: "root@10.0.0.1: Permission denied (publickey).", the
+// jump host's "channel 0: open failed: connect failed: ...", and "Connection
+// to X closed by remote host.".
+var sshClientLineREs = []*regexp.Regexp{
+	regexp.MustCompile(`^\S+@\S+: permission denied \(`),
+	regexp.MustCompile(`^channel \d+: open failed:`),
+	regexp.MustCompile(`^connection to \S+ closed by remote host`),
+}
+
+// sshClientLine reports whether one stderr line is a diagnostic of the ssh
+// client itself.
+func sshClientLine(line string) bool {
+	line = strings.ToLower(strings.TrimSpace(line))
+	for _, prefix := range sshClientLinePrefixes {
+		if strings.HasPrefix(line, prefix) {
+			return true
+		}
+	}
+	for _, re := range sshClientLineREs {
+		if re.MatchString(line) {
+			return true
+		}
+	}
+	return false
 }
 
 // sshTransportFailure reports whether a command that exited 255 failed in ssh
 // itself and never reached the remote command. PVE's Perl CLI also exits 255
-// when it dies (an unclustered node's `pvecm status` does), so the exit code
-// alone cannot tell the two apart. An ssh failure leaves stdout empty and
-// writes an ssh diagnostic to stderr: a line starting with "ssh:" or one of
-// the well-known connection and authentication errors.
+// when it dies (an unclustered node's `pvecm status` does, and so does one that
+// cannot reach pmxcfs), so the exit code alone cannot tell the two apart. An
+// ssh failure leaves stdout empty and writes a diagnostic of the ssh client to
+// stderr, one of the forms in sshClientLinePrefixes and sshClientLineREs. A
+// remote command's message does not count, however alike its words are.
 func sshTransportFailure(stdout, stderr string) bool {
 	if strings.TrimSpace(stdout) != "" {
 		return false
 	}
 	for line := range strings.SplitSeq(stderr, "\n") {
-		line = strings.ToLower(strings.TrimSpace(line))
-		if strings.HasPrefix(line, "ssh:") {
+		if sshClientLine(line) {
 			return true
-		}
-		for _, marker := range sshTransportMarkers {
-			if strings.Contains(line, marker) {
-				return true
-			}
 		}
 	}
 	return false

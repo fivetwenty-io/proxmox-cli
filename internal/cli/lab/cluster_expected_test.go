@@ -3,6 +3,7 @@ package lab
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -14,6 +15,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/config"
 	"github.com/fivetwenty-io/proxmox-cli/internal/exec"
+	"github.com/fivetwenty-io/proxmox-cli/internal/exitcode"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
@@ -255,11 +257,59 @@ func TestSSHTransportFailure(t *testing.T) {
 		{"stdout present", "Cluster information", "Connection refused", false},
 		{"pve die message", "", "Corosync config does not exist", false},
 		{"empty", "", "", false},
+		{"kex banner", "", "kex_exchange_identification: Connection closed by remote host", true},
+		{"closed by", "", "Connection closed by 10.0.0.1 port 22", true},
+		{"jump host open failed", "", "channel 0: open failed: connect failed: Connection refused", true},
+		{"permission denied retries", "", "Permission denied, please try again.", true},
+		{"host key", "", "Host key verification failed.", true},
+		// The remote command's own text, however alike its words are, is not
+		// ssh failing. pmxcfs says all of these when pve-cluster is down.
+		{"pmxcfs ipcc", "", "ipcc_send_rec[1] failed: Connection refused\nUnable to load access control list: Connection refused", false},
+		{"pmxcfs ipcc alone", "", "ipcc_send_rec[2] failed: Connection refused", false},
+		{"remote connection timed out", "", "pvecm: Connection timed out", false},
+		{"remote permission denied", "", "pvecm: Permission denied", false},
+		{"remote no route", "", "unable to connect: No route to host", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			assert.Equal(t, tc.want, sshTransportFailure(tc.stdout, tc.stderr))
 		})
 	}
+}
+
+// TestRunGuestSSH_RemoteConnectionRefusedIsNotATransportFailure covers a
+// remote command that exits 255 with pmxcfs's ipcc error. ssh reached the
+// node and the command ran, so the failure is not a connection error and must
+// not be relabeled as one, which would exit 3 and be retried as "not up yet".
+func TestRunGuestSSH_RemoteConnectionRefusedIsNotATransportFailure(t *testing.T) {
+	ipcc := "ipcc_send_rec[1] failed: Connection refused\n" +
+		"ipcc_send_rec[2] failed: Connection refused\n" +
+		"Unable to load access control list: Connection refused\n"
+
+	fake := exec.Fake(exec.FakeResponse{ExitCode: 255, Stderr: ipcc})
+	_, err := runGuestSSH(waitDepsWithFake(fake), "10.10.1.10", "pvecm status")
+	require.Error(t, err)
+	_, isConnect := errors.AsType[*guestConnectError](err)
+	assert.False(t, isConnect, "the remote command failed, not ssh")
+
+	// The same words from ssh itself are a connection failure.
+	fake = exec.Fake(sshConnectFailure)
+	_, err = runGuestSSH(waitDepsWithFake(fake), "10.10.1.10", "pvecm status")
+	require.Error(t, err)
+	_, isConnect = errors.AsType[*guestConnectError](err)
+	assert.True(t, isConnect)
+}
+
+func TestClusterExpected_RemoteIPCCRefusalIsNotUnreachable(t *testing.T) {
+	cmd, fake := expectedTestCmd(t, exec.FakeResponse{
+		Stderr:   "ipcc_send_rec[1] failed: Connection refused\nUnable to load access control list: Connection refused\n",
+		ExitCode: 255,
+	})
+
+	_, err := runGuestCmd(t, cmd, "expected", "wayne", "1", "--node", "0")
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "unreachable")
+	assert.NotEqual(t, sshUnreachableExitCode, exitcode.FromError(err))
+	assert.Equal(t, 0, countRemote(fake, "pvecm expected 1"))
 }
 
 func TestClusterExpected_FailsWhenExpectedVotesUnreadable(t *testing.T) {
