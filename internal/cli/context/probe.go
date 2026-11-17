@@ -8,6 +8,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"html"
+	"io"
 	"math"
 	"net/http"
 	"net/url"
@@ -30,6 +32,11 @@ import (
 // seconds per context rather than the thirty a real API call would wait.
 const probeCeiling = 5 * time.Second
 
+// probeBodyLimit caps how much of the root page the probe reads when it has to
+// look for a product title. The title sits in the first lines of the page, so
+// a page that has not shown one within this many bytes is not read further.
+const probeBodyLimit = 64 << 10
+
 // probeResult carries the outcome of one live --connect probe.
 type probeResult struct {
 	// Reachable is true when the root page answered over TLS/HTTP.
@@ -41,9 +48,12 @@ type probeResult struct {
 	// its chain.
 	Err error
 
-	// ProductGuess is the product the endpoint identified itself as via its
-	// Server response header ("pve", "pbs", or "pdm"), or "" when the header
-	// gave no reliable signal. The probe never guesses beyond the header.
+	// ProductGuess is the product the endpoint identified itself as ("pve",
+	// "pbs", or "pdm"), or "" when it gave no reliable signal. The Server
+	// response header is read first. Some products, PBS 4.x among them, send
+	// none, so a page with no such header is read for the product name its
+	// <title> carries (productFromRootPage). The probe never guesses beyond
+	// those two signals.
 	ProductGuess string
 
 	// Via is the route the probe took, as Connection.Via names it.
@@ -99,15 +109,39 @@ func probeContext(ctx context.Context, conn cli.Connection) (probeResult, error)
 		return probeResult{Reachable: false, Err: err, Via: via}, nil
 	}
 
-	// The body is never read. Keep-alives are off, so closing it closes the
-	// connection, and through a jump that ends the ssh child.
-	_ = resp.Body.Close()
+	// Keep-alives are off, so closing the body closes the connection, and
+	// through a jump that ends the ssh child. The body is read only when the
+	// Server header named no product, and then only up to probeBodyLimit.
+	defer func() { _ = resp.Body.Close() }()
 
-	return probeResult{
-		Reachable:    true,
-		ProductGuess: productFromServerHeader(resp.Header.Get("Server")),
-		Via:          via,
-	}, nil
+	guess := productFromServerHeader(resp.Header.Get("Server"))
+	if guess == "" {
+		guess = productFromRootResponse(resp)
+	}
+
+	return probeResult{Reachable: true, ProductGuess: guess, Via: via}, nil
+}
+
+// productFromRootResponse reads at most probeBodyLimit bytes of resp's body
+// and returns the product its page names, or "" when the response is not an
+// HTML success page, when the body cannot be read, or when the page names no
+// product. A read error is no signal rather than a failure, since the host
+// has already answered and is reachable.
+func productFromRootResponse(resp *http.Response) string {
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return ""
+	}
+
+	if !strings.Contains(strings.ToLower(resp.Header.Get("Content-Type")), "text/html") {
+		return ""
+	}
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, probeBodyLimit))
+	if err != nil {
+		return ""
+	}
+
+	return productFromRootPage(string(body))
 }
 
 // newProbeClient builds the probe's client and returns its transport too, so
@@ -354,4 +388,120 @@ func productFromServerHeader(server string) string {
 	default:
 		return ""
 	}
+}
+
+// rootPageProducts pairs the product name each Proxmox web interface puts in
+// its page title with the product identifier. No name is a prefix or suffix
+// of another, so a title can name at most one of them.
+var rootPageProducts = []struct {
+	name    string
+	product string
+}{
+	{"Proxmox Virtual Environment", config.ProductPVE},
+	{"Proxmox Backup Server", config.ProductPBS},
+	{"Proxmox Datacenter Manager", config.ProductPDM},
+}
+
+// productFromRootPage maps the root page of a Proxmox web interface to a
+// product identifier, for the endpoints that send no identifying Server
+// header. Each interface titles its page "<node name> - <product name>", for
+// example "pbs1 - Proxmox Backup Server", and a login page may carry the
+// product name alone.
+//
+// The signal is the whole <title> and nothing else, so it cannot be set off
+// by a product name that appears elsewhere in the page, such as a link, a
+// script path, or text on a page from another application. The title has to
+// equal a product name or end in " - " and a product name. A node name holds
+// no space, so a host named after one product can never make its page read as
+// another. A page with no title, a title that names no product, or a second
+// title that names a different product returns "" and the probe reports
+// "unverified" rather than a guess.
+func productFromRootPage(page string) string {
+	titles := pageTitles(page)
+	if len(titles) == 0 {
+		return ""
+	}
+
+	product := ""
+	for _, title := range titles {
+		found := productFromTitle(title)
+		switch {
+		case found == "":
+			continue
+		case product != "" && product != found:
+			return ""
+		default:
+			product = found
+		}
+	}
+
+	return product
+}
+
+// productFromTitle returns the product a single page title names, or "".
+func productFromTitle(title string) string {
+	lower := strings.ToLower(title)
+
+	for _, p := range rootPageProducts {
+		name := strings.ToLower(p.name)
+		if lower == name || strings.HasSuffix(lower, " - "+name) {
+			return p.product
+		}
+	}
+
+	return ""
+}
+
+// pageTitles returns the text of every <title> element in page, with entities
+// decoded and whitespace collapsed. An element left unclosed in the part of
+// the page that was read is skipped.
+func pageTitles(page string) []string {
+	var titles []string
+
+	lower := asciiLower(page)
+	for from := 0; ; {
+		open := strings.Index(lower[from:], "<title")
+		if open < 0 {
+			return titles
+		}
+		open += from
+
+		// "<title" must end the tag name: "<titlefoo>" is not a title.
+		tagEnd := open + len("<title")
+		if tagEnd >= len(lower) || (lower[tagEnd] != '>' && lower[tagEnd] != ' ' && lower[tagEnd] != '\t' &&
+			lower[tagEnd] != '\n' && lower[tagEnd] != '\r') {
+			from = tagEnd
+
+			continue
+		}
+
+		start := strings.IndexByte(lower[tagEnd:], '>')
+		if start < 0 {
+			return titles
+		}
+		start += tagEnd + 1
+
+		end := strings.Index(lower[start:], "</title")
+		if end < 0 {
+			return titles
+		}
+		end += start
+
+		titles = append(titles, strings.Join(strings.Fields(html.UnescapeString(page[start:end])), " "))
+		from = end
+	}
+}
+
+// asciiLower lowercases only the ASCII letters of s. Unlike strings.ToLower
+// it never changes the byte length, so an index found in the result is the
+// same index in s.
+func asciiLower(s string) string {
+	b := []byte(s)
+	for i, c := range b {
+		if c >= 'A' && c <= 'Z' {
+			b[i] = c + ('a' - 'A')
+		}
+	}
+
+	return string(b)
 }
