@@ -120,6 +120,87 @@ type remoteListEntry struct {
 	WebUrl *string  `json:"web-url,omitempty"`
 }
 
+// remoteNode is one cluster node address of a remote, decoded from PDM's
+// property-string form: `host`, or `hostname=host,fingerprint=XX` with any
+// other keys kept in extra.
+type remoteNode struct {
+	host        string
+	fingerprint string
+	extra       []string
+}
+
+// parseRemoteNode decodes one element of a remote's nodes list. The bare form
+// `host` and the keyed form `hostname=host` both name the host; `fingerprint=`
+// names its certificate fingerprint; every other `key=value` pair is kept
+// verbatim so no field PDM adds later is silently dropped from the table.
+func parseRemoteNode(spec string) remoteNode {
+	var node remoteNode
+
+	for part := range strings.SplitSeq(spec, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+
+		key, value, keyed := strings.Cut(part, "=")
+
+		switch {
+		case !keyed && node.host == "":
+			node.host = part
+		case keyed && key == "hostname" && node.host == "":
+			node.host = value
+		case keyed && key == "fingerprint":
+			node.fingerprint = value
+		default:
+			node.extra = append(node.extra, strings.ReplaceAll(part, "=", " "))
+		}
+	}
+
+	return node
+}
+
+// formatRemoteNodes renders a remote's nodes list for the table: each node as
+// `host (fingerprint X)`, a node without a fingerprint as its bare host, and
+// the nodes joined by "; ". The API's own property-string form joins a node's
+// host and fingerprint with a comma, which made a multi-node list read as an
+// ambiguous run of commas. An element that carries a fingerprint but no host
+// belongs to the node before it. JSON and YAML output are not affected.
+func formatRemoteNodes(specs []string) string {
+	var nodes []remoteNode
+
+	for _, spec := range specs {
+		node := parseRemoteNode(spec)
+
+		if node.host == "" && len(nodes) > 0 && len(node.extra) == 0 {
+			prev := &nodes[len(nodes)-1]
+			if prev.fingerprint == "" {
+				prev.fingerprint = node.fingerprint
+				continue
+			}
+		}
+
+		nodes = append(nodes, node)
+	}
+
+	cells := make([]string, 0, len(nodes))
+
+	for _, node := range nodes {
+		details := append([]string(nil), node.extra...)
+		if node.fingerprint != "" {
+			details = append([]string{"fingerprint " + node.fingerprint}, details...)
+		}
+
+		if len(details) == 0 {
+			cells = append(cells, node.host)
+			continue
+		}
+
+		cells = append(cells, fmt.Sprintf("%s (%s)", node.host, strings.Join(details, ", ")))
+	}
+
+	return strings.Join(cells, "; ")
+}
+
 // newRemoteLsCmd builds `pmx pdm remote ls` — list every managed remote
 // (GET /remotes/remote).
 func newRemoteLsCmd() *cobra.Command {
@@ -154,7 +235,7 @@ func newRemoteLsCmd() *cobra.Command {
 			for _, t := range table {
 				e := t.Entry
 				rows = append(rows, []string{
-					e.Id, e.Type, e.Authid, strings.Join(e.Nodes, ","), strPtrString(e.WebUrl),
+					e.Id, e.Type, e.Authid, formatRemoteNodes(e.Nodes), strPtrString(e.WebUrl),
 				})
 				raws = append(raws, t.Raw)
 			}

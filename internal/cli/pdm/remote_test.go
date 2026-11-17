@@ -360,3 +360,53 @@ func TestRemoteAdd_HelpExampleTokenIsResolved(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "from-example", rec.form.Get("token"))
 }
+
+// TestFormatRemoteNodes covers the NODES cell: each node renders as
+// `host (fingerprint X)`, a node without a fingerprint as its bare host, and
+// nodes are joined by "; ".
+func TestFormatRemoteNodes(t *testing.T) {
+	for name, tc := range map[string]struct {
+		in   []string
+		want string
+	}{
+		"empty":                {nil, ""},
+		"bare host":            {[]string{"10.0.0.1"}, "10.0.0.1"},
+		"host and fingerprint": {[]string{"10.0.0.1,fingerprint=AA:BB"}, "10.0.0.1 (fingerprint AA:BB)"},
+		"keyed hostname":       {[]string{"hostname=pve1,fingerprint=AA:BB"}, "pve1 (fingerprint AA:BB)"},
+		"multi node mixed": {
+			[]string{"10.0.0.1,fingerprint=AA", "10.0.0.2", "pve3,fingerprint=CC"},
+			"10.0.0.1 (fingerprint AA); 10.0.0.2; pve3 (fingerprint CC)",
+		},
+		"fingerprint split into its own element": {
+			[]string{"10.0.0.1", "fingerprint=AA", "10.0.0.2", "fingerprint=BB"},
+			"10.0.0.1 (fingerprint AA); 10.0.0.2 (fingerprint BB)",
+		},
+		"unknown key kept": {[]string{"10.0.0.1,fingerprint=AA,port=8006"}, "10.0.0.1 (fingerprint AA, port 8006)"},
+	} {
+		require.Equal(t, tc.want, formatRemoteNodes(tc.in), name)
+	}
+}
+
+// TestRemoteLs_TableRendersNodesUnambiguouslyAndJSONIsUnchanged asserts the
+// table NODES cell uses the readable form while JSON keeps the API's strings.
+func TestRemoteLs_TableRendersNodesUnambiguouslyAndJSONIsUnchanged(t *testing.T) {
+	payload := []map[string]any{{
+		"id": "alpha", "type": "pve", "authid": "root@pam",
+		"nodes": []string{"10.0.0.1,fingerprint=AA:BB", "10.0.0.2,fingerprint=CC:DD"},
+	}}
+
+	f, pc := newFakeClient(t)
+	f.HandleJSON("GET /api2/json/remotes/remote", payload)
+
+	var table bytes.Buffer
+	require.NoError(t, run(depsFor(t, pc, output.FormatTable, false), &table, newRemoteLsCmd(), "ls"))
+	require.Contains(t, table.String(), "10.0.0.1 (fingerprint AA:BB); 10.0.0.2 (fingerprint CC:DD)")
+	require.NotContains(t, table.String(), "10.0.0.1,fingerprint=")
+
+	var js bytes.Buffer
+	require.NoError(t, run(depsFor(t, pc, output.FormatJSON, false), &js, newRemoteLsCmd(), "ls"))
+
+	var got []map[string]any
+	require.NoError(t, json.Unmarshal(js.Bytes(), &got))
+	require.Equal(t, []any{"10.0.0.1,fingerprint=AA:BB", "10.0.0.2,fingerprint=CC:DD"}, got[0]["nodes"])
+}
