@@ -327,20 +327,52 @@ func knownHostsName(host string, port int) string {
 	return fmt.Sprintf("'[%s]:%d'", strings.Trim(host, "[]"), port)
 }
 
-// jumpHosts lists the hosts in an ssh -J chain without their user names, so a
-// hint can name the bastions a connection went through.
-func jumpHosts(chain string) string {
-	var hosts []string
+// jumpKnownHostsNames lists, for each hop of an ssh -J chain, the name
+// ssh-keygen -R needs to drop that hop's known_hosts entry. Each hop is
+// [ssh://][user@]host[:port], so the scheme and the user are stripped before the
+// host and port go through knownHostsName. A hop on a port other than 22
+// becomes "'[bastion]:2200'", which is how ssh records it.
+func jumpKnownHostsNames(chain string) []string {
+	var names []string
 	for hop := range strings.SplitSeq(chain, ",") {
-		hop = strings.TrimSpace(hop)
-		if i := strings.LastIndex(hop, "@"); i >= 0 {
-			hop = hop[i+1:]
-		}
-		if hop != "" {
-			hosts = append(hosts, hop)
+		host, port := splitJumpHop(hop)
+		if host != "" {
+			names = append(names, knownHostsName(host, port))
 		}
 	}
-	return strings.Join(hosts, ", ")
+	return names
+}
+
+// splitJumpHop reads the host and port out of one hop of an ssh -J chain,
+// dropping an ssh:// scheme, a user, and a trailing slash. The port is 0 when
+// the hop names none. A bracketed IPv6 literal may carry a port after the
+// bracket, and a bare IPv6 literal, which holds several colons, has none.
+func splitJumpHop(hop string) (host string, port int) {
+	hop = strings.TrimSpace(hop)
+	hop = strings.TrimPrefix(hop, "ssh://")
+	hop = strings.TrimRight(hop, "/")
+	if i := strings.LastIndex(hop, "@"); i >= 0 {
+		hop = hop[i+1:]
+	}
+
+	switch {
+	case strings.HasPrefix(hop, "["):
+		end := strings.Index(hop, "]")
+		if end < 0 {
+			return strings.Trim(hop, "[]"), 0
+		}
+		host = hop[1:end]
+		if rest, ok := strings.CutPrefix(hop[end+1:], ":"); ok {
+			port, _ = strconv.Atoi(rest)
+		}
+		return host, port
+	case strings.Count(hop, ":") == 1:
+		h, p, _ := strings.Cut(hop, ":")
+		port, _ = strconv.Atoi(p)
+		return h, port
+	default:
+		return hop, 0
+	}
 }
 
 // guestAuthHint turns a retry-proof ssh failure against host into the advice
@@ -355,10 +387,14 @@ func guestAuthHint(kind sshAuthFailure, host string, f sshcmd.Flags) string {
 		hint := fmt.Sprintf(
 			"the guest's host key differs from the one in known_hosts, which is usual after a lab is "+
 				"re-created on the same addresses; run `ssh-keygen -R %s` and retry", knownHostsName(host, f.Port))
-		if f.Jump != "" {
+		if names := jumpKnownHostsNames(f.Jump); len(names) > 0 {
+			cmds := make([]string, len(names))
+			for i, name := range names {
+				cmds[i] = "`ssh-keygen -R " + name + "`"
+			}
 			hint += fmt.Sprintf(
-				". The changed key might instead belong to the jump host (%s), in which case run "+
-					"`ssh-keygen -R` for that host", jumpHosts(f.Jump))
+				". The changed key might instead belong to a jump host, in which case run %s",
+				strings.Join(cmds, " or "))
 		}
 		return hint
 	case sshDeniedKey:

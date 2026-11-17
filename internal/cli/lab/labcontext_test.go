@@ -720,9 +720,42 @@ func TestLabWaitForSSH_ChangedHostKeyIsTerminal(t *testing.T) {
 
 	t.Run("a jump host is named as another possible owner of the key", func(t *testing.T) {
 		err := run(t, func(d *cli.Deps) { d.Ctx.SSH.Jump = "ops@bastion.example:2200,gw@inner.example" })
-		assert.ErrorContains(t, err, "might instead belong to the jump host (bastion.example:2200, inner.example)")
+		assert.ErrorContains(t, err, "might instead belong to a jump host, in which case run "+
+			"`ssh-keygen -R '[bastion.example]:2200'` or `ssh-keygen -R inner.example`")
 		assert.ErrorContains(t, err, "`ssh-keygen -R 10.10.1.10`")
 	})
+
+	t.Run("an ssh:// jump hop is stripped to its host", func(t *testing.T) {
+		err := run(t, func(d *cli.Deps) { d.Ctx.SSH.Jump = "ssh://ops@bastion.example" })
+		assert.ErrorContains(t, err, "`ssh-keygen -R bastion.example`")
+		assert.NotContains(t, err.Error(), "ssh://")
+	})
+}
+
+// TestJumpKnownHostsNames covers the known_hosts names the jump-host hint
+// offers: per hop, without scheme or user, and bracketed when the port is not 22.
+func TestJumpKnownHostsNames(t *testing.T) {
+	for _, tc := range []struct {
+		chain string
+		want  []string
+	}{
+		{"bastion", []string{"bastion"}},
+		{"ops@bastion", []string{"bastion"}},
+		{"bastion:22", []string{"bastion"}},
+		{"bastion:2200", []string{"'[bastion]:2200'"}},
+		{"ops@bastion:2200", []string{"'[bastion]:2200'"}},
+		{"ssh://bastion", []string{"bastion"}},
+		{"ssh://ops@bastion:2200", []string{"'[bastion]:2200'"}},
+		{"ssh://ops@bastion:2200/", []string{"'[bastion]:2200'"}},
+		{"a@one:2200, b@two", []string{"'[one]:2200'", "two"}},
+		{"[fe80::1]:2200", []string{"'[fe80::1]:2200'"}},
+		{"[fe80::1]", []string{"fe80::1"}},
+		{"fe80::1", []string{"fe80::1"}},
+		{"", nil},
+		{" , ", nil},
+	} {
+		assert.Equal(t, tc.want, jumpKnownHostsNames(tc.chain), "chain %q", tc.chain)
+	}
 }
 
 // TestLabWaitForSSH_RefusedKeyIsTerminalOnlyWhenItPersists verifies the wait
