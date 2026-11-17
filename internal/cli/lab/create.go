@@ -1057,8 +1057,10 @@ func createZfsDatasetCreateArgs(dataset string, refquotaGB int) []string {
 // root/22-default-with-context-override precedence runQuotaSet (quota.go)
 // uses for its own "zfs set refquota" call — the operator's ssh key/user
 // material lives on the pmx context (deps.Ctx.SSH), same as every other lab
-// verb that shells out. Callers must check deps.Ctx != nil first; this
-// function dereferences it unconditionally.
+// verb that shells out. The context's ssh.jump rides along, so a node that is
+// not directly routable from where pmx runs is reached through the same
+// bastion the API connection and the lab guest commands use. Callers must
+// check deps.Ctx != nil first; this function dereferences it unconditionally.
 func createDatasetSSHFlags(deps *cli.Deps) sshcmd.Flags {
 	f := sshcmd.Flags{User: "root", Port: 22}
 	if deps.Ctx.SSH.User != "" {
@@ -1070,6 +1072,7 @@ func createDatasetSSHFlags(deps *cli.Deps) sshcmd.Flags {
 	if deps.Ctx.SSH.Identity != "" {
 		f.Identity = deps.Ctx.SSH.Identity
 	}
+	f.Jump = contextSSHJump(deps)
 	return f
 }
 
@@ -1078,8 +1081,8 @@ func createDatasetSSHFlags(deps *cli.Deps) sshcmd.Flags {
 // against GET /cluster/status — the exact mechanism `pmx pve node ssh`
 // uses, internal/cli/node/ssh.go's resolveHost), NOT deps.Ctx.Host.
 //
-// deps.Ctx.Host is the pmx CONTEXT's own configured host (quota.go's ssh
-// target), which on a multi-node outer fleet cluster is only the cluster's
+// deps.Ctx.Host is the pmx CONTEXT's own configured host (the target quota set
+// and destroy --purge-dataset once used too), which on a multi-node outer fleet cluster is only the cluster's
 // API entrypoint — a different machine from the node a lab's VMs (and its
 // ZFS pool) actually live on. A live run confirmed this the hard way:
 // deps.Ctx.Host ("pve-0.taile80fe.ts.net") was not even ssh-reachable from

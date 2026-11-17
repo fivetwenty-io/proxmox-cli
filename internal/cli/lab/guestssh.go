@@ -60,9 +60,7 @@ func labGuestSSHFlags(deps *cli.Deps) (sshcmd.Flags, error) {
 	// only from inside the context's network. When the context itself is
 	// reached through a bastion, every guest behind it is too, and without this
 	// each guest command fails with a bare connect timeout.
-	if deps.Ctx.SSH.Jump != "" {
-		f.Jump = deps.Ctx.SSH.Jump
-	}
+	f.Jump = contextSSHJump(deps)
 	return f, nil
 }
 

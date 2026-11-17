@@ -65,10 +65,12 @@ func newDestroyCmd() *cobra.Command {
 			"Destroying requires --yes/-y or an interactive 'y' confirmation. Pass --purge to " +
 			"remove the lab's resource pool and storage definition as well, or --dry-run to " +
 			"preview what would be destroyed without mutating anything or prompting.\n\n" +
-			"Pass --purge-dataset to also destroy the lab's ZFS dataset on the context host " +
-			"(implies --purge; irreversible). It refuses to run when --api-endpoint or " +
-			"$PMX_API_ENDPOINT points the invocation's API at a different host than the context " +
-			"stores, since the dataset is destroyed over ssh to the stored host. " +
+			"Pass --purge-dataset to also destroy the lab's ZFS dataset (implies --purge; " +
+			"irreversible). The dataset is destroyed over ssh on the node that hosts it, reached " +
+			"the way \"pmx lab create\" reaches it. The node is the one from --node, $PMX_NODE, or " +
+			"the context's default node, or the single node every lab VM lives on, and its own " +
+			"address is looked up from the cluster. The ssh user, port, identity, and jump come " +
+			"from the active context. " +
 			"Labs running Ceph should tear down the storage " +
 			"layer first (see the lab repo's Ceph teardown script); the OSD data is destroyed " +
 			"with the VMs either way.",
@@ -84,17 +86,10 @@ func newDestroyCmd() *cobra.Command {
 			if purgeDataset {
 				purge = true
 			}
-			if purgeDataset && (deps.Ctx == nil || deps.Ctx.Host == "") {
+			if purgeDataset && deps.Ctx == nil {
 				return errors.New(
-					"lab destroy --purge-dataset: a context host is required; select an active pmx context with --context/-c")
-			}
-			// The dataset is destroyed over ssh to the stored host, so an
-			// endpoint override that aims the API elsewhere leaves the target
-			// ambiguous. Refuse before any VM is touched.
-			if purgeDataset {
-				if err := deps.RefuseOverriddenSSHHost("lab destroy --purge-dataset"); err != nil {
-					return err
-				}
+					"lab destroy --purge-dataset: an active pmx context is required to reach the dataset's node " +
+						"over ssh; select one with --context/-c")
 			}
 
 			lab, err := resolveLabForMutate(cmd, name)
@@ -131,6 +126,29 @@ func newDestroyCmd() *cobra.Command {
 				}
 			}
 
+			// The dataset's ssh target is resolved before anything is destroyed,
+			// so an unresolvable node or address fails the run while every VM
+			// is still intact rather than after they are gone.
+			var (
+				datasetFlags sshcmd.Flags
+				datasetHost  string
+				datasetNode  string
+			)
+			if purgeDataset {
+				vmNodes := make([]string, 0, len(toDestroy))
+				for _, d := range toDestroy {
+					vmNodes = append(vmNodes, d.vm.Node)
+				}
+				datasetNode, err = labDatasetNode(deps, "lab destroy --purge-dataset", vmNodes...)
+				if err != nil {
+					return err
+				}
+				datasetFlags, datasetHost, err = resolveLabDatasetSSH(ctx, deps, "lab destroy --purge-dataset", datasetNode)
+				if err != nil {
+					return err
+				}
+			}
+
 			var plan []string
 			for _, d := range toDestroy {
 				plan = append(plan, fmt.Sprintf("node %s VM %d on node %q", d.target.label, d.vm.VMID, d.vm.Node))
@@ -140,7 +158,8 @@ func newDestroyCmd() *cobra.Command {
 				plan = append(plan, fmt.Sprintf("storage %q", stgID))
 			}
 			if purgeDataset {
-				plan = append(plan, fmt.Sprintf("ZFS dataset %s on %s (recursive)", zfsDatasetPath(lab), deps.Ctx.Host))
+				plan = append(plan, fmt.Sprintf("ZFS dataset %s on node %s (%s) (recursive)",
+					zfsDatasetPath(lab), datasetNode, datasetHost))
 			}
 
 			if len(plan) == 0 {
@@ -200,7 +219,7 @@ func newDestroyCmd() *cobra.Command {
 			}
 
 			if purgeDataset {
-				if err := destroyDatasetOnHost(deps, lab); err != nil {
+				if err := destroyDatasetOnHost(deps, lab, datasetFlags, datasetHost); err != nil {
 					return err
 				}
 			}
@@ -386,31 +405,24 @@ func destroyDeleteStorage(ctx context.Context, api *apiclient.APIClient, stgID s
 	return nil
 }
 
-// destroyDatasetOnHost removes the lab's ZFS dataset over SSH to the context
-// host — the same transport quota set uses (quota.go), NOT guest SSH: the
-// dataset lives on the outer host, not in a lab guest. Absent dataset is
-// success (idempotent re-destroy); a real zfs destroy failure propagates.
-func destroyDatasetOnHost(deps *cli.Deps, lab *config.Lab) error {
+// destroyDatasetOnHost removes the lab's ZFS dataset over SSH to host, the
+// address of the node that hosts it, using f's connection flags (user, port,
+// identity, and jump from the context). It is the same target and transport
+// the create verb's dataset step and quota set use (resolveLabDatasetSSH),
+// NOT guest SSH: the dataset lives on the outer node, not in a lab guest.
+// Absent dataset is success (idempotent re-destroy); a real zfs destroy
+// failure propagates.
+func destroyDatasetOnHost(deps *cli.Deps, lab *config.Lab, f sshcmd.Flags, host string) error {
 	ds := zfsDatasetPath(lab)
-	f := sshcmd.Flags{User: "root", Port: 22}
-	if deps.Ctx.SSH.User != "" {
-		f.User = deps.Ctx.SSH.User
-	}
-	if deps.Ctx.SSH.Port != 0 {
-		f.Port = deps.Ctx.SSH.Port
-	}
-	if deps.Ctx.SSH.Identity != "" {
-		f.Identity = deps.Ctx.SSH.Identity
-	}
-	argv := sshcmd.BaseArgs(&f, deps.Ctx.Host)
+	argv := sshcmd.BaseArgs(&f, host)
 	argv = append(argv, fmt.Sprintf(`if zfs list %q >/dev/null 2>&1; then zfs destroy -r %q; fi`, ds, ds))
 
 	var stderr bytes.Buffer
 	if err := deps.Runner.Run("ssh", argv, nil, nil, io.Discard, &stderr); err != nil {
 		if msg := strings.TrimSpace(stderr.String()); msg != "" {
-			return fmt.Errorf("destroy dataset %s on %s: %w (stderr: %s)", ds, deps.Ctx.Host, err, msg)
+			return fmt.Errorf("destroy dataset %s on %s: %w (stderr: %s)", ds, host, err, msg)
 		}
-		return fmt.Errorf("destroy dataset %s on %s: %w", ds, deps.Ctx.Host, err)
+		return fmt.Errorf("destroy dataset %s on %s: %w", ds, host, err)
 	}
 	return nil
 }

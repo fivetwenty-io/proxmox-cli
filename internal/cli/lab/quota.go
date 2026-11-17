@@ -61,11 +61,13 @@ func newQuotaSetCmd() *cobra.Command {
 
 Proxmox VE has no API for ZFS dataset properties, so this verb runs "zfs
 set refquota" with the requested size (refquota=480G, for example) on the
-lab host directly over ssh. It targets the active context's host and the
-ssh connection settings configured on it: ssh.user, ssh.port, ssh.identity.
-It refuses to run when --api-endpoint or $PMX_API_ENDPOINT points the
-invocation's API at a different host, since the intended machine is then
-ambiguous.
+node that hosts the lab's dataset, directly over ssh. It reaches that node
+the way "pmx lab create" does. The node comes from --node, $PMX_NODE, or
+the context's default node, and its own address is looked up from the
+cluster, because the context's host is only the API entrypoint and on a
+multi-node cluster may not be reachable by ssh at all. The ssh connection
+settings come from the active context: ssh.user, ssh.port, ssh.identity,
+and ssh.jump, so a node behind a bastion is reached through it.
 
 The effective refquota is --refquota-gb when given, else the lab's
 storage.refquota_gb. At least one of the two must yield a positive value.
@@ -93,9 +95,10 @@ the confirmation prompt.`,
 
 // runQuotaSet resolves and peppi-guards name, determines the effective
 // refquota (--refquota-gb over the lab's storage.refquota_gb when the flag was passed),
-// builds the ssh argv the same way internal/cli/remote and
-// internal/cli/qemu do (sshcmd.BaseArgs against the active context's host
-// and SSH block), and either previews or executes it via deps.Runner.
+// builds the ssh argv the way the create verb's dataset step does
+// (resolveLabDatasetSSH: the node's own address plus the context's ssh user,
+// port, identity, and jump), and either previews or executes it via
+// deps.Runner.
 func runQuotaSet(cmd *cobra.Command, name string, refquotaFlagGB int, dryRun, yes bool) error {
 	deps := cli.GetDeps(cmd)
 
@@ -113,33 +116,21 @@ func runQuotaSet(cmd *cobra.Command, name string, refquotaFlagGB int, dryRun, ye
 			"lab %q has no positive refquota: pass --refquota-gb or set storage.refquota_gb in its config", name)
 	}
 
-	if deps.Ctx == nil {
-		return fmt.Errorf(
-			"quota set requires an active pmx context to resolve an ssh target; select one with --context/-c")
-	}
-
-	// The quota is set over ssh to the stored host, so an endpoint override
-	// that aims the API elsewhere leaves the target ambiguous.
-	if err := deps.RefuseOverriddenSSHHost("lab quota set"); err != nil {
+	node, err := labDatasetNode(deps, "quota set")
+	if err != nil {
 		return err
 	}
 
-	f := sshcmd.Flags{User: "root", Port: 22}
-	if deps.Ctx.SSH.User != "" {
-		f.User = deps.Ctx.SSH.User
-	}
-	if deps.Ctx.SSH.Port != 0 {
-		f.Port = deps.Ctx.SSH.Port
-	}
-	if deps.Ctx.SSH.Identity != "" {
-		f.Identity = deps.Ctx.SSH.Identity
+	f, host, err := resolveLabDatasetSSH(cmd.Context(), deps, "quota set", node)
+	if err != nil {
+		return err
 	}
 
 	dataset := zfsDatasetPath(lab)
 	remoteCmd := append([]string{"zfs", "set"}, labDatasetQuotaProps(refquotaGB)...)
 	remoteCmd = append(remoteCmd, dataset)
 
-	argv := sshcmd.BaseArgs(&f, deps.Ctx.Host)
+	argv := sshcmd.BaseArgs(&f, host)
 	argv = append(argv, remoteCmd...)
 
 	if dryRun {
@@ -163,7 +154,7 @@ func runQuotaSet(cmd *cobra.Command, name string, refquotaFlagGB int, dryRun, ye
 	// stdin is nil: "zfs set" reads no input of its own, unlike the
 	// arbitrary user commands `pmx pve node exec`/`pmx ssh` pass through.
 	if err := deps.Runner.Run("ssh", argv, nil, nil, cmd.OutOrStdout(), cmd.ErrOrStderr()); err != nil {
-		return fmt.Errorf("set refquota on lab %q via ssh %s@%s: %w", name, f.User, deps.Ctx.Host, err)
+		return fmt.Errorf("set refquota on lab %q via ssh %s@%s: %w", name, f.User, host, err)
 	}
 
 	res := output.Result{Message: fmt.Sprintf("Lab %q refquota set to %dG.", name, refquotaGB)}

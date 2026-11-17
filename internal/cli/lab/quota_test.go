@@ -9,11 +9,22 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/config"
 	"github.com/fivetwenty-io/proxmox-cli/internal/exec"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
+	"github.com/fivetwenty-io/proxmox-cli/internal/testhelper"
 )
+
+// quotaTestNodeIP is the address the testhelper's default GET /cluster/status
+// route reports for node "pve1". The quota tests assert it is the ssh
+// destination, and that the context's own host never is.
+const quotaTestNodeIP = "192.168.1.10"
+
+// quotaTestCtxHost is the context's own configured host in the quota tests:
+// the cluster's API entrypoint, which must never be the ssh destination.
+const quotaTestCtxHost = "sm-0.lab.internal"
 
 // quotaTestCmd builds a bare cobra.Command carrying a *cli.Deps loaded from
 // configPath (via newCmdWithDeps, the shared package helper), plus the same
@@ -50,14 +61,21 @@ func quotaFlagValues(t *testing.T, cmd *cobra.Command) (refquotaGB int, dryRun, 
 }
 
 // wireQuotaDeps attaches a fake ssh context (host + connection settings), a
-// *exec.FakeRunner, and an output.Renderer to cmd's already-loaded *cli.Deps
+// *exec.FakeRunner, a fake PVE API client reporting node "pve1" at
+// quotaTestNodeIP, and an output.Renderer to cmd's already-loaded *cli.Deps
 // (mutating the same pointer newCmdWithDeps stashed in cmd's context), and
 // wires cmd's in/out/err streams to the given buffers. Returns the
 // FakeRunner so tests can inspect its recorded Calls.
-func wireQuotaDeps(cmd *cobra.Command, stdin string, stdout, stderr *bytes.Buffer) *exec.FakeRunner {
+func wireQuotaDeps(t *testing.T, cmd *cobra.Command, stdin string, stdout, stderr *bytes.Buffer) *exec.FakeRunner {
+	t.Helper()
+
 	deps := cli.GetDeps(cmd)
+	api, err := apiclient.NewAPIClient(testhelper.NewFakePVE(t).Options)
+	require.NoError(t, err)
+	deps.API = api
+	deps.Node = "pve1"
 	deps.Ctx = &config.Context{
-		Host: "sm-0.lab.internal",
+		Host: quotaTestCtxHost,
 		SSH: config.SSHBlock{
 			User:     "root",
 			Port:     2222,
@@ -76,66 +94,116 @@ func wireQuotaDeps(cmd *cobra.Command, stdin string, stdout, stderr *bytes.Buffe
 	return fake
 }
 
-// TestLabQuota_RefusesOverriddenHost proves that quota set refuses, before
-// any ssh command or prompt, when an endpoint override aimed the
-// invocation's API at a host other than the one the context stores, and
-// that an override naming the stored host, in another case, still runs.
-func TestLabQuota_RefusesOverriddenHost(t *testing.T) {
+// TestLabQuota_TargetsNodeAddressNotContextHost is the regression test for
+// quota set ssh-ing to the context's own host. On a multi-node cluster that
+// host is only the API entrypoint and may not accept ssh at all, so the verb
+// must reach the node's own address, resolved from the cluster the same way
+// the create verb's dataset step resolves it.
+func TestLabQuota_TargetsNodeAddressNotContextHost(t *testing.T) {
 	cfg := &config.Config{
 		Labs: map[string]*config.Lab{"alpha": cleanLab("alpha")},
 	}
 	path := writeConfig(t, cfg)
 
-	route := func(t *testing.T, ctx *config.Context, host string) cli.Connection {
-		t.Helper()
-
-		conn, err := cli.ResolveConnection("sm", ctx, cli.ConnectionOverrides{
-			Host: host, Port: 8443, EndpointSource: "$PMX_API_ENDPOINT",
-		})
-		require.NoError(t, err)
-
-		return conn
-	}
-
-	t.Run("a different host is refused", func(t *testing.T) {
-		cmd := quotaTestCmd(t, path)
+	t.Run("the node address is the ssh destination", func(t *testing.T) {
+		cmd := quotaTestCmd(t, path, "--yes")
 		var stdout, stderr bytes.Buffer
-		fake := wireQuotaDeps(cmd, "y\n", &stdout, &stderr)
+		fake := wireQuotaDeps(t, cmd, "", &stdout, &stderr)
+
+		refquotaGB, dryRun, yes := quotaFlagValues(t, cmd)
+		require.NoError(t, runQuotaSet(cmd, "alpha", refquotaGB, dryRun, yes))
+		require.Len(t, fake.Calls, 1)
+		assert.Contains(t, fake.Calls[0].Args, "root@"+quotaTestNodeIP)
+		assert.NotContains(t, strings.Join(fake.Calls[0].Args, " "), quotaTestCtxHost)
+	})
+
+	t.Run("an endpoint override no longer makes the target ambiguous", func(t *testing.T) {
+		cmd := quotaTestCmd(t, path, "--yes")
+		var stdout, stderr bytes.Buffer
+		fake := wireQuotaDeps(t, cmd, "", &stdout, &stderr)
 		deps := cli.GetDeps(cmd)
 		deps.CtxName = "sm"
-		deps.Route = route(t, deps.Ctx, "pve9.lab.internal")
+		conn, err := cli.ResolveConnection("sm", deps.Ctx, cli.ConnectionOverrides{
+			Host: "pve9.lab.internal", Port: 8443, EndpointSource: "$PMX_API_ENDPOINT",
+		})
+		require.NoError(t, err)
+		deps.Route = conn
+
+		refquotaGB, dryRun, yes := quotaFlagValues(t, cmd)
+		require.NoError(t, runQuotaSet(cmd, "alpha", refquotaGB, dryRun, yes))
+		require.Len(t, fake.Calls, 1)
+		assert.Contains(t, fake.Calls[0].Args, "root@"+quotaTestNodeIP,
+			"the node address comes from the cluster the API reached, so there is nothing to refuse")
+	})
+
+	t.Run("no node anywhere is a clear error before any ssh", func(t *testing.T) {
+		cmd := quotaTestCmd(t, path, "--yes")
+		var stdout, stderr bytes.Buffer
+		fake := wireQuotaDeps(t, cmd, "", &stdout, &stderr)
+		cli.GetDeps(cmd).Node = ""
 
 		refquotaGB, dryRun, yes := quotaFlagValues(t, cmd)
 		err := runQuotaSet(cmd, "alpha", refquotaGB, dryRun, yes)
-
-		require.EqualError(t, err, `lab quota set runs ssh against the stored host sm-0.lab.internal of context "sm", `+
-			`but this invocation's API endpoint is pve9.lab.internal; drop the endpoint override and retry`)
-		assert.Empty(t, fake.Calls, "the refusal must precede every ssh command")
-		assert.Empty(t, stdout.String(), "the refusal must precede the confirmation prompt")
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "pass --node")
+		assert.Empty(t, fake.Calls)
 	})
 
-	t.Run("the stored host in another case still runs", func(t *testing.T) {
+	t.Run("no context is a clear error", func(t *testing.T) {
 		cmd := quotaTestCmd(t, path, "--yes")
 		var stdout, stderr bytes.Buffer
-		fake := wireQuotaDeps(cmd, "", &stdout, &stderr)
-		deps := cli.GetDeps(cmd)
-		deps.CtxName = "sm"
-		deps.Route = route(t, deps.Ctx, "SM-0.lab.internal")
+		fake := wireQuotaDeps(t, cmd, "", &stdout, &stderr)
+		cli.GetDeps(cmd).Ctx = nil
+
+		refquotaGB, dryRun, yes := quotaFlagValues(t, cmd)
+		err := runQuotaSet(cmd, "alpha", refquotaGB, dryRun, yes)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "active pmx context")
+		assert.Empty(t, fake.Calls)
+	})
+}
+
+// TestLabQuota_UsesContextSSHJump covers the jump half of the same bug: a
+// context reached through a bastion lists its bastion in ssh.jump, and the
+// quota ssh call must tunnel through it, as the create verb's dataset step
+// does. The "none" literal means dial direct and must not become "-J none".
+func TestLabQuota_UsesContextSSHJump(t *testing.T) {
+	cfg := &config.Config{
+		Labs: map[string]*config.Lab{"alpha": cleanLab("alpha")},
+	}
+	path := writeConfig(t, cfg)
+
+	run := func(t *testing.T, jump string) []string {
+		t.Helper()
+
+		cmd := quotaTestCmd(t, path, "--yes")
+		var stdout, stderr bytes.Buffer
+		fake := wireQuotaDeps(t, cmd, "", &stdout, &stderr)
+		cli.GetDeps(cmd).Ctx.SSH.Jump = jump
 
 		refquotaGB, dryRun, yes := quotaFlagValues(t, cmd)
 		require.NoError(t, runQuotaSet(cmd, "alpha", refquotaGB, dryRun, yes))
 		require.Len(t, fake.Calls, 1)
-		assert.Contains(t, fake.Calls[0].Args, "root@sm-0.lab.internal")
+		return fake.Calls[0].Args
+	}
+
+	t.Run("a stored jump chain is passed as -J", func(t *testing.T) {
+		args := run(t, "ops@bastion.example:2200")
+		assert.Equal(t, []string{
+			"-p", "2222",
+			"-J", "ops@bastion.example:2200",
+			"-i", "/home/wayne/.ssh/lab_ed25519",
+			"root@" + quotaTestNodeIP,
+			"zfs", "set", "quota=50G", "refquota=50G", "tank/labs/alpha",
+		}, args)
 	})
 
-	t.Run("no client route leaves the verb alone", func(t *testing.T) {
-		cmd := quotaTestCmd(t, path, "--yes")
-		var stdout, stderr bytes.Buffer
-		fake := wireQuotaDeps(cmd, "", &stdout, &stderr)
+	t.Run("none dials direct", func(t *testing.T) {
+		assert.NotContains(t, run(t, "none"), "-J")
+	})
 
-		refquotaGB, dryRun, yes := quotaFlagValues(t, cmd)
-		require.NoError(t, runQuotaSet(cmd, "alpha", refquotaGB, dryRun, yes))
-		require.Len(t, fake.Calls, 1)
+	t.Run("an empty jump dials direct", func(t *testing.T) {
+		assert.NotContains(t, run(t, ""), "-J")
 	})
 }
 
@@ -148,7 +216,7 @@ func TestQuotaSet_HappyPathWithYes_UsesConfigRefquota(t *testing.T) {
 	path := writeConfig(t, cfg)
 	cmd := quotaTestCmd(t, path, "--yes")
 	var stdout, stderr bytes.Buffer
-	fake := wireQuotaDeps(cmd, "", &stdout, &stderr)
+	fake := wireQuotaDeps(t, cmd, "", &stdout, &stderr)
 
 	refquotaGB, dryRun, yes := quotaFlagValues(t, cmd)
 	err := runQuotaSet(cmd, "alpha", refquotaGB, dryRun, yes)
@@ -161,7 +229,7 @@ func TestQuotaSet_HappyPathWithYes_UsesConfigRefquota(t *testing.T) {
 	assert.Equal(t, []string{
 		"-p", "2222",
 		"-i", "/home/wayne/.ssh/lab_ed25519",
-		"root@sm-0.lab.internal",
+		"root@" + quotaTestNodeIP,
 		"zfs", "set", "quota=50G", "refquota=50G", "tank/labs/alpha",
 	}, call.Args)
 }
@@ -181,7 +249,7 @@ func TestQuotaSet_UsesConfiguredStoragePoolForDataset(t *testing.T) {
 	path := writeConfig(t, cfg)
 	cmd := quotaTestCmd(t, path, "--yes")
 	var stdout, stderr bytes.Buffer
-	fake := wireQuotaDeps(cmd, "", &stdout, &stderr)
+	fake := wireQuotaDeps(t, cmd, "", &stdout, &stderr)
 
 	refquotaGB, dryRun, yes := quotaFlagValues(t, cmd)
 	err := runQuotaSet(cmd, "alpha", refquotaGB, dryRun, yes)
@@ -200,7 +268,7 @@ func TestQuotaSet_RefquotaFlagOverridesConfig(t *testing.T) {
 	path := writeConfig(t, cfg)
 	cmd := quotaTestCmd(t, path, "--yes", "--refquota-gb=999")
 	var stdout, stderr bytes.Buffer
-	fake := wireQuotaDeps(cmd, "", &stdout, &stderr)
+	fake := wireQuotaDeps(t, cmd, "", &stdout, &stderr)
 
 	refquotaGB, dryRun, yes := quotaFlagValues(t, cmd)
 	err := runQuotaSet(cmd, "alpha", refquotaGB, dryRun, yes)
@@ -222,7 +290,7 @@ func TestQuotaSet_DryRun_RecordsNoCallAndPrintsCommand(t *testing.T) {
 	path := writeConfig(t, cfg)
 	cmd := quotaTestCmd(t, path, "--dry-run")
 	var stdout, stderr bytes.Buffer
-	fake := wireQuotaDeps(cmd, "", &stdout, &stderr)
+	fake := wireQuotaDeps(t, cmd, "", &stdout, &stderr)
 
 	refquotaGB, dryRun, yes := quotaFlagValues(t, cmd)
 	err := runQuotaSet(cmd, "alpha", refquotaGB, dryRun, yes)
@@ -232,7 +300,8 @@ func TestQuotaSet_DryRun_RecordsNoCallAndPrintsCommand(t *testing.T) {
 	out := stdout.String()
 	assert.Contains(t, out, "ssh")
 	assert.Contains(t, out, "-p 2222")
-	assert.Contains(t, out, "root@sm-0.lab.internal")
+	assert.Contains(t, out, "root@"+quotaTestNodeIP)
+	assert.NotContains(t, out, quotaTestCtxHost)
 	assert.Contains(t, out, "zfs set quota=50G refquota=50G tank/labs/alpha")
 }
 
@@ -248,7 +317,7 @@ func TestQuotaSet_RefusesWithoutYesNonInteractively(t *testing.T) {
 	// Empty stdin simulates a non-interactive invocation: the confirmation
 	// read hits EOF immediately and must be treated as "no", not a hang or
 	// a panic.
-	fake := wireQuotaDeps(cmd, "", &stdout, &stderr)
+	fake := wireQuotaDeps(t, cmd, "", &stdout, &stderr)
 
 	refquotaGB, dryRun, yes := quotaFlagValues(t, cmd)
 	err := runQuotaSet(cmd, "alpha", refquotaGB, dryRun, yes)
@@ -269,7 +338,7 @@ func TestQuotaSet_MissingRefquotaEverywhere_HelpfulError(t *testing.T) {
 	path := writeConfig(t, cfg)
 	cmd := quotaTestCmd(t, path, "--yes")
 	var stdout, stderr bytes.Buffer
-	fake := wireQuotaDeps(cmd, "", &stdout, &stderr)
+	fake := wireQuotaDeps(t, cmd, "", &stdout, &stderr)
 
 	refquotaGB, dryRun, yes := quotaFlagValues(t, cmd)
 	err := runQuotaSet(cmd, "alpha", refquotaGB, dryRun, yes)
@@ -292,7 +361,7 @@ func TestQuotaSet_PeppiGuardRefusesBeforeAnyRunnerCall(t *testing.T) {
 	path := writeConfig(t, cfg)
 	cmd := quotaTestCmd(t, path, "--yes")
 	var stdout, stderr bytes.Buffer
-	fake := wireQuotaDeps(cmd, "", &stdout, &stderr)
+	fake := wireQuotaDeps(t, cmd, "", &stdout, &stderr)
 
 	refquotaGB, dryRun, yes := quotaFlagValues(t, cmd)
 	err := runQuotaSet(cmd, "dirty", refquotaGB, dryRun, yes)

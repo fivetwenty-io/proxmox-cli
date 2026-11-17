@@ -663,7 +663,8 @@ func TestDestroy_PurgeDataset_RunsZfsDestroyAfterStorageDelete(t *testing.T) {
 	require.Len(t, fake.Calls, 1)
 	assert.Equal(t, "ssh", fake.Calls[0].Name)
 	argv := strings.Join(fake.Calls[0].Args, " ")
-	assert.Contains(t, argv, "sm-0.lab.internal")
+	assert.Contains(t, argv, "root@192.168.1.10", "the node's own address, resolved from the cluster")
+	assert.NotContains(t, argv, "sm-0.lab.internal", "the context's own host is only the API entrypoint")
 	assert.Contains(t, argv,
 		`if zfs list "tank/labs/alpha" >/dev/null 2>&1; then zfs destroy -r "tank/labs/alpha"; fi`)
 	assert.Contains(t, stdout.String(), "destroyed")
@@ -800,7 +801,7 @@ func TestDestroy_PurgeDataset_InPlanAndPrompt(t *testing.T) {
 
 	out := stdout.String()
 	assert.Contains(t, out, "dry-run")
-	assert.Contains(t, out, "ZFS dataset tank/labs/alpha on sm-0.lab.internal (recursive)")
+	assert.Contains(t, out, "ZFS dataset tank/labs/alpha on node pve1 (192.168.1.10) (recursive)")
 }
 
 // TestDestroy_PurgeDataset_SSHFailurePropagates covers the ssh transport
@@ -837,7 +838,7 @@ func TestDestroy_PurgeDataset_SSHFailurePropagates(t *testing.T) {
 
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "tank/labs/alpha")
-	assert.ErrorContains(t, err, "sm-0.lab.internal")
+	assert.ErrorContains(t, err, "192.168.1.10")
 	assert.ErrorContains(t, err, "dataset is busy",
 		"the remote command's stderr must be folded into the returned error, not discarded")
 }
@@ -857,28 +858,48 @@ func TestDestroy_PurgeDataset_NoContext_Errors(t *testing.T) {
 	_, _, err := destroyRun(t, cmd, "alpha", "--yes", "--purge-dataset")
 
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "context host is required")
+	assert.ErrorContains(t, err, "active pmx context is required")
 }
 
-// TestLabDestroy_RefusesOverriddenHost proves that --purge-dataset refuses,
-// before any API call or ssh command, when an endpoint override aimed the
-// invocation's API at a host other than the one the context stores, since
-// the dataset would be destroyed over ssh on the stored host. Plain --purge
-// runs no ssh and is unaffected.
-func TestLabDestroy_RefusesOverriddenHost(t *testing.T) {
+// destroyPurgeDatasetFixture registers the PVE routes a one-VM
+// "--purge --purge-dataset" run needs, so a test can vary only how the ssh
+// target is chosen.
+func destroyPurgeDatasetFixture(t *testing.T, f *testhelper.FakePVE) {
+	t.Helper()
+
+	destroyHandleClusterResources(f, map[string]any{
+		"vmid": 100, "node": "pve1", "pool": "lab-alpha", "name": "lab-alpha", "status": "stopped", "type": "qemu",
+	})
+	f.HandleFunc("GET /api2/json/nodes/pve1/qemu/100/status/current", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, map[string]any{"status": "stopped", "vmid": 100})
+	})
+	deleteUPID := "UPID:pve1:00000002:00000002:65000000:qmdestroy:100:root@pam:"
+	f.HandleFunc("DELETE /api2/json/nodes/pve1/qemu/100", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, deleteUPID)
+	})
+	destroyHandleTaskStatus(f, "pve1", deleteUPID)
+	f.HandleFunc("DELETE /api2/json/pools", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, nil)
+	})
+	f.HandleFunc("DELETE /api2/json/storage/tank-lab-alpha", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, nil)
+	})
+}
+
+// TestDestroy_PurgeDataset_TargetsNodeAddress covers how --purge-dataset
+// chooses its ssh target. The dataset lives on the node that hosts the lab,
+// so the destination is that node's own address resolved from the cluster,
+// never the context's host, and an endpoint override that re-aims the API no
+// longer leaves it ambiguous.
+func TestDestroy_PurgeDataset_TargetsNodeAddress(t *testing.T) {
 	cfg := &config.Config{
 		Labs: map[string]*config.Lab{"alpha": cleanLab("alpha")},
 	}
 	path := writeConfig(t, cfg)
 
-	t.Run("purge-dataset refuses", func(t *testing.T) {
+	t.Run("an endpoint override still reaches the node address", func(t *testing.T) {
 		f, ac := destroyFakeClient(t)
-
-		var apiCalls atomic.Int64
-		f.HandleFunc("GET /api2/json/cluster/resources", func(w http.ResponseWriter, _ *http.Request) {
-			apiCalls.Add(1)
-			testhelper.WriteData(w, []any{})
-		})
+		destroyPurgeDatasetFixture(t, f)
 
 		cmd := destroyTestCmd(t, path, ac, "pve1")
 		deps, fake := destroyWireSSH(t, cmd)
@@ -886,16 +907,69 @@ func TestLabDestroy_RefusesOverriddenHost(t *testing.T) {
 		deps.Route = overriddenLabRoute(t, deps.Ctx, "pve9")
 
 		_, _, err := destroyRun(t, cmd, "alpha", "--yes", "--purge-dataset")
-
-		require.EqualError(t, err, `lab destroy --purge-dataset runs ssh against the stored host sm-0.lab.internal `+
-			`of context "sm", but this invocation's API endpoint is pve9; drop the endpoint override and retry`)
-		assert.Zero(t, apiCalls.Load(), "the refusal must precede every API call")
-		assert.Empty(t, fake.Calls, "the refusal must precede every ssh command")
+		require.NoError(t, err)
+		require.Len(t, fake.Calls, 1)
+		assert.Contains(t, fake.Calls[0].Args, "root@192.168.1.10")
 	})
 
-	t.Run("plain purge is unaffected", func(t *testing.T) {
+	t.Run("no node set uses the single node the lab VMs live on", func(t *testing.T) {
 		f, ac := destroyFakeClient(t)
+		destroyPurgeDatasetFixture(t, f)
 
+		cmd := destroyTestCmd(t, path, ac, "")
+		_, fake := destroyWireSSH(t, cmd)
+
+		_, _, err := destroyRun(t, cmd, "alpha", "--yes", "--purge-dataset")
+		require.NoError(t, err)
+		require.Len(t, fake.Calls, 1)
+		assert.Contains(t, fake.Calls[0].Args, "root@192.168.1.10")
+	})
+
+	t.Run("no node and no VMs fails before anything is destroyed", func(t *testing.T) {
+		f, ac := destroyFakeClient(t)
+		destroyHandleClusterResources(f)
+
+		var mutating atomic.Int64
+		f.HandleFunc("DELETE /api2/json/pools", func(w http.ResponseWriter, _ *http.Request) {
+			mutating.Add(1)
+			testhelper.WriteData(w, nil)
+		})
+		f.HandleFunc("DELETE /api2/json/storage/tank-lab-alpha", func(w http.ResponseWriter, _ *http.Request) {
+			mutating.Add(1)
+			testhelper.WriteData(w, nil)
+		})
+
+		cmd := destroyTestCmd(t, path, ac, "")
+		_, fake := destroyWireSSH(t, cmd)
+
+		_, _, err := destroyRun(t, cmd, "alpha", "--yes", "--purge-dataset")
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "pass --node")
+		assert.Zero(t, mutating.Load(), "the target is resolved before the pool and storage are deleted")
+		assert.Empty(t, fake.Calls)
+	})
+
+	t.Run("the context's ssh.jump is passed as -J", func(t *testing.T) {
+		f, ac := destroyFakeClient(t)
+		destroyPurgeDatasetFixture(t, f)
+
+		cmd := destroyTestCmd(t, path, ac, "pve1")
+		deps, fake := destroyWireSSH(t, cmd)
+		deps.Ctx.SSH.Jump = "ops@bastion.example:2200"
+
+		_, _, err := destroyRun(t, cmd, "alpha", "--yes", "--purge-dataset")
+		require.NoError(t, err)
+		require.Len(t, fake.Calls, 1)
+		assert.Equal(t, []string{
+			"-p", "22",
+			"-J", "ops@bastion.example:2200",
+			"root@192.168.1.10",
+			`if zfs list "tank/labs/alpha" >/dev/null 2>&1; then zfs destroy -r "tank/labs/alpha"; fi`,
+		}, fake.Calls[0].Args)
+	})
+
+	t.Run("plain purge runs no ssh", func(t *testing.T) {
+		f, ac := destroyFakeClient(t)
 		destroyHandleClusterResources(f)
 		f.HandleFunc("DELETE /api2/json/pools", func(w http.ResponseWriter, _ *http.Request) {
 			testhelper.WriteData(w, nil)
