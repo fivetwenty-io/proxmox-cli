@@ -3,6 +3,7 @@ package pdm
 import (
 	"bytes"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -52,6 +53,51 @@ func TestResourceLs_FlattensSortsAndRendersErrorRow(t *testing.T) {
 	require.Equal(t, "connection refused", got[2]["error"])
 	require.Equal(t, "zeta", got[3]["remote"])
 	require.Equal(t, "qemu/100", got[3]["id"])
+}
+
+// TestResourceLs_TableTypeColumnShowsResourceType asserts that the TYPE column
+// renders each entry's "type" field, not the leading "remote" segment of its
+// PDM id, and that an entry without a type field falls back to the id prefix.
+func TestResourceLs_TableTypeColumnShowsResourceType(t *testing.T) {
+	f, pc := newFakeClient(t)
+	deps := depsFor(t, pc, output.FormatTable, false)
+
+	f.HandleJSON("GET /api2/json/resources/list", []map[string]any{
+		{
+			"remote": "alpha",
+			"resources": []map[string]any{
+				{"id": "remote/alpha/guest/100", "type": "pve-qemu", "name": "vm100", "node": "pve1", "status": "running"},
+				{"id": "remote/alpha/storage/pve1/local", "type": "pve-storage", "node": "pve1", "status": "available"},
+				{"id": "qemu/200", "name": "legacy", "node": "pve1", "status": "stopped"},
+			},
+		},
+	})
+
+	var buf bytes.Buffer
+	require.NoError(t, run(deps, &buf, newResourceLsCmd(), "ls"))
+
+	// The table is box-drawn; keep only the lines that carry cells.
+	var cells [][]string
+	for line := range strings.SplitSeq(buf.String(), "\n") {
+		if !strings.Contains(line, "│") {
+			continue
+		}
+
+		var row []string
+		for cell := range strings.SplitSeq(strings.Trim(line, "│ "), "│") {
+			row = append(row, strings.TrimSpace(cell))
+		}
+		cells = append(cells, row)
+	}
+	require.Len(t, cells, 4, "output:\n%s", buf.String())
+	require.Equal(t, []string{"REMOTE", "TYPE", "ID", "NAME", "NODE", "STATUS"}, cells[0])
+
+	var types []string
+	for _, row := range cells[1:] {
+		types = append(types, row[1])
+	}
+	require.Equal(t, []string{"qemu", "pve-qemu", "pve-storage"}, types)
+	require.NotContains(t, types, "remote")
 }
 
 // TestResourceLs_ValidatesResourceType asserts that `resource ls` validates

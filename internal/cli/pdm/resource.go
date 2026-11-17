@@ -48,14 +48,32 @@ type resourceListWrapper struct {
 	Resources []json.RawMessage `json:"resources"`
 }
 
+// resourceTypeOf returns the resource kind to show in the TYPE column. PDM
+// ids lead with the literal segment "remote" ("remote/<remote>/guest/100"), so
+// the id prefix names nothing useful; the entry's "type" field does. The id
+// prefix remains as the fallback for an entry without that field.
+func resourceTypeOf(entry map[string]any, id string) string {
+	if typ, ok := entry["type"].(string); ok && typ != "" {
+		return typ
+	}
+
+	before, _, ok := strings.Cut(id, "/")
+	if !ok {
+		return ""
+	}
+
+	return before
+}
+
 // newResourceLsCmd builds `pmx pdm resource ls` — list every resource
 // collected from every managed remote (GET /resources/list).
 //
 // The API groups resources by remote, and each individual resource entry is
 // one of several kinds (PVE guest, node, storage, network; PBS datastore,
 // node) with no fields shared across every kind except "id". This command
-// flattens the per-remote groups into one row per resource, inferring TYPE
-// from the "<type>/<name>" convention Proxmox resource ids follow. A remote
+// flattens the per-remote groups into one row per resource. TYPE is the
+// resource's own "type" field (pve-qemu, pve-storage, pbs-datastore, ...); an
+// entry that carries none falls back to the first segment of its id. A remote
 // that failed to respond renders as a single "error" row instead of being
 // silently dropped.
 func newResourceLsCmd() *cobra.Command {
@@ -136,10 +154,7 @@ func newResourceLsCmd() *cobra.Command {
 					m["remote"] = w.Remote
 
 					id, _ := m["id"].(string)
-					typ := ""
-					if before, _, ok := strings.Cut(id, "/"); ok {
-						typ = before
-					}
+					typ := resourceTypeOf(m, id)
 					name, _ := m["name"].(string)
 					node, _ := m["node"].(string)
 					status, _ := m["status"].(string)
