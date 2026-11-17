@@ -344,6 +344,7 @@ func TestLabCephMgr_CreatesMissingMgrs(t *testing.T) {
 	lab := cephTestLab("ceph", 3)
 	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"ceph": lab}})
 	f := testhelper.NewFakePVE(t)
+	cephHandleMons(f, "running", "running", "running")
 	f.HandleJSON("GET /api2/json/nodes/lab-ceph-0/ceph/mgr", []any{
 		map[string]any{"name": "lab-ceph-0", "state": "active"},
 	})
@@ -369,6 +370,17 @@ func TestLabCephMgr_CreatesMissingMgrs(t *testing.T) {
 	assert.Contains(t, out, "created")
 }
 
+// cephHandleMons registers the mon listing node 0 answers with, one entry per
+// state, for lab-ceph-0, lab-ceph-1, and so on. The mgr verb reads it to decide
+// whether Ceph is reachable, so every mgr test has to answer it.
+func cephHandleMons(f *testhelper.FakePVE, states ...string) {
+	list := make([]any, 0, len(states))
+	for i, state := range states {
+		list = append(list, map[string]any{"name": fmt.Sprintf("lab-ceph-%d", i), "state": state})
+	}
+	f.HandleJSON("GET /api2/json/nodes/lab-ceph-0/ceph/mon", list)
+}
+
 // cephDaemonStateCase is one row of the mon/mgr state tests: the listing
 // PVE returns for node 0 and what the verb must do about each daemon.
 type cephDaemonStateCase struct {
@@ -381,29 +393,6 @@ type cephDaemonStateCase struct {
 	// brokenState, when set, is the state of lab-ceph-1's daemon, which the
 	// verb must report and leave alone (no create, no delete) and fail on.
 	brokenState string
-	// unreachable marks a listing that shows Ceph as unreachable from PVE:
-	// nothing is created, deleted, or advised for deletion, and the verb fails.
-	unreachable bool
-}
-
-// unknownCreated returns the nodes a listing with one daemon in "unknown" still
-// gets created on. A lone unknown mgr among healthy ones is a broken daemon, so
-// the absent node is created. An unknown mon means Ceph is unreachable, so
-// nothing is created.
-func unknownCreated(kind string) []string {
-	if kind == "mon" {
-		return nil
-	}
-	return []string{"lab-ceph-2"}
-}
-
-// unknownBroken is the state the verb reports as a broken daemon for a listing
-// with one daemon in "unknown": a mgr is broken, a mon is an unreachable Ceph.
-func unknownBroken(kind string) string {
-	if kind == "mon" {
-		return ""
-	}
-	return "unknown"
 }
 
 // cephDaemonStateCases covers a running, an unknown, a stopped, and an absent
@@ -427,9 +416,8 @@ func cephDaemonStateCases() []cephDaemonStateCase {
 			cephDaemonStateCase{
 				name: k.kind + " unknown", kind: k.kind,
 				listing:     []any{node0, map[string]any{"name": "lab-ceph-1", "state": "unknown"}},
-				created:     unknownCreated(k.kind),
-				brokenState: unknownBroken(k.kind),
-				unreachable: k.kind == "mon",
+				created:     []string{"lab-ceph-2"},
+				brokenState: "unknown",
 			},
 			cephDaemonStateCase{
 				name: k.kind + " stopped", kind: k.kind,
@@ -480,6 +468,9 @@ func TestLabCephDaemons_CountsOnlyRunningDaemonsAsPresent(t *testing.T) {
 			lab := cephTestLab("ceph", 3)
 			path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"ceph": lab}})
 			f := testhelper.NewFakePVE(t)
+			// Node 0's mon is running in every case, so Ceph is reachable and a
+			// bad daemon of either kind gets the delete advice.
+			cephHandleMons(f, "running")
 			f.HandleJSON("GET /api2/json/nodes/lab-ceph-0/ceph/"+tc.kind, tc.listing)
 
 			// Nothing is ever deleted, and a broken daemon is never recreated
@@ -504,13 +495,6 @@ func TestLabCephDaemons_CountsOnlyRunningDaemonsAsPresent(t *testing.T) {
 			require.Len(t, createRec, len(tc.created), "created exactly the absent daemons")
 			for i, node := range tc.created {
 				assert.Equal(t, "/api2/json/nodes/"+node+"/ceph/"+tc.kind+"/"+node, createRec[i].path)
-			}
-
-			if tc.unreachable {
-				require.Error(t, err)
-				assertCephUnreachable(t, err)
-				assert.Contains(t, out, "present but not running (state: unknown)")
-				return
 			}
 
 			if tc.brokenState == "" {
@@ -538,6 +522,7 @@ func TestLabCephDaemons_NamesEveryBrokenDaemon(t *testing.T) {
 	lab := cephTestLab("ceph", 3)
 	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"ceph": lab}})
 	f := testhelper.NewFakePVE(t)
+	cephHandleMons(f, "running", "running", "running")
 	f.HandleJSON("GET /api2/json/nodes/lab-ceph-0/ceph/mgr", []any{
 		map[string]any{"name": "lab-ceph-0", "state": "unknown"},
 		map[string]any{"name": "lab-ceph-1", "state": "active"},
@@ -569,33 +554,45 @@ func assertCephUnreachable(t *testing.T, err error) {
 	assert.NotContains(t, err.Error(), "--yes")
 }
 
-// TestLabCephDaemons_UnknownMeansCephIsUnreachable covers the listings that
-// show Ceph as unreachable from PVE. Each fails the verb with no create, no
-// delete, and no delete command, because deleting a mon whose state PVE cannot
-// read could wipe the monmap.
-func TestLabCephDaemons_UnknownMeansCephIsUnreachable(t *testing.T) {
-	healthy := map[string]string{"mgr": "active", "mon": "running"}
+// TestLabCephDaemons_NoRunningMonMeansCephIsUnreachable covers the mon
+// listings that show Ceph as unreachable from PVE, which is only a listing
+// with no running mon. Each fails the verb with no create, no delete, and no
+// delete command, because deleting a daemon while quorum is lost could wipe the
+// monmap. The mgr verb reaches the same verdict from the mon listing, whatever
+// the mgrs report.
+func TestLabCephDaemons_NoRunningMonMeansCephIsUnreachable(t *testing.T) {
 	entry := func(i int, state string) map[string]any {
 		return map[string]any{"name": fmt.Sprintf("lab-ceph-%d", i), "state": state}
 	}
 
 	for _, tc := range []struct {
-		name    string
-		kind    string
-		listing []any
+		name string
+		kind string
+		mons []any
+		// mgrs is the mgr listing; the mgr verb must not need it to decide.
+		mgrs []any
 	}{
-		{"a mon in unknown among running mons", "mon", []any{entry(0, "running"), entry(1, "unknown"), entry(2, "running")}},
-		{"the only mon in unknown", "mon", []any{entry(0, "unknown")}},
-		{"every mon in unknown", "mon", []any{entry(0, "unknown"), entry(1, "unknown"), entry(2, "unknown")}},
-		{"every mgr in unknown", "mgr", []any{entry(0, "unknown"), entry(1, "unknown"), entry(2, "unknown")}},
-		{"the only listed mgr in unknown", "mgr", []any{entry(0, "unknown")}},
-		{"an unknown mon beside a stopped one", "mon", []any{entry(0, "stopped"), entry(1, "unknown")}},
+		{"the only mon in unknown", "mon", []any{entry(0, "unknown")}, nil},
+		{"every mon in unknown", "mon", []any{entry(0, "unknown"), entry(1, "unknown"), entry(2, "unknown")}, nil},
+		{"every mon stopped", "mon", []any{entry(0, "stopped"), entry(1, "stopped"), entry(2, "stopped")}, nil},
+		{"an unknown mon beside a stopped one", "mon", []any{entry(0, "stopped"), entry(1, "unknown")}, nil},
+		{"a mon with no state reported", "mon", []any{map[string]any{"name": "lab-ceph-0"}}, nil},
+		{"no mon running while mgrs show stopped", "mgr",
+			[]any{entry(0, "stopped"), entry(1, "unknown"), entry(2, "stopped")},
+			[]any{entry(0, "stopped"), entry(1, "stopped"), entry(2, "stopped")}},
+		{"no mon running while mgrs show active", "mgr",
+			[]any{entry(0, "unknown"), entry(1, "unknown")},
+			[]any{entry(0, "active"), entry(1, "standby")}},
+		{"an empty mon listing for the mgr verb", "mgr", []any{}, []any{entry(0, "stopped")}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			lab := cephTestLab("ceph", 3)
 			path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"ceph": lab}})
 			f := testhelper.NewFakePVE(t)
-			f.HandleJSON("GET /api2/json/nodes/lab-ceph-0/ceph/"+tc.kind, tc.listing)
+			f.HandleJSON("GET /api2/json/nodes/lab-ceph-0/ceph/mon", tc.mons)
+			if tc.mgrs != nil {
+				f.HandleJSON("GET /api2/json/nodes/lab-ceph-0/ceph/mgr", tc.mgrs)
+			}
 			createForbid(f, t, "POST /api2/json/nodes")
 			createForbid(f, t, "DELETE /api2/json/nodes")
 
@@ -605,46 +602,125 @@ func TestLabCephDaemons_UnknownMeansCephIsUnreachable(t *testing.T) {
 			_, err := runGuestCmd(t, cmd, tc.kind, "ceph")
 			require.Error(t, err, "the verb still exits non-zero")
 			assertCephUnreachable(t, err)
+			assert.ErrorContains(t, err, "cannot ensure ceph "+tc.kind)
+			assert.ErrorContains(t, err, "no mon is running")
 		})
 	}
 
-	t.Run("a stopped daemon with no unknown one keeps its delete command", func(t *testing.T) {
-		for kind, state := range healthy {
-			lab := cephTestLab("ceph", 3)
-			path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"ceph": lab}})
-			f := testhelper.NewFakePVE(t)
-			f.HandleJSON("GET /api2/json/nodes/lab-ceph-0/ceph/"+kind, []any{
-				entry(0, state), entry(1, "stopped"), entry(2, state)})
-			createForbid(f, t, "POST /api2/json/nodes")
-			createForbid(f, t, "DELETE /api2/json/nodes")
-
-			cmd, _ := buildGuestSSHCmd(t, path, newCephCmd())
-			stubInnerAPIClient(t, f)
-
-			_, err := runGuestCmd(t, cmd, kind, "ceph")
-			require.Error(t, err)
-			assert.ErrorContains(t, err, "pmx pve -c lab-ceph --node lab-ceph-1 node ceph "+kind+" delete lab-ceph-1 --yes")
-			assert.NotContains(t, err.Error(), "unreachable")
-		}
-	})
-
-	t.Run("a lone unknown mgr beside healthy ones keeps its delete command", func(t *testing.T) {
+	t.Run("an empty mon listing lets the mon verb create the first mon", func(t *testing.T) {
 		lab := cephTestLab("ceph", 3)
 		path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"ceph": lab}})
 		f := testhelper.NewFakePVE(t)
-		f.HandleJSON("GET /api2/json/nodes/lab-ceph-0/ceph/mgr", []any{
-			entry(0, "active"), entry(1, "unknown"), entry(2, "standby")})
-		createForbid(f, t, "POST /api2/json/nodes")
+		f.HandleJSON("GET /api2/json/nodes/lab-ceph-0/ceph/mon", []any{})
 		createForbid(f, t, "DELETE /api2/json/nodes")
+
+		var createRec []hostnetRecordedRequest
+		for _, node := range []string{"lab-ceph-0", "lab-ceph-1", "lab-ceph-2"} {
+			upid := cephTaskUPID(node)
+			hostnetRecord(f, &createRec, nil, "", "POST /api2/json/nodes/"+node+"/ceph/mon/"+node, upid, 200)
+			cephHandleTaskStatus(f, node, upid)
+		}
 
 		cmd, _ := buildGuestSSHCmd(t, path, newCephCmd())
 		stubInnerAPIClient(t, f)
 
-		_, err := runGuestCmd(t, cmd, "mgr", "ceph")
-		require.Error(t, err)
-		assert.ErrorContains(t, err, "pmx pve -c lab-ceph --node lab-ceph-1 node ceph mgr delete lab-ceph-1 --yes")
-		assert.NotContains(t, err.Error(), "unreachable")
+		_, err := runGuestCmd(t, cmd, "mon", "ceph")
+		require.NoError(t, err)
+		assert.Len(t, createRec, 3)
 	})
+}
+
+// TestLabCephDaemons_RunningMonKeepsDeleteAdvice covers the listings that look
+// alarming but leave Ceph reachable, because at least one mon is running. The
+// bad daemon is named with its delete command and the error never calls Ceph
+// unreachable: an unknown mon among running mons, a stopped mon, the only mgr
+// in unknown while the mons run, every mgr in unknown, a stopped mgr, and an
+// unknown mgr among healthy ones.
+func TestLabCephDaemons_RunningMonKeepsDeleteAdvice(t *testing.T) {
+	entry := func(i int, state string) map[string]any {
+		return map[string]any{"name": fmt.Sprintf("lab-ceph-%d", i), "state": state}
+	}
+
+	for _, tc := range []struct {
+		name string
+		kind string
+		mons []any
+		mgrs []any
+		// bad is the node whose daemon must get the delete command.
+		bad string
+	}{
+		{"an unknown mon among running mons", "mon",
+			[]any{entry(0, "running"), entry(1, "unknown"), entry(2, "running")}, nil, "lab-ceph-1"},
+		{"a stopped mon among running mons", "mon",
+			[]any{entry(0, "running"), entry(1, "stopped"), entry(2, "running")}, nil, "lab-ceph-1"},
+		{"the only mgr in unknown while mons run", "mgr",
+			[]any{entry(0, "running"), entry(1, "running"), entry(2, "running")},
+			[]any{entry(0, "unknown"), entry(1, "active"), entry(2, "standby")}, "lab-ceph-0"},
+		{"every mgr in unknown while mons run", "mgr",
+			[]any{entry(0, "running"), entry(1, "running"), entry(2, "running")},
+			[]any{entry(0, "unknown"), entry(1, "unknown"), entry(2, "unknown")}, "lab-ceph-1"},
+		{"a stopped mgr while mons run", "mgr",
+			[]any{entry(0, "running"), entry(1, "running"), entry(2, "running")},
+			[]any{entry(0, "active"), entry(1, "stopped"), entry(2, "standby")}, "lab-ceph-1"},
+		{"an unknown mgr among healthy ones", "mgr",
+			[]any{entry(0, "running"), entry(1, "running"), entry(2, "running")},
+			[]any{entry(0, "active"), entry(1, "unknown"), entry(2, "standby")}, "lab-ceph-1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			lab := cephTestLab("ceph", 3)
+			path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"ceph": lab}})
+			f := testhelper.NewFakePVE(t)
+			f.HandleJSON("GET /api2/json/nodes/lab-ceph-0/ceph/mon", tc.mons)
+			if tc.mgrs != nil {
+				f.HandleJSON("GET /api2/json/nodes/lab-ceph-0/ceph/mgr", tc.mgrs)
+			}
+			createForbid(f, t, "DELETE /api2/json/nodes")
+			// A bad daemon is never recreated over its own name, and every
+			// other node in these listings already has a daemon.
+			createForbid(f, t, "POST /api2/json/nodes")
+
+			cmd, _ := buildGuestSSHCmd(t, path, newCephCmd())
+			stubInnerAPIClient(t, f)
+
+			_, err := runGuestCmd(t, cmd, tc.kind, "ceph")
+			require.Error(t, err)
+			assert.ErrorContains(t, err,
+				"pmx pve -c lab-ceph --node "+tc.bad+" node ceph "+tc.kind+" delete "+tc.bad+" --yes")
+			assert.NotContains(t, err.Error(), "unreachable")
+		})
+	}
+}
+
+// TestLabCephMgr_LoneUnknownMgrWhileMonsRun is the case a live lab hit: the
+// mgr listing holds a single mgr in unknown and the mons run. Ceph is
+// reachable, so the other nodes get their mgr and the unknown one is named with
+// its delete command instead of being reported as an unreachable cluster.
+func TestLabCephMgr_LoneUnknownMgrWhileMonsRun(t *testing.T) {
+	lab := cephTestLab("ceph", 3)
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"ceph": lab}})
+	f := testhelper.NewFakePVE(t)
+	cephHandleMons(f, "running", "running", "running")
+	f.HandleJSON("GET /api2/json/nodes/lab-ceph-0/ceph/mgr", []any{
+		map[string]any{"name": "lab-ceph-0", "state": "unknown"},
+	})
+	createForbid(f, t, "DELETE /api2/json/nodes")
+	createForbid(f, t, "POST /api2/json/nodes/lab-ceph-0/ceph/mgr/lab-ceph-0")
+
+	var createRec []hostnetRecordedRequest
+	for _, node := range []string{"lab-ceph-1", "lab-ceph-2"} {
+		upid := cephTaskUPID(node)
+		hostnetRecord(f, &createRec, nil, "", "POST /api2/json/nodes/"+node+"/ceph/mgr/"+node, upid, 200)
+		cephHandleTaskStatus(f, node, upid)
+	}
+
+	cmd, _ := buildGuestSSHCmd(t, path, newCephCmd())
+	stubInnerAPIClient(t, f)
+
+	_, err := runGuestCmd(t, cmd, "mgr", "ceph")
+	require.Error(t, err)
+	assert.Len(t, createRec, 2, "the nodes without a mgr still get one")
+	assert.ErrorContains(t, err, "pmx pve -c lab-ceph --node lab-ceph-0 node ceph mgr delete lab-ceph-0 --yes")
+	assert.NotContains(t, err.Error(), "unreachable")
 }
 
 // TestCephDaemonDeleteCommand pins the printed command's form: it names the
