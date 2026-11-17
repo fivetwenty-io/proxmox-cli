@@ -173,10 +173,13 @@ func TestCreate_ZfsDatasetEnsure_UsesContextSSHJump(t *testing.T) {
 	}
 }
 
-// TestSSHFlags_NoJumpPassesProxyJumpNone covers R5: with no jump, or the none
-// literal, the dataset and guest flags tell ssh not to use a ProxyJump from
-// ~/.ssh/config, so ssh takes the same path as the API. A real jump replaces it.
-func TestSSHFlags_NoJumpPassesProxyJumpNone(t *testing.T) {
+// TestSSHFlags_NoJumpPassesProxyJumpNoneOnDatasetOnly covers R5: with no jump,
+// or the none literal, the dataset flags tell ssh not to use a ProxyJump from
+// ~/.ssh/config, so ssh takes the same path as the API, while the guest flags
+// leave ProxyJump to the operator's ssh config, because a lab vnet is often
+// reachable only through a bastion configured there. A real jump replaces it
+// for both.
+func TestSSHFlags_NoJumpPassesProxyJumpNoneOnDatasetOnly(t *testing.T) {
 	deps := func(jump string) *cli.Deps {
 		return &cli.Deps{Ctx: &config.Context{Host: "pve-0", SSH: config.SSHBlock{Jump: jump}}}
 	}
@@ -198,8 +201,12 @@ func TestSSHFlags_NoJumpPassesProxyJumpNone(t *testing.T) {
 				args := sshcmd.OptionArgs(&f)
 				joined := strings.Join(args, " ")
 				if tc.wantNoJump {
-					assert.Contains(t, joined, "-o ProxyJump=none", label)
 					assert.NotContains(t, args, "-J", label)
+					if label == "dataset" {
+						assert.Contains(t, joined, "-o ProxyJump=none", label)
+					} else {
+						assert.NotContains(t, joined, "ProxyJump", label)
+					}
 				} else {
 					assert.NotContains(t, joined, "ProxyJump=none", label)
 					assert.Contains(t, joined, "-J "+tc.jump, label)

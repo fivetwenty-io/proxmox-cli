@@ -60,8 +60,13 @@ func labGuestSSHFlags(deps *cli.Deps) (sshcmd.Flags, error) {
 	// only from inside the context's network. When the context itself is
 	// reached through a bastion, every guest behind it is too, and without this
 	// each guest command fails with a bare connect timeout.
+	//
+	// NoJump stays unset on purpose: with no context jump, guest ssh leaves
+	// ProxyJump to the operator's ~/.ssh/config, because a lab vnet is often
+	// reachable only through a bastion configured there. Only the dataset ssh
+	// path passes ProxyJump=none (createDatasetSSHFlags), since its identity
+	// preflight guards that route.
 	f.Jump = contextSSHJump(deps)
-	f.NoJump = f.Jump == ""
 	return f, nil
 }
 
