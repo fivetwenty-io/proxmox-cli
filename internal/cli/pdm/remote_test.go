@@ -3,6 +3,7 @@ package pdm
 import (
 	"bytes"
 	"encoding/json"
+	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -254,4 +255,108 @@ func TestRemoteRrddata_ListsDataPoints(t *testing.T) {
 	require.Contains(t, buf.String(), "1000")
 	require.Contains(t, buf.String(), "12.5")
 	require.Contains(t, buf.String(), "2000")
+}
+
+// TestRemoteAdd_ResolvesTokenReferences asserts that --token accepts the same
+// reference forms context secrets use, and that the secret is sent, not the
+// reference.
+func TestRemoteAdd_ResolvesTokenReferences(t *testing.T) {
+	t.Setenv("PMX_TEST_REMOTE_TOKEN", "resolved-secret")
+
+	for _, ref := range []string{"${PMX_TEST_REMOTE_TOKEN}", "$PMX_TEST_REMOTE_TOKEN"} {
+		f, pc := newFakeClient(t)
+		deps := depsFor(t, pc, output.FormatTable, false)
+
+		var rec recordedRequest
+		recordJSON(f, "POST /api2/json/remotes/remote", &rec, nil)
+
+		var buf bytes.Buffer
+		err := run(deps, &buf, newRemoteAddCmd(), "add", "alpha",
+			"--type", "pve", "--authid", "root@pam", "--token", ref, "--node", "10.0.0.1")
+		require.NoError(t, err, "ref=%s", ref)
+		require.Equal(t, "resolved-secret", rec.form.Get("token"), "ref=%s", ref)
+		require.NotContains(t, buf.String(), "WARN", "a reference is not an inline secret")
+	}
+}
+
+// TestRemoteAdd_TokenKeychainReferenceUsesSharedResolver asserts that a
+// keychain: reference goes to the shared secret resolver.
+func TestRemoteAdd_TokenKeychainReferenceUsesSharedResolver(t *testing.T) {
+	var asked string
+
+	orig := resolveRemoteSecretRef
+	resolveRemoteSecretRef = func(ref string) (string, error) {
+		asked = ref
+		return "keychain-secret", nil
+	}
+	t.Cleanup(func() { resolveRemoteSecretRef = orig })
+
+	f, pc := newFakeClient(t)
+	deps := depsFor(t, pc, output.FormatTable, false)
+
+	var rec recordedRequest
+	recordJSON(f, "PUT /api2/json/remotes/remote/alpha", &rec, nil)
+
+	var buf bytes.Buffer
+	err := run(deps, &buf, newRemoteUpdateCmd(), "update", "alpha", "--token", "keychain:pmx-pdm/alpha")
+	require.NoError(t, err)
+	require.Equal(t, "keychain:pmx-pdm/alpha", asked)
+	require.Equal(t, "keychain-secret", rec.form.Get("token"))
+}
+
+// TestRemoteAdd_UnsetTokenReferenceFailsBeforeRequest asserts that a reference
+// that cannot be resolved is an error, never registered as the literal token.
+func TestRemoteAdd_UnsetTokenReferenceFailsBeforeRequest(t *testing.T) {
+	for _, ref := range []string{"${PMX_TEST_UNSET_TOKEN}", "$PMX_TEST_UNSET_TOKEN"} {
+		f, pc := newFakeClient(t)
+		deps := depsFor(t, pc, output.FormatTable, false)
+
+		called := false
+		f.HandleFunc("POST /api2/json/remotes/remote", func(http.ResponseWriter, *http.Request) { called = true })
+
+		var buf bytes.Buffer
+		err := run(deps, &buf, newRemoteAddCmd(), "add", "alpha",
+			"--type", "pve", "--authid", "root@pam", "--token", ref, "--node", "10.0.0.1")
+		require.ErrorContains(t, err, "--token", "ref=%s", ref)
+		require.False(t, called, "no request may be sent for an unresolved reference, ref=%s", ref)
+	}
+}
+
+// TestRemoteAdd_LiteralTokenWarns asserts that a literal --token is still sent
+// as given but draws a warning that names no part of the value.
+func TestRemoteAdd_LiteralTokenWarns(t *testing.T) {
+	f, pc := newFakeClient(t)
+	deps := depsFor(t, pc, output.FormatTable, false)
+
+	var rec recordedRequest
+	recordJSON(f, "POST /api2/json/remotes/remote", &rec, nil)
+
+	var buf bytes.Buffer
+	err := run(deps, &buf, newRemoteAddCmd(), "add", "alpha",
+		"--type", "pve", "--authid", "root@pam", "--token", "lit-secret", "--node", "10.0.0.1")
+	require.NoError(t, err)
+	require.Equal(t, "lit-secret", rec.form.Get("token"))
+	require.Contains(t, buf.String(), "WARN: --token carries the access token inline")
+	require.NotContains(t, buf.String(), "lit-secret")
+}
+
+// TestRemoteAdd_HelpExampleTokenIsResolved asserts that the --token value
+// shown in the add example is a form pmx really resolves.
+func TestRemoteAdd_HelpExampleTokenIsResolved(t *testing.T) {
+	t.Setenv("PVE_TOKEN_SECRET", "from-example")
+
+	example := newRemoteAddCmd().Example
+	require.Contains(t, example, "--token '${PVE_TOKEN_SECRET}'")
+
+	f, pc := newFakeClient(t)
+	deps := depsFor(t, pc, output.FormatTable, false)
+
+	var rec recordedRequest
+	recordJSON(f, "POST /api2/json/remotes/remote", &rec, nil)
+
+	var buf bytes.Buffer
+	err := run(deps, &buf, newRemoteAddCmd(), "add", "pve-main",
+		"--type", "pve", "--authid", "root@pam", "--token", "${PVE_TOKEN_SECRET}", "--node", "pve1")
+	require.NoError(t, err)
+	require.Equal(t, "from-example", rec.form.Get("token"))
 }

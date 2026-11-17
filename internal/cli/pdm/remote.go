@@ -12,6 +12,7 @@ import (
 	pdmremotes "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pdm/remotes"
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
+	"github.com/fivetwenty-io/proxmox-cli/internal/config"
 	"github.com/fivetwenty-io/proxmox-cli/internal/optionschema"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
@@ -32,6 +33,44 @@ var validRemoteRrdConsolidations = []string{"MAX", "AVERAGE"}
 // to the user. They are forwarded to the API on add/update but the API's GET
 // responses include the stored value, so it must be stripped from ls/show output.
 var remoteSecretKeys = []string{"token"}
+
+// resolveRemoteSecretRef resolves a ${NAME} or keychain:PATH reference. It is
+// config.ResolveSecret, the resolver context secrets use, held in a variable so
+// tests can drive the keychain branch without touching a real keychain.
+var resolveRemoteSecretRef = config.ResolveSecret
+
+// resolveRemoteToken turns a --token value into the secret to send. A value
+// shaped like a reference (${NAME}, $NAME, or keychain:PATH) is resolved through
+// the same resolver context secrets use, and a reference that cannot be resolved
+// is an error rather than a literal, so a mistyped variable name can never be
+// registered as the remote's access token. Any other value is the literal
+// secret, which draws a warning on stderr because it is now in shell history
+// and the process list. No error text quotes the value.
+func resolveRemoteToken(cmd *cobra.Command, value string) (string, error) {
+	if !config.IsSecretReference(value) {
+		if value != "" {
+			_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "WARN: --token carries the access token inline, where shell "+
+				"history and the process list can see it; prefer ${ENV_VAR} or keychain:PATH")
+		}
+		return value, nil
+	}
+
+	ref := value
+	// Rewrite $NAME as ${NAME} so an unset variable is reported, not used as a literal.
+	if strings.HasPrefix(ref, "$") && !strings.HasPrefix(ref, "${") {
+		ref = "${" + ref[1:] + "}"
+	}
+
+	resolved, err := resolveRemoteSecretRef(ref)
+	if err != nil {
+		return "", fmt.Errorf("--token: %w", err)
+	}
+	if resolved == "" {
+		return "", fmt.Errorf("--token: reference %q resolved to an empty value", value)
+	}
+
+	return resolved, nil
+}
 
 // stripRemoteSecrets deletes every key in remoteSecretKeys from fields, in place.
 func stripRemoteSecrets(fields map[string]any) {
@@ -192,7 +231,9 @@ type remoteFlags struct {
 func (rf *remoteFlags) registerCommon(cmd *cobra.Command) {
 	f := cmd.Flags()
 	f.StringVar(&rf.authid, "authid", "", "authentication ID on the remote (e.g. 'root@pam' or an API token)")
-	f.StringVar(&rf.token, "token", "", "the access token's secret")
+	f.StringVar(&rf.token, "token", "",
+		"the access token's secret: ${ENV_VAR}, $ENV_VAR, or keychain:PATH is resolved by pmx; "+
+			"anything else is sent literally (sensitive)")
 	f.StringArrayVar(&rf.nodes, "node", nil, "cluster node address of the remote (repeatable)")
 	f.StringVar(&rf.webUrl, "web-url", "", "configuration for the web UI URL link generation")
 }
@@ -215,13 +256,17 @@ func (rf *remoteFlags) registerUpdate(cmd *cobra.Command) {
 }
 
 // applyUpdate builds the update payload, forwarding optional flags only when set.
-func (rf *remoteFlags) applyUpdate(cmd *cobra.Command, p *pdmremotes.UpdateRemoteParams) {
+func (rf *remoteFlags) applyUpdate(cmd *cobra.Command, p *pdmremotes.UpdateRemoteParams) error {
 	fl := cmd.Flags()
 	if fl.Changed("authid") {
 		p.Authid = &rf.authid
 	}
 	if fl.Changed("token") {
-		p.Token = &rf.token
+		token, err := resolveRemoteToken(cmd, rf.token)
+		if err != nil {
+			return err
+		}
+		p.Token = &token
 	}
 	if fl.Changed("node") {
 		p.Nodes = rf.nodes
@@ -235,6 +280,8 @@ func (rf *remoteFlags) applyUpdate(cmd *cobra.Command, p *pdmremotes.UpdateRemot
 	if fl.Changed("digest") {
 		p.Digest = &rf.digest
 	}
+
+	return nil
 }
 
 // newRemoteAddCmd builds `pmx pdm remote add <id>` — register a new remote
@@ -252,7 +299,9 @@ func newRemoteAddCmd() *cobra.Command {
 			"instance to manage (POST /remotes/remote). --type, --authid, --token, and " +
 			"at least one --node are required. If --create-token is set, a new API " +
 			"token is minted on the remote with that name and used instead of the " +
-			"authentication details given here.",
+			"authentication details given here. --token takes the secret literally, or as " +
+			"a reference that pmx resolves: ${ENV_VAR}, $ENV_VAR, or keychain:SERVICE[/ACCOUNT]. " +
+			"A literal value lands in shell history and the process list, so prefer a reference.",
 		Example: `  pmx pdm remote add pve-main --type pve --authid root@pam --token '${PVE_TOKEN_SECRET}' --node pve1
   pmx pdm remote add pbs-main --type pbs --authid root@pam --token '${PBS_TOKEN_SECRET}' --node pbs1`,
 		Args: cobra.ExactArgs(1),
@@ -266,11 +315,16 @@ func newRemoteAddCmd() *cobra.Command {
 					id, strings.Join(validRemoteTypes, ", "), typeFlag)
 			}
 
+			token, err := resolveRemoteToken(cmd, rf.token)
+			if err != nil {
+				return fmt.Errorf("add remote %q: %w", id, err)
+			}
+
 			params := &pdmremotes.CreateRemoteParams{
 				Id:     id,
 				Type:   typeFlag,
 				Authid: rf.authid,
-				Token:  rf.token,
+				Token:  token,
 				Nodes:  rf.nodes,
 			}
 			if fl.Changed("create-token") {
@@ -280,7 +334,7 @@ func newRemoteAddCmd() *cobra.Command {
 				params.WebUrl = &rf.webUrl
 			}
 
-			err := deps.PDM.Remotes.CreateRemote(cmd.Context(), params)
+			err = deps.PDM.Remotes.CreateRemote(cmd.Context(), params)
 			if err != nil {
 				return fmt.Errorf("add remote %q: %w", id, err)
 			}
@@ -322,7 +376,9 @@ func newRemoteUpdateCmd() *cobra.Command {
 			}
 
 			params := &pdmremotes.UpdateRemoteParams{}
-			rf.applyUpdate(cmd, params)
+			if err := rf.applyUpdate(cmd, params); err != nil {
+				return fmt.Errorf("update remote %q: %w", id, err)
+			}
 
 			err := deps.PDM.Remotes.UpdateRemote(cmd.Context(), id, params)
 			if err != nil {
