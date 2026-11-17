@@ -81,8 +81,10 @@ The effective refquota is --refquota-gb when given, else the lab's
 storage.refquota_gb. At least one of the two must yield a positive value.
 
 This runs a real command against the lab host by default. Pass --dry-run to
-print the ssh command that would run without executing it, or --yes to skip
-the confirmation prompt.`,
+print the zfs ssh command that would run without executing it. A dry run
+makes no ssh connection, whereas a real run first probes the target's identity
+over ssh and only then runs the zfs command. Pass --yes to skip the
+confirmation prompt.`,
 		Example: `  pmx lab quota set wayne
   pmx lab quota set wayne --refquota-gb 600 --yes
   pmx lab quota set wayne --dry-run`,
@@ -95,10 +97,21 @@ the confirmation prompt.`,
 	cmd.Flags().IntVar(&refquotaGB, "refquota-gb", 0,
 		"refquota in GB; overrides the lab's storage.refquota_gb config value")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false,
-		"print the ssh command that would run, without executing it")
+		"print the zfs ssh command that would run, without connecting (a real run first probes the target's "+
+			"identity over ssh)")
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip the confirmation prompt")
 
 	return cmd
+}
+
+// quotaDryRunNote is the line a dry run prints after the zfs command. The
+// command alone would suggest a real run goes straight to zfs, but a real run
+// first connects to the target and checks its identity, and refuses on a
+// mismatch.
+func quotaDryRunNote(node string) string {
+	return fmt.Sprintf("A real run first probes the ssh target over ssh to confirm it is node %q (its host "+
+		"name and pve-ssl.pem fingerprint must match what the API reports), and only then runs this zfs command.",
+		node)
 }
 
 // runQuotaSet resolves and peppi-guards name, determines the effective
@@ -150,7 +163,7 @@ func runQuotaSet(cmd *cobra.Command, name string, refquotaFlagGB int, dryRun, ye
 
 	if dryRun {
 		display := append([]string{"ssh"}, argv...)
-		res := output.Result{Message: strings.Join(display, " ")}
+		res := output.Result{Message: strings.Join(display, " ") + "\n\n" + quotaDryRunNote(node)}
 		return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 	}
 

@@ -429,6 +429,17 @@ func TestQuotaSet_DryRun_RecordsNoCallAndPrintsCommand(t *testing.T) {
 	assert.Contains(t, out, "root@"+quotaTestNodeIP)
 	assert.NotContains(t, out, quotaTestCtxHost)
 	assert.Contains(t, out, "zfs set quota=50G refquota=50G tank/labs/alpha")
+	assert.Contains(t, out, "A real run first probes the ssh target over ssh")
+	assert.Contains(t, out, "and only then runs this zfs command")
+}
+
+// TestQuotaSetHelp_SaysARealRunProbesTheTargetFirst keeps the help in step with
+// the dry run's note about the identity probe.
+func TestQuotaSetHelp_SaysARealRunProbesTheTargetFirst(t *testing.T) {
+	cmd := newQuotaSetCmd()
+	assert.Contains(t, cmd.Long, "a real run first probes the target's identity")
+	assert.Contains(t, cmd.Long, "over ssh and only then runs the zfs command")
+	assert.Contains(t, cmd.Flags().Lookup("dry-run").Usage, "a real run first probes the target's identity over ssh")
 }
 
 func TestQuotaSet_RefusesWithoutYesNonInteractively(t *testing.T) {
