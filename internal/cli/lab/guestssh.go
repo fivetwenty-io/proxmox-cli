@@ -102,7 +102,7 @@ func labGuestSSHFlags(deps *cli.Deps) (sshcmd.Flags, error) {
 // only in an agent (e.g. a hardware token) rather than an on-disk identity
 // file.
 func labGuestSSHArgs(f sshcmd.Flags, host string) []string {
-	args := sshcmd.OptionArgs(&f)
+	args := sshcmd.OptionArgs((&f).ForHost(host))
 	args = append(args,
 		"-o", "BatchMode=yes",
 		"-o", fmt.Sprintf("ConnectTimeout=%d", guestConnectTimeoutSec),

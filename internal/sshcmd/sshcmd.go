@@ -123,6 +123,7 @@ func Dest(f *Flags, host string) string {
 // using the supplied flags. The remote command, if any, is appended by the
 // caller.
 func BaseArgs(f *Flags, host string) []string {
+	f = f.ForHost(host)
 	return append(OptionArgs(f), Dest(f, host))
 }
 

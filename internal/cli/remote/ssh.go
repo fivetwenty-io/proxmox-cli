@@ -140,7 +140,7 @@ func RunSSH(cmd *cobra.Command, deps *cli.Deps, f *sshcmd.Flags, node string, re
 	opts, command := sshcmd.SplitPassthrough(rest)
 
 	argv := make([]string, 0, len(opts)+len(command)+8)
-	argv = append(argv, sshcmd.OptionArgs(f)...)
+	argv = append(argv, sshcmd.OptionArgs(f.ForHost(host))...)
 	argv = append(argv, opts...)
 	argv = append(argv, sshcmd.Dest(f, host))
 	argv = append(argv, command...)

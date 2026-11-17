@@ -554,7 +554,7 @@ func readACMERenewalTimer(cmd *cobra.Command, deps *cli.Deps, f *sshFlags, node 
 		return nil, err
 	}
 
-	argv := append(sshcmd.BatchOptionArgs(f), sshcmd.Dest(f, host),
+	argv := append(sshcmd.BatchOptionArgs(f.ForHost(host)), sshcmd.Dest(f, host),
 		"systemctl", "show", acmeRenewalTimer, "--property="+acmeTimerProperties)
 	var stdout, stderr bytes.Buffer
 	if err := deps.Runner.Run("ssh", argv, nil, nil, &stdout, &stderr); err != nil {

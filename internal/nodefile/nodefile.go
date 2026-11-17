@@ -64,7 +64,7 @@ type Conn struct {
 // carrying the remote stderr (cat cannot distinguish a missing file from other
 // failures by exit code, so no sentinel is mapped here).
 func (c Conn) Read(path string) (content, sha string, err error) {
-	argv := append(sshcmd.BatchOptionArgs(c.Flags), sshcmd.Dest(c.Flags, c.Host),
+	argv := append(sshcmd.BatchOptionArgs(c.Flags.ForHost(c.Host)), sshcmd.Dest(c.Flags, c.Host),
 		"cat", sshcmd.ShellQuote(path))
 
 	var out, errBuf bytes.Buffer
@@ -96,7 +96,7 @@ func (c Conn) Write(path, content, expectSHA, lockPath string) error {
 	}
 
 	script := buildWriteScript(path, expectSHA, lockPath)
-	argv := append(sshcmd.BatchOptionArgs(c.Flags), sshcmd.Dest(c.Flags, c.Host),
+	argv := append(sshcmd.BatchOptionArgs(c.Flags.ForHost(c.Host)), sshcmd.Dest(c.Flags, c.Host),
 		"sh", "-ec", sshcmd.ShellQuote(script))
 
 	var out, errBuf bytes.Buffer
@@ -122,7 +122,7 @@ func (c Conn) Write(path, content, expectSHA, lockPath string) error {
 // and for read-only probes. A non-zero exit is returned as the error with both
 // captured streams available for the caller to fold into its own message.
 func (c Conn) Exec(script string) (stdout, stderr string, err error) {
-	argv := append(sshcmd.BatchOptionArgs(c.Flags), sshcmd.Dest(c.Flags, c.Host),
+	argv := append(sshcmd.BatchOptionArgs(c.Flags.ForHost(c.Host)), sshcmd.Dest(c.Flags, c.Host),
 		"sh", "-ec", sshcmd.ShellQuote(script))
 
 	var out, errBuf bytes.Buffer

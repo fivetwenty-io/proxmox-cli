@@ -206,7 +206,7 @@ cat > "$t" || { rm -f -- "$t"; exit 1; }
 mv -- "$t" "$p"`,
 		sshcmd.ShellQuote(snippetDir), sshcmd.ShellQuote(destPath))
 
-	argv := append(sshcmd.BatchOptionArgs(f), sshcmd.Dest(f, host), remoteCmd)
+	argv := append(sshcmd.BatchOptionArgs(f.ForHost(host)), sshcmd.Dest(f, host), remoteCmd)
 	if err := deps.Runner.Run("ssh", argv, nil, src, cmd.OutOrStdout(), cmd.ErrOrStderr()); err != nil {
 		return fmt.Errorf("upload snippet %q to storage %q on node %q over SSH: %w", dest, storage, deps.Node, err)
 	}
