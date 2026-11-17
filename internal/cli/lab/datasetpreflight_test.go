@@ -460,6 +460,56 @@ func TestLabQuota_IdentityPreflight(t *testing.T) {
 		assert.Empty(t, identityProbes(t, deps))
 		assert.Empty(t, fake.Calls)
 	})
+
+	t.Run("a node whose kernel hostname is an FQDN passes on its first label", func(t *testing.T) {
+		_, cmd, deps, fake := wire(t, "--yes")
+		replyIdentity(deps, "PVE1.lab.example.net", strings.ToLower(preflightFingerprint("pve1")))
+
+		require.NoError(t, run(t, cmd))
+		require.Len(t, fake.Calls, 1, "zfs runs once the FQDN's first label matches the node")
+	})
+
+	t.Run("an FQDN with another first label is still refused", func(t *testing.T) {
+		_, cmd, deps, fake := wire(t, "--yes")
+		replyIdentity(deps, "pve7.lab.example.net", strings.ToLower(preflightFingerprint("pve1")))
+
+		err := run(t, cmd)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, `"pve7.lab.example.net"`)
+		assert.Empty(t, fake.Calls)
+	})
+
+	t.Run("an FQDN with the right label is still refused on a fingerprint mismatch", func(t *testing.T) {
+		_, cmd, deps, fake := wire(t, "--yes")
+		replyIdentity(deps, "pve1.lab.example.net", preflightFingerprint("pve2"))
+
+		err := run(t, cmd)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "fingerprint")
+		assert.Empty(t, fake.Calls)
+	})
+}
+
+// TestSameHostLabel pins the host name comparison of the identity preflight:
+// only the label before the first dot counts, on both sides, without case.
+func TestSameHostLabel(t *testing.T) {
+	for _, tc := range []struct {
+		a, b string
+		want bool
+	}{
+		{"pve1", "pve1", true},
+		{"PVE1", "pve1", true},
+		{"pve1.example.net", "pve1", true},
+		{"pve1", "pve1.example.net", true},
+		{"pve1.a.example", "PVE1.b.example", true},
+		{"pve1\n", "pve1", true},
+		{"pve10", "pve1", false},
+		{"pve1x.example", "pve1", false},
+		{"pve2.example", "pve1.example", false},
+		{".pve1", "pve1", false},
+	} {
+		assert.Equal(t, tc.want, sameHostLabel(tc.a, tc.b), "%q vs %q", tc.a, tc.b)
+	}
 }
 
 // TestCreate_DatasetStep_RefusesAProxiedRoute covers the dataset step of create:

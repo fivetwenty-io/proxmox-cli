@@ -289,6 +289,20 @@ func apiNodeFingerprint(ctx context.Context, deps *cli.Deps, node string) (strin
 	return "", fmt.Errorf("the API did not report a pve-ssl.pem fingerprint for node %q", node)
 }
 
+// sameHostLabel reports whether two host names have the same first label,
+// ignoring case. A node's kernel hostname can be a fully qualified name while
+// the API names the node by its short name, so only the label before the first
+// dot is compared, on both sides. The certificate fingerprint check still
+// proves the machine is the node.
+func sameHostLabel(a, b string) bool {
+	label := func(s string) string {
+		first, _, _ := strings.Cut(strings.TrimSpace(s), ".")
+		return first
+	}
+
+	return strings.EqualFold(label(a), label(b))
+}
+
 // parseDatasetIdentity reads the output of datasetIdentityCommand: the host
 // name on the first line, and the fingerprint after the "=" of the openssl
 // line.
@@ -356,7 +370,7 @@ func verifyLabDatasetTarget(
 			verb, f.User, host, node, err)
 	}
 
-	if !strings.EqualFold(gotHost, node) {
+	if !sameHostLabel(gotHost, node) {
 		return fmt.Errorf(
 			"%s: ssh %s@%s reached a machine named %q, not node %q, so it stops before changing anything; "+
 				"the address may belong to another cluster",
