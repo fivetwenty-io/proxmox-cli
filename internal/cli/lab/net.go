@@ -464,6 +464,19 @@ func sdnZoneAllowsVnetTag(zoneType string) bool {
 	return zoneType != "simple"
 }
 
+// sdnVnetDesc is the plan or result text for one outer SDN vnet. It names the
+// tag only when the vnet really carries one: the zone's plugin type takes a
+// tag (tagAllowed, from sdnZoneAllowsVnetTag) and the lab configures a
+// non-zero one, which is the exact condition under which the create and update
+// calls send it. A vnet in a "simple" zone is created without a tag, so
+// printing "tag N" for it would report a value PVE never stored.
+func sdnVnetDesc(vnetID, zoneName string, tag int, tagAllowed bool) string {
+	if tagAllowed && tag != 0 {
+		return fmt.Sprintf("sdn vnet %q (zone %q, tag %d)", vnetID, zoneName, tag)
+	}
+	return fmt.Sprintf("sdn vnet %q (zone %q)", vnetID, zoneName)
+}
+
 // ensureLabSdnVnetSubnet ensures one outer SDN vnet — identified by vnetID,
 // in zoneName, with the given tag and alias — exists and matches those
 // values: it creates the vnet when absent; when present, it updates only the

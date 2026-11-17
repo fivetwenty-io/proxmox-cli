@@ -692,6 +692,10 @@ func TestCreateHappyPath_OrderedCalls(t *testing.T) {
 	out, err := runCreateCmd(t, cmd, "wayne", "--node", "node1")
 	require.NoError(t, err)
 	assert.Contains(t, out, "created")
+	// The lab's zone is the default simple type: PVE creates its vnet with
+	// no tag, so the result must not report the configured one.
+	assert.Contains(t, out, `sdn vnet "labwayne" (zone "labs")`)
+	assert.NotContains(t, out, "tag 5001")
 
 	// buildCreatePlan performs every read (list) query, including the VMID
 	// allocation, during its planning phase, before create.go's execution
@@ -1218,6 +1222,93 @@ func TestCreateDryRun_AbsentVnetIsNeverListedForSubnets(t *testing.T) {
 	assert.Contains(t, out, "would create")
 	assert.Contains(t, out, "sdn vnet")
 	assert.Contains(t, out, "sdn subnet", "an absent vnet has no subnets, so the subnet step plans a create")
+}
+
+// vnetTagCases are the zone plugin types the vnet tag text depends on: a
+// simple zone creates its vnet without a tag, so the text must not show one,
+// while vlan, qinq, vxlan, and evpn zones carry the tag.
+var vnetTagCases = []struct {
+	zoneType string
+	wantTag  bool
+}{
+	{"simple", false},
+	{"vlan", true},
+	{"qinq", true},
+	{"vxlan", true},
+	{"evpn", true},
+}
+
+// TestCreateDryRun_VnetTagShownOnlyForZonesThatUseOne covers the plan table
+// of `pmx lab create --dry-run` for a not-yet-created vnet in each kind of
+// live zone: the "tag N" text appears only where the zone type takes a tag.
+func TestCreateDryRun_VnetTagShownOnlyForZonesThatUseOne(t *testing.T) {
+	for _, tc := range vnetTagCases {
+		t.Run(tc.zoneType, func(t *testing.T) {
+			f := testhelper.NewFakePVE(t)
+			lab := createTestLab("wayne")
+
+			f.HandleJSON("GET /api2/json/cluster/sdn/zones", []any{map[string]any{"zone": "labs", "type": tc.zoneType}})
+			f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{})
+			f.HandleJSON("GET /api2/json/storage", []any{map[string]any{"storage": "tank", "type": "zfspool", "pool": "tank"}})
+			f.HandleJSON("GET /api2/json/pools", []any{})
+			createPoolNotFoundRoute(f, "lab-wayne")
+			f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
+
+			path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+			cmd := buildCreateCmd(t, path, f, "node1")
+
+			out, err := runCreateCmd(t, cmd, "wayne", "--node", "node1", "--dry-run")
+			require.NoError(t, err)
+			assert.Contains(t, out, `sdn vnet "labwayne" (zone "labs"`)
+			if tc.wantTag {
+				assert.Contains(t, out, `sdn vnet "labwayne" (zone "labs", tag 5001)`)
+			} else {
+				assert.Contains(t, out, `sdn vnet "labwayne" (zone "labs")`)
+				assert.NotContains(t, out, "tag 5001")
+			}
+		})
+	}
+}
+
+// TestCreateDryRun_ExtraVnetTagShownOnlyForZonesThatUseOne covers the same
+// rule for a vnet declared under network.vnets: the extra vnet's plan line,
+// with its subnet, drops the tag in a simple zone and keeps it elsewhere.
+func TestCreateDryRun_ExtraVnetTagShownOnlyForZonesThatUseOne(t *testing.T) {
+	for _, tc := range vnetTagCases {
+		t.Run(tc.zoneType, func(t *testing.T) {
+			f := testhelper.NewFakePVE(t)
+			lab := createTestLab("wayne")
+			lab.Network.Vnets = []config.LabVnet{{ID: "wayst", Tag: 5002}}
+
+			f.HandleJSON("GET /api2/json/cluster/sdn/zones", []any{map[string]any{"zone": "labs", "type": tc.zoneType}})
+			f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{})
+			f.HandleJSON("GET /api2/json/storage", []any{map[string]any{"storage": "tank", "type": "zfspool", "pool": "tank"}})
+			f.HandleJSON("GET /api2/json/pools", []any{})
+			createPoolNotFoundRoute(f, "lab-wayne")
+			f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
+
+			path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+			cmd := buildCreateCmd(t, path, f, "node1")
+
+			out, err := runCreateCmd(t, cmd, "wayne", "--node", "node1", "--dry-run")
+			require.NoError(t, err)
+			if tc.wantTag {
+				assert.Contains(t, out, `sdn vnet "wayst" (zone "labs", tag 5002)`)
+			} else {
+				assert.Contains(t, out, `sdn vnet "wayst" (zone "labs")`)
+				assert.NotContains(t, out, "tag 5002")
+			}
+		})
+	}
+}
+
+// TestSdnVnetDesc pins the shared plan and result text for one vnet: the tag
+// shows only when the zone takes one and the lab sets a non-zero value, the
+// same condition the create call uses to send it.
+func TestSdnVnetDesc(t *testing.T) {
+	assert.Equal(t, `sdn vnet "v1" (zone "z", tag 5111)`, sdnVnetDesc("v1", "z", 5111, true))
+	assert.Equal(t, `sdn vnet "v1" (zone "z")`, sdnVnetDesc("v1", "z", 5111, false))
+	assert.Equal(t, `sdn vnet "v1" (zone "z")`, sdnVnetDesc("v1", "z", 0, true))
 }
 
 // TestCreateFlagOverride_VCPUAndMemory covers flag-over-config precedence: a flag that

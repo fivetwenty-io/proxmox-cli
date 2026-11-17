@@ -1284,7 +1284,7 @@ func buildCreatePlan(
 		return nil, fmt.Errorf("decode SDN vnet list: %w", err)
 	}
 	plan.steps = append(plan.steps, createStep{
-		desc:       fmt.Sprintf("sdn vnet %q (zone %q, tag %d)", eff.Network.VnetID, zoneName, eff.Network.VxlanTag),
+		desc:       sdnVnetDesc(eff.Network.VnetID, zoneName, eff.Network.VxlanTag, tagAllowed),
 		skip:       vnetExists,
 		skipReason: "already exists",
 		apply: func(ctx context.Context) error {
@@ -1439,17 +1439,16 @@ func buildCreatePlan(
 			}
 		}
 
-		desc := fmt.Sprintf("sdn vnet %q (zone %q, tag %d)", v.ID, zoneName, v.Tag)
+		desc := sdnVnetDesc(v.ID, zoneName, v.Tag, tagAllowed)
 		switch {
 		case v.CIDR != "" && cidr6 != "" && (snat || eff.Network.Snat6):
-			desc = fmt.Sprintf("sdn vnet %q (zone %q, tag %d) + subnets %q, %q (snat)",
-				v.ID, zoneName, v.Tag, v.CIDR, cidr6)
+			desc = fmt.Sprintf("%s + subnets %q, %q (snat)", desc, v.CIDR, cidr6)
 		case v.CIDR != "" && snat:
-			desc = fmt.Sprintf("sdn vnet %q (zone %q, tag %d) + subnet %q (snat)", v.ID, zoneName, v.Tag, v.CIDR)
+			desc = fmt.Sprintf("%s + subnet %q (snat)", desc, v.CIDR)
 		case v.CIDR != "" && cidr6 != "":
-			desc = fmt.Sprintf("sdn vnet %q (zone %q, tag %d) + subnets %q, %q", v.ID, zoneName, v.Tag, v.CIDR, cidr6)
+			desc = fmt.Sprintf("%s + subnets %q, %q", desc, v.CIDR, cidr6)
 		case v.CIDR != "":
-			desc = fmt.Sprintf("sdn vnet %q (zone %q, tag %d) + subnet %q", v.ID, zoneName, v.Tag, v.CIDR)
+			desc = fmt.Sprintf("%s + subnet %q", desc, v.CIDR)
 		}
 		plan.steps = append(plan.steps, createStep{
 			desc:       desc,
