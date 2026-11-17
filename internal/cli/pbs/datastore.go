@@ -562,12 +562,54 @@ func newDatastoreStatusCmd() *cobra.Command {
 				return fmt.Errorf("decode datastore status %q: %w", name, err)
 			}
 
-			res := output.Result{Single: stringMap(fields), Raw: fields}
+			// The table shows 0 where PBS reports no snapshots or groups of a
+			// type; Raw stays the API document, as every pmx structured output does.
+			single := stringMap(fields)
+			if counts, ok := fields["counts"]; ok {
+				single["counts"] = scalarString(zeroFillCounts(counts))
+			}
+
+			res := output.Result{Single: single, Raw: fields}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
 	cmd.Flags().BoolVar(&verbose, "verbose", false, "include snapshot counts and garbage-collection status")
 	return cmd
+}
+
+// zeroFillCounts returns a copy of a datastore status "counts" value with the
+// nulls PBS reports for a backup type that has no groups or snapshots replaced
+// by zeros, for the table. A new, empty datastore has no entry for any type, and
+// printing {"ct":null,"vm":null} says nothing a reader can use. A null type
+// entry becomes {"groups":0,"snapshots":0}, the shape its populated siblings
+// have, and a null inside a type entry becomes 0. A counts value that is itself
+// null or not an object is returned unchanged.
+func zeroFillCounts(counts any) any {
+	byType, ok := counts.(map[string]any)
+	if !ok {
+		return counts
+	}
+
+	filled := make(map[string]any, len(byType))
+	for backupType, entry := range byType {
+		switch e := entry.(type) {
+		case nil:
+			filled[backupType] = map[string]any{"groups": 0, "snapshots": 0}
+		case map[string]any:
+			inner := make(map[string]any, len(e))
+			for k, v := range e {
+				if v == nil {
+					v = 0
+				}
+				inner[k] = v
+			}
+			filled[backupType] = inner
+		default:
+			filled[backupType] = entry
+		}
+	}
+
+	return filled
 }
 
 // datastoreUsageEntry is one element of the GET /status/datastore-usage

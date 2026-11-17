@@ -556,3 +556,36 @@ func TestNewDatastoreCmd_RegistersAllVerbs(t *testing.T) {
 		require.True(t, names[want], "datastore command must expose a %q sub-command", want)
 	}
 }
+
+// TestDatastoreStatus_VerboseEmptyDatastoreShowsZeroCounts asserts that a new,
+// empty datastore's null per-type counts render as 0 in the table while the
+// JSON output stays exactly the API document.
+func TestDatastoreStatus_VerboseEmptyDatastoreShowsZeroCounts(t *testing.T) {
+	f, pc := newFakeClient(t)
+	f.HandleJSON("GET "+fmt.Sprintf(pathAdminStatusFmt, "store1"), map[string]any{
+		"avail": 1000, "total": 2000, "used": 1000, "backend-type": "filesystem",
+		"counts": map[string]any{
+			"ct":   nil,
+			"host": map[string]any{"groups": nil, "snapshots": nil},
+			"vm":   map[string]any{"groups": 2, "snapshots": 5},
+		},
+	})
+
+	var table bytes.Buffer
+	require.NoError(t, run(depsFor(t, pc, output.FormatTable, false), &table,
+		newDatastoreStatusCmd(), "status", "store1", "--verbose"))
+	require.NotContains(t, table.String(), "null")
+	require.Contains(t, table.String(),
+		`{"ct":{"groups":0,"snapshots":0},"host":{"groups":0,"snapshots":0},"vm":{"groups":2,"snapshots":5}}`)
+
+	var js bytes.Buffer
+	require.NoError(t, run(depsFor(t, pc, output.FormatJSON, false), &js,
+		newDatastoreStatusCmd(), "status", "store1", "--verbose"))
+
+	var got map[string]any
+	require.NoError(t, json.Unmarshal(js.Bytes(), &got))
+	counts, ok := got["counts"].(map[string]any)
+	require.True(t, ok, "counts must stay an object in JSON output")
+	require.Contains(t, counts, "ct")
+	require.Nil(t, counts["ct"], "JSON output is the raw API document, nulls included")
+}
