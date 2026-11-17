@@ -1753,17 +1753,32 @@ func planCreateTarget(
 	// For a VM this command creates, vmNode is node.
 	if start {
 		label := spec.label
+		stepIdx := len(plan.steps)
 		plan.steps = append(plan.steps, createStep{
 			desc: fmt.Sprintf("start VM %s (%s) on node %q", vmidLabel, label, vmNode),
 			apply: func(ctx context.Context) error {
-				resp, serr := ac.Nodes.CreateQemuStatusStart(ctx, vmNode, vmidStr, &nodes.CreateQemuStatusStartParams{})
-				if serr != nil {
-					return fmt.Errorf("start VM %d (%s): %w", vmid, label, serr)
+				// A VM that is already running (a re-run of create --start) has
+				// nothing to start, and PVE fails a second start with "VM already
+				// running", so check first and report the step as skipped. The
+				// agent wait below still runs, because the context step after it
+				// needs the guest reachable either way.
+				running, rerr := createVMRunning(ctx, ac, vmNode, vmidStr)
+				if rerr != nil {
+					return fmt.Errorf("check status of VM %d (%s): %w", vmid, label, rerr)
 				}
-				if resp != nil {
-					if upid, uerr := apiclient.UPIDFromRaw(*resp); uerr == nil && upid != "" {
-						if werr := apiclient.WaitTask(ctx, ac, upid, nil); werr != nil {
-							return werr
+				if running {
+					plan.steps[stepIdx].skip = true
+					plan.steps[stepIdx].skipReason = "already running"
+				} else {
+					resp, serr := ac.Nodes.CreateQemuStatusStart(ctx, vmNode, vmidStr, &nodes.CreateQemuStatusStartParams{})
+					if serr != nil {
+						return fmt.Errorf("start VM %d (%s): %w", vmid, label, serr)
+					}
+					if resp != nil {
+						if upid, uerr := apiclient.UPIDFromRaw(*resp); uerr == nil && upid != "" {
+							if werr := apiclient.WaitTask(ctx, ac, upid, nil); werr != nil {
+								return werr
+							}
 						}
 					}
 				}

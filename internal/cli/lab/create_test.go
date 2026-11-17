@@ -262,6 +262,7 @@ func createRegisterContextHookStartRoutes(f *testhelper.FakePVE) {
 	f.HandleFunc("POST /api2/json/nodes/node1/qemu/9500/status/start", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteData(w, nil)
 	})
+	f.HandleJSON("GET /api2/json/nodes/node1/qemu/9500/status/current", map[string]any{"status": "stopped"})
 	f.HandleJSON("POST /api2/json/nodes/node1/qemu/9500/agent/ping", map[string]any{})
 }
 
@@ -495,6 +496,7 @@ func TestCreate_Start_RetriesAgentUntilItAnswers(t *testing.T) {
 	lab.Network.Mgmt.Subnet = "10.10.1.0/24"
 	createRegisterContextHookFreshVMRoutes(f, t, lab)
 
+	f.HandleJSON("GET /api2/json/nodes/node1/qemu/9500/status/current", map[string]any{"status": "stopped"})
 	f.HandleFunc("POST /api2/json/nodes/node1/qemu/9500/status/start", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteData(w, nil)
 	})
@@ -527,6 +529,7 @@ func TestCreate_Start_AgentNeverAnswersIsANote(t *testing.T) {
 	lab.Network.Mgmt.Subnet = "10.10.1.0/24"
 	createRegisterContextHookFreshVMRoutes(f, t, lab)
 
+	f.HandleJSON("GET /api2/json/nodes/node1/qemu/9500/status/current", map[string]any{"status": "stopped"})
 	f.HandleFunc("POST /api2/json/nodes/node1/qemu/9500/status/start", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteData(w, nil)
 	})
@@ -554,6 +557,7 @@ func TestCreate_Start_AgentPermissionErrorIsNotRetried(t *testing.T) {
 	lab.Network.Mgmt.Subnet = "10.10.1.0/24"
 	createRegisterContextHookFreshVMRoutes(f, t, lab)
 
+	f.HandleJSON("GET /api2/json/nodes/node1/qemu/9500/status/current", map[string]any{"status": "stopped"})
 	f.HandleFunc("POST /api2/json/nodes/node1/qemu/9500/status/start", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteData(w, nil)
 	})
@@ -569,6 +573,29 @@ func TestCreate_Start_AgentPermissionErrorIsNotRetried(t *testing.T) {
 	_, err := runCreateCmd(t, cmd, "wayne", "--start", "--no-context")
 	require.NoError(t, err)
 	assert.Equal(t, 1, pings)
+}
+
+// TestCreate_Start_AlreadyRunningIsSkipped covers re-running create --start
+// against a lab whose VM is already running: PVE would fail a second start
+// with "VM already running", so create checks first, skips the start with a
+// note in the row, and carries on to the context step.
+func TestCreate_Start_AlreadyRunningIsSkipped(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	lab := createTestLab("wayne")
+	lab.Network.Mgmt.Subnet = "10.10.1.0/24"
+	createRegisterContextHookFreshVMRoutes(f, t, lab)
+
+	f.HandleJSON("GET /api2/json/nodes/node1/qemu/9500/status/current", map[string]any{"status": "running"})
+	createForbid(f, t, "POST /api2/json/nodes/node1/qemu/9500/status/start")
+	f.HandleJSON("POST /api2/json/nodes/node1/qemu/9500/agent/ping", map[string]any{})
+
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+	cmd, _ := buildCreateCmdWithSSH(t, path, f, "node1")
+
+	out, err := runCreateCmd(t, cmd, "wayne", "--start")
+	require.NoError(t, err)
+	assert.Contains(t, out, "skip (already running)")
+	assert.Contains(t, out, "context lab-wayne ready")
 }
 
 // TestCreateHappyPath_OrderedCalls covers a lab whose zone, vnet, subnet,
@@ -985,6 +1012,7 @@ func TestCreateStart_TargetsExistingVMsOwnNode(t *testing.T) {
 		startCalled = true
 		testhelper.WriteData(w, nil)
 	})
+	f.HandleJSON("GET /api2/json/nodes/node2/qemu/9200/status/current", map[string]any{"status": "stopped"})
 	f.HandleJSON("POST /api2/json/nodes/node2/qemu/9200/agent/ping", map[string]any{})
 
 	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})

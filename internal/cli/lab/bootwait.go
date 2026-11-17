@@ -92,6 +92,16 @@ func labBootTimeoutExit(err error) error {
 	return err
 }
 
+// createVMRunning reports whether the VM is currently running, from its live
+// status. Any other state, including paused and stopped, reads as not running.
+func createVMRunning(ctx context.Context, ac *apiclient.APIClient, node, vmid string) (bool, error) {
+	current, err := ac.Nodes.ListQemuStatusCurrent(ctx, node, vmid)
+	if err != nil {
+		return false, err
+	}
+	return current != nil && current.Status == "running", nil
+}
+
 // createWaitForAgent pings the VM's QEMU guest agent until it answers or bound
 // elapses. The agent starts after the guest OS, so an early ping fails with
 // "QEMU guest agent is not running" even on a healthy boot; that and every

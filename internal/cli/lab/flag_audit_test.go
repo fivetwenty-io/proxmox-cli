@@ -174,6 +174,7 @@ func TestCreateAuditFields_StartInvokesLifecycleStart(t *testing.T) {
 	// pings the guest agent after starting, tolerating a failure (it only
 	// becomes an informational note), but an unregistered route would still
 	// hit that forbid handler via prefix match and fail the test.
+	f.HandleJSON("GET /api2/json/nodes/node1/qemu/9700/status/current", map[string]any{"status": "stopped"})
 	f.HandleJSON("POST /api2/json/nodes/node1/qemu/9700/agent/ping", nil)
 
 	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
