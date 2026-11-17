@@ -128,12 +128,20 @@ func runClusterInit(cmd *cobra.Command, name string, dryRun, requireContext bool
 	}
 	note, ctxErr := refreshLabContextAfterClusterInit(cmd, deps, lab)
 	if note != "" {
-		message += "; " + note
+		message = joinClusterInitNote(message, note)
 	}
 	if rerr := deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: message}, deps.Format); rerr != nil {
 		return rerr
 	}
 	return requireContextErr(requireContext, name, []error{ctxErr})
+}
+
+// joinClusterInitNote appends the context-refresh note to the cluster init
+// message. ensureClusterInit's messages are complete sentences ending in a
+// period, so the period is dropped before the "; " that joins the note, which
+// would otherwise print as ".;".
+func joinClusterInitNote(message, note string) string {
+	return strings.TrimSuffix(message, ".") + "; " + note
 }
 
 // refreshLabContextAfterClusterInit refreshes the lab's pmx context after

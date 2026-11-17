@@ -648,7 +648,23 @@ func TestClusterInit_RefreshesExistingContextFingerprint(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, fp, deps.Cfg.Contexts["lab-demo"].TLS.Fingerprint)
 	assert.Contains(t, out, "context lab-demo refreshed")
+	// The two clauses join as "votes; context", with no period left in front
+	// of the semicolon.
+	assert.Contains(t, out, "quorate 1/1 votes; context lab-demo refreshed")
+	assert.NotContains(t, out, ".;")
 	require.Len(t, fake.Calls, 7)
+}
+
+// TestJoinClusterInitNote pins how the cluster init message and the
+// context-refresh note are joined: a trailing period on the message is
+// dropped, and a message without one is joined unchanged.
+func TestJoinClusterInitNote(t *testing.T) {
+	assert.Equal(t, "created, quorate 1/1 votes; context lab-demo refreshed",
+		joinClusterInitNote("created, quorate 1/1 votes.", "context lab-demo refreshed"))
+	assert.Equal(t, "created; context lab-demo refreshed",
+		joinClusterInitNote("created", "context lab-demo refreshed"))
+	assert.Equal(t, "already clustered; nothing to do; context lab-demo refreshed",
+		joinClusterInitNote("already clustered; nothing to do.", "context lab-demo refreshed"))
 }
 
 // TestClusterInit_ContextRefreshFailureExitsZeroByDefault pins the contract
