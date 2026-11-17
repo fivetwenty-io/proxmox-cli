@@ -47,6 +47,12 @@ func labBootWaitBound(deps *cli.Deps) time.Duration {
 	return labBootWaitDefault
 }
 
+// labSSHDeniedPersistence is how long the ssh wait keeps retrying a refused
+// key before it treats the refusal as final. A booting node starts sshd before
+// pmxcfs mounts /etc/pve/priv, so for a short while its authorized keys are
+// missing and every key is refused.
+const labSSHDeniedPersistence = 30 * time.Second
+
 // bootBudgetKey is the context key under which a run's shared boot budget
 // travels.
 type bootBudgetKey struct{}

@@ -61,6 +61,7 @@ func labGuestSSHFlags(deps *cli.Deps) (sshcmd.Flags, error) {
 	// reached through a bastion, every guest behind it is too, and without this
 	// each guest command fails with a bare connect timeout.
 	f.Jump = contextSSHJump(deps)
+	f.NoJump = f.Jump == ""
 	return f, nil
 }
 
@@ -311,16 +312,50 @@ func sshAuthFailureIn(stderr string) sshAuthFailure {
 	return found
 }
 
+// knownHostsName is the name ssh-keygen -R needs to drop host's entry from
+// known_hosts. ssh records a host on a port other than 22 as "[host]:port", and
+// the brackets and colon need quoting for a shell.
+func knownHostsName(host string, port int) string {
+	if port == 0 || port == 22 {
+		return host
+	}
+	return fmt.Sprintf("'[%s]:%d'", strings.Trim(host, "[]"), port)
+}
+
+// jumpHosts lists the hosts in an ssh -J chain without their user names, so a
+// hint can name the bastions a connection went through.
+func jumpHosts(chain string) string {
+	var hosts []string
+	for hop := range strings.SplitSeq(chain, ",") {
+		hop = strings.TrimSpace(hop)
+		if i := strings.LastIndex(hop, "@"); i >= 0 {
+			hop = hop[i+1:]
+		}
+		if hop != "" {
+			hosts = append(hosts, hop)
+		}
+	}
+	return strings.Join(hosts, ", ")
+}
+
 // guestAuthHint turns a retry-proof ssh failure against host into the advice
-// that clears it, or "" when there is none to give. A changed host key is
-// ordinary after a lab is re-created on the same addresses, and the fix is to
-// drop the stale known_hosts entry.
-func guestAuthHint(kind sshAuthFailure, host string) string {
+// that clears it, or "" when there is none to give. f carries the port and the
+// jump chain the connection used. A changed host key is ordinary after a lab is
+// re-created on the same addresses, and the fix is to drop the stale
+// known_hosts entry. When the connection went through a jump host the changed
+// key might be that host's instead, and the hint says so.
+func guestAuthHint(kind sshAuthFailure, host string, f sshcmd.Flags) string {
 	switch kind {
 	case sshChangedHostKey:
-		return fmt.Sprintf(
+		hint := fmt.Sprintf(
 			"the guest's host key differs from the one in known_hosts, which is usual after a lab is "+
-				"re-created on the same addresses; run `ssh-keygen -R %s` and retry", host)
+				"re-created on the same addresses; run `ssh-keygen -R %s` and retry", knownHostsName(host, f.Port))
+		if f.Jump != "" {
+			hint += fmt.Sprintf(
+				". The changed key might instead belong to the jump host (%s), in which case run "+
+					"`ssh-keygen -R` for that host", jumpHosts(f.Jump))
+		}
+		return hint
 	case sshDeniedKey:
 		return fmt.Sprintf(
 			"%s refused the ssh key; check that ssh.identity or your ssh agent holds the key the lab "+

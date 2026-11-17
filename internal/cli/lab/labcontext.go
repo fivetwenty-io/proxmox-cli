@@ -8,6 +8,7 @@ import (
 	"net"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -231,17 +232,44 @@ func labFetchHostname(deps *cli.Deps, ip string) (string, error) {
 // *exitcode.InfraError wrapping a *labWaitTimeoutError, so the command exits
 // with exitcode.Infra.
 func labWaitForSSH(ctx context.Context, deps *cli.Deps, ip string) error {
+	flags, ferr := labGuestSSHFlags(deps)
+	if ferr != nil {
+		return ferr
+	}
+
+	// deniedSince is when the current run of refused-key failures began, and
+	// the zero time when the last probe did not fail that way.
+	var deniedSince time.Time
+
 	err := labWaitUntil(ctx, labBootWaitBound(deps), func() (bool, error) {
 		res, perr := runGuestSSH(deps, ip, "hostname")
 		if !guestNotYetReachable(perr) {
 			return true, nil
 		}
-		// A refused key or a changed host key fails the same way on every
-		// attempt, so waiting longer cannot help: stop and say how to fix it.
-		if kind := sshAuthFailureIn(res.Stderr); kind != sshNoAuthFailure {
-			return true, fmt.Errorf("%s: %w", guestAuthHint(kind, ip), perr)
+
+		switch kind := sshAuthFailureIn(res.Stderr); kind {
+		case sshChangedHostKey:
+			// The host key does not change by waiting for it.
+			return true, fmt.Errorf("%s: %w", guestAuthHint(kind, ip, flags), perr)
+
+		case sshDeniedKey:
+			// A booting node can refuse keys for a while: sshd is up before
+			// pmxcfs mounts /etc/pve/priv and the authorized keys with it. The
+			// refusal is final only once it has lasted labSSHDeniedPersistence.
+			now := labWaitNow()
+			if deniedSince.IsZero() {
+				deniedSince = now
+			}
+			hinted := fmt.Errorf("%s: %w", guestAuthHint(kind, ip, flags), perr)
+			if now.Sub(deniedSince) >= labSSHDeniedPersistence {
+				return true, hinted
+			}
+			return false, hinted
+
+		default:
+			deniedSince = time.Time{}
+			return false, perr
 		}
-		return false, perr
 	})
 	if err == nil {
 		return nil

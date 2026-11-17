@@ -667,58 +667,118 @@ func TestLabWaitForSSH_RemoteFailureEndsTheWait(t *testing.T) {
 	require.Len(t, fake.Calls, 1, "a real remote failure must not be retried")
 }
 
-// TestLabWaitForSSH_AuthFailuresAreTerminal verifies a failure that no wait can
-// clear, a refused key or a changed host key, ends the wait at the first probe
-// as an infrastructure error, instead of retrying it until the deadline. The
-// host key case also tells the operator how to clear the stale entry.
-func TestLabWaitForSSH_AuthFailuresAreTerminal(t *testing.T) {
-	for _, tc := range []struct {
-		name   string
-		stderr string
-		want   []string
-	}{
-		{
-			"publickey denied",
-			"root@10.10.1.10: Permission denied (publickey).",
-			[]string{"refused the ssh key", "ssh.identity"},
-		},
-		{
-			"password prompts exhausted",
-			"Permission denied, please try again.\nroot@10.10.1.10: Permission denied (publickey,password).",
-			[]string{"refused the ssh key"},
-		},
-		{
-			"too many authentication failures",
-			"Received disconnect from 10.10.1.10 port 22:2: Too many authentication failures\n" +
-				"Disconnected from 10.10.1.10 port 22\n" +
-				"root@10.10.1.10: Permission denied (publickey).",
-			[]string{"refused the ssh key"},
-		},
-		{
-			"host key changed",
-			"@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n" +
-				"@    WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!     @\n" +
-				"Host key verification failed.",
-			[]string{"`ssh-keygen -R 10.10.1.10`", "known_hosts"},
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			fake := exec.Fake(
-				exec.FakeResponse{ExitCode: 255, Stderr: tc.stderr},
-				sshConnectFailure, sshConnectFailure,
-			)
+// deniedKey is ssh's own refusal of the key, the failure a booting node gives
+// while pmxcfs has not yet mounted /etc/pve/priv.
+var deniedKey = exec.FakeResponse{ExitCode: 255, Stderr: "root@10.10.1.10: Permission denied (publickey)."}
 
-			err := labWaitForSSH(context.Background(), waitDepsWithFake(fake), "10.10.1.10")
-			require.Error(t, err)
-			for _, want := range tc.want {
-				assert.ErrorContains(t, err, want)
-			}
-			assert.Len(t, fake.Calls, 1, "a failure that repeats on every attempt is not retried")
-			_, isConnect := errors.AsType[*guestConnectError](err)
-			assert.True(t, isConnect,
-				"the failure stays an ssh connection failure, which create --start maps to an infrastructure exit")
-		})
+// manyResponses repeats resp n times, for a wait that must run to its deadline.
+func manyResponses(resp exec.FakeResponse, n int) []exec.FakeResponse {
+	out := make([]exec.FakeResponse, n)
+	for i := range out {
+		out[i] = resp
 	}
+	return out
+}
+
+// TestLabWaitForSSH_ChangedHostKeyIsTerminal verifies a changed host key ends
+// the wait at the first probe, because waiting cannot change the key, and that
+// the hint names the right ssh-keygen -R argument for the port and the jump.
+func TestLabWaitForSSH_ChangedHostKeyIsTerminal(t *testing.T) {
+	changed := exec.FakeResponse{
+		ExitCode: 255,
+		Stderr: "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n" +
+			"@    WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!     @\n" +
+			"Host key verification failed.",
+	}
+
+	run := func(t *testing.T, mutate func(*cli.Deps)) error {
+		t.Helper()
+
+		fake := exec.Fake(append([]exec.FakeResponse{changed}, manyResponses(sshConnectFailure, 5)...)...)
+		deps := waitDepsWithFake(fake)
+		mutate(deps)
+
+		err := labWaitForSSH(context.Background(), deps, "10.10.1.10")
+		require.Error(t, err)
+		assert.Len(t, fake.Calls, 1, "a host key that has changed is not retried")
+		_, isConnect := errors.AsType[*guestConnectError](err)
+		assert.True(t, isConnect, "the failure stays an ssh connection failure, which maps to an infrastructure exit")
+		return err
+	}
+
+	t.Run("port 22 names the bare address", func(t *testing.T) {
+		err := run(t, func(*cli.Deps) {})
+		assert.ErrorContains(t, err, "`ssh-keygen -R 10.10.1.10`")
+		assert.ErrorContains(t, err, "known_hosts")
+		assert.NotContains(t, err.Error(), "jump host")
+	})
+
+	t.Run("another port names the bracketed form", func(t *testing.T) {
+		err := run(t, func(d *cli.Deps) { d.Ctx.SSH.Port = 2222 })
+		assert.ErrorContains(t, err, "`ssh-keygen -R '[10.10.1.10]:2222'`")
+	})
+
+	t.Run("a jump host is named as another possible owner of the key", func(t *testing.T) {
+		err := run(t, func(d *cli.Deps) { d.Ctx.SSH.Jump = "ops@bastion.example:2200,gw@inner.example" })
+		assert.ErrorContains(t, err, "might instead belong to the jump host (bastion.example:2200, inner.example)")
+		assert.ErrorContains(t, err, "`ssh-keygen -R 10.10.1.10`")
+	})
+}
+
+// TestLabWaitForSSH_RefusedKeyIsTerminalOnlyWhenItPersists verifies the wait
+// rides out a short refusal of the key, which a booting node gives while its
+// authorized keys are not mounted yet, and stops once the refusal has lasted 30
+// seconds within the overall deadline.
+func TestLabWaitForSSH_RefusedKeyIsTerminalOnlyWhenItPersists(t *testing.T) {
+	t.Run("a transient refusal is retried until the key works", func(t *testing.T) {
+		fake := exec.Fake(deniedKey, deniedKey, deniedKey, deniedKey, exec.FakeResponse{Stdout: "node0\n"})
+		require.NoError(t, labWaitForSSH(context.Background(), waitDepsWithFake(fake), "10.10.1.10"))
+		assert.Len(t, fake.Calls, 5, "four refusals over 15 seconds, then the probe that connected")
+	})
+
+	t.Run("a refusal that lasts 30 seconds ends the wait with a hint", func(t *testing.T) {
+		fake := exec.Fake(manyResponses(deniedKey, 50)...)
+		err := labWaitForSSH(context.Background(), waitDepsWithFake(fake), "10.10.1.10")
+		require.Error(t, err)
+		assert.Len(t, fake.Calls, 7, "probes at 0, 5, ... 30 seconds, and the 30-second one is final")
+		assert.ErrorContains(t, err, "refused the ssh key")
+		assert.ErrorContains(t, err, "ssh.identity")
+		assert.NotContains(t, err.Error(), "timed out waiting for ssh", "this is a refusal, not a deadline")
+		_, isConnect := errors.AsType[*guestConnectError](err)
+		assert.True(t, isConnect)
+	})
+
+	t.Run("a different failure in between restarts the 30 seconds", func(t *testing.T) {
+		responses := append(manyResponses(deniedKey, 4), sshConnectFailure)
+		responses = append(responses, manyResponses(deniedKey, 4)...)
+		responses = append(responses, exec.FakeResponse{Stdout: "node0\n"})
+		fake := exec.Fake(responses...)
+		require.NoError(t, labWaitForSSH(context.Background(), waitDepsWithFake(fake), "10.10.1.10"))
+		assert.Len(t, fake.Calls, 10, "neither run of refusals reached 30 seconds")
+	})
+
+	t.Run("a deadline shorter than 30 seconds times out and keeps the hint", func(t *testing.T) {
+		fake := exec.Fake(manyResponses(deniedKey, 50)...)
+		deps := waitDepsWithFake(fake)
+		deps.WaitTimeout = 20
+
+		err := labWaitForSSH(context.Background(), deps, "10.10.1.10")
+		require.Error(t, err)
+		assert.Equal(t, exitcode.Infra, exitcode.FromError(err))
+		assert.ErrorContains(t, err, "timed out waiting for ssh on 10.10.1.10")
+		assert.ErrorContains(t, err, "refused the ssh key")
+		assert.Len(t, fake.Calls, 5, "probes at 0, 5, 10, 15, and 20 seconds")
+	})
+
+	t.Run("too many authentication failures counts as a refused key", func(t *testing.T) {
+		tooMany := exec.FakeResponse{ExitCode: 255, Stderr: "Received disconnect from 10.10.1.10 port 22:2: " +
+			"Too many authentication failures\nDisconnected from 10.10.1.10 port 22"}
+		fake := exec.Fake(manyResponses(tooMany, 50)...)
+		err := labWaitForSSH(context.Background(), waitDepsWithFake(fake), "10.10.1.10")
+		require.Error(t, err)
+		assert.Len(t, fake.Calls, 7)
+		assert.ErrorContains(t, err, "refused the ssh key")
+	})
 
 	t.Run("a remote command saying permission denied is not an auth failure", func(t *testing.T) {
 		fake := exec.Fake(exec.FakeResponse{ExitCode: 1, Stderr: "hostname: Permission denied"})

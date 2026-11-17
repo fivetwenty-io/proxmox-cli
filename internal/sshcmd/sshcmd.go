@@ -21,6 +21,11 @@ type Flags struct {
 	// for a chain), used to reach a target that is not directly routable from
 	// where pmx runs. Empty means connect directly.
 	Jump string
+
+	// NoJump, with an empty Jump, passes -o ProxyJump=none so a ProxyJump or
+	// ProxyCommand in ~/.ssh/config cannot send ssh down a different path than
+	// the one the caller resolved. It has no effect when Jump is set.
+	NoJump bool
 }
 
 // RegisterFlags installs the shared SSH connection flags on cmd.
@@ -36,8 +41,8 @@ func RegisterFlags(cmd *cobra.Command, f *Flags) {
 }
 
 // OptionArgs builds the ssh option argv (everything before the destination)
-// from the supplied flags: -p, and optionally -J, -i, -A,
-// -o StrictHostKeyChecking=no.
+// from the supplied flags: -p, and optionally -J (or -o ProxyJump=none), -i,
+// -A, -o StrictHostKeyChecking=no.
 //
 // -J is emitted first so it is never separated from its value by another
 // option. ssh applies -i (and -A) to the final destination only; the jump
@@ -46,8 +51,11 @@ func RegisterFlags(cmd *cobra.Command, f *Flags) {
 func OptionArgs(f *Flags) []string {
 	args := make([]string, 0, 10)
 	args = append(args, "-p", strconv.Itoa(f.Port))
-	if f.Jump != "" {
+	switch {
+	case f.Jump != "":
 		args = append(args, "-J", f.Jump)
+	case f.NoJump:
+		args = append(args, "-o", "ProxyJump=none")
 	}
 	if f.Identity != "" {
 		args = append(args, "-i", f.Identity)
