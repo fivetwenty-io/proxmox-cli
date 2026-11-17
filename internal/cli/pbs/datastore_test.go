@@ -349,6 +349,40 @@ func TestDatastore_RetiredPruneFlagsCarryHelpNote(t *testing.T) {
 	}
 }
 
+// pflag treats the first back-quoted word in a usage string as the flag's value
+// placeholder, so a command back-quoted in the note once rendered
+// "--keep-daily pmx pbs prune job add" in the type column. The rendered help
+// has to show the real type and keep the note text in the description.
+func TestDatastore_RetiredPruneFlagsRenderTheirTypeInHelp(t *testing.T) {
+	for _, newCmd := range []func() *cobra.Command{newDatastoreCreateCmd, newDatastoreUpdateCmd} {
+		cmd := newCmd()
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+		cmd.SetArgs([]string{"--help"})
+		require.NoError(t, cmd.Execute())
+		help := buf.String()
+
+		for _, name := range legacyPruneFlags {
+			var line string
+			for l := range strings.SplitSeq(help, "\n") {
+				if strings.HasPrefix(strings.TrimSpace(l), "--"+name+" ") {
+					line = l
+					break
+				}
+			}
+			require.NotEmpty(t, line, "%s: --%s is missing from the help", cmd.Name(), name)
+			if name == "prune-schedule" {
+				require.Contains(t, line, "--prune-schedule string", "%s: %q", cmd.Name(), line)
+			} else {
+				require.Contains(t, line, "--"+name+" int", "%s: %q", cmd.Name(), line)
+			}
+			require.Contains(t, line, "'pmx pbs prune job add'", "%s: %q", cmd.Name(), line)
+			require.NotContains(t, line, "`", "%s: %q", cmd.Name(), line)
+		}
+	}
+}
+
 // --- delete -----------------------------------------------------------------
 
 func TestDatastoreDelete_BlocksUntilComplete(t *testing.T) {

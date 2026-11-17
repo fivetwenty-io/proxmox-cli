@@ -66,7 +66,7 @@ func newClusterExpectedCmd() *cobra.Command {
 	cmd.Flags().StringVar(&nodeFlag, "node", "",
 		"node index to run on (0-4); default is the first node that answers over ssh")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false,
-		"probe and check, then print the node and command that would run, without running `pvecm expected`")
+		"probe and check, then print the node and command that would run, without running 'pvecm expected'")
 	return cmd
 }
 

@@ -362,7 +362,7 @@ func (nf *nodeFlags) register(cmd *cobra.Command) {
 	f.StringArrayVar(&nf.peers, "peer", nil, "peer of this node (repeatable)")
 	f.StringVar(&nf.lockToken, "lock-token", "", "token for unlocking the global SDN configuration")
 	f.StringArrayVar(&nf.ifaceVals, "interface", nil,
-		"interface property-string for this node (repeatable, maps to API `interfaces`)")
+		"interface property-string for this node (repeatable, maps to API 'interfaces')")
 }
 
 func (nf *nodeFlags) applyCreate(fl *cobra.Command, p *cluster.CreateSdnFabricsNodeParams) {

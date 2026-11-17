@@ -183,7 +183,7 @@ func (lf *realmLdapFlags) registerCommon(cmd *cobra.Command) {
 	f.StringVar(&lf.server2, "server2", "", "fallback LDAP server address")
 	f.StringVar(&lf.syncAttributes, "sync-attributes", "",
 		"comma-separated key=value pairs mapping LDAP attributes to PBS user fields")
-	f.StringVar(&lf.syncDefaultsOptions, "sync-defaults-options", "", "default sync options applied by `realm sync`")
+	f.StringVar(&lf.syncDefaultsOptions, "sync-defaults-options", "", "default sync options applied by 'realm sync'")
 	f.StringVar(&lf.userClasses, "user-classes", "", "comma-separated list of allowed objectClass values")
 	f.BoolVar(&lf.verify, "verify", false, "verify the server's TLS certificate")
 }

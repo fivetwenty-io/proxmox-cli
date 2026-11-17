@@ -31,7 +31,7 @@ var legacyPruneFlags = []string{
 }
 
 // legacyPruneNote is appended to the help of every flag in legacyPruneFlags.
-const legacyPruneNote = " (removed in newer PBS releases; use `pmx pbs prune job add` instead)"
+const legacyPruneNote = " (removed in newer PBS releases; use 'pmx pbs prune job add' instead)"
 
 // datastorePruneErr rewrites the server's terse rejection of a retired
 // retention parameter into the command that superseded it. Any other failure is

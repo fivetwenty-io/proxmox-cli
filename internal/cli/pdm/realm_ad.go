@@ -186,7 +186,7 @@ func (af *realmAdFlags) registerCommon(cmd *cobra.Command) {
 	f.StringVar(&af.server2, "server2", "", "fallback AD server address")
 	f.StringVar(&af.syncAttributes, "sync-attributes", "",
 		"comma-separated key=value pairs mapping LDAP attributes to PDM user fields")
-	f.StringVar(&af.syncDefaultsOptions, "sync-defaults-options", "", "default sync options applied by `realm sync`")
+	f.StringVar(&af.syncDefaultsOptions, "sync-defaults-options", "", "default sync options applied by 'realm sync'")
 	f.StringVar(&af.userClasses, "user-classes", "", "comma-separated list of allowed objectClass values")
 	f.BoolVar(&af.verify, "verify", false, "verify the server's TLS certificate")
 }

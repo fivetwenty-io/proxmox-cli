@@ -76,7 +76,7 @@ func newAgentExecCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&command, "command", "",
-		"legacy: whitespace-split command line (prefer `-- <program> [args...]` for spaced arguments)")
+		"legacy: whitespace-split command line (prefer '-- <program> [args...]' for spaced arguments)")
 	cmd.Flags().StringVar(&inputData, "input-data", "", "data to pass as stdin to the command")
 	return cmd
 }
@@ -134,7 +134,7 @@ func newAgentExecStatusCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().Int64Var(&pid, "pid", 0, "PID returned by `agent exec` (required)")
+	cmd.Flags().Int64Var(&pid, "pid", 0, "PID returned by 'agent exec' (required)")
 	cli.MustMarkRequired(cmd, "pid")
 	return cmd
 }
