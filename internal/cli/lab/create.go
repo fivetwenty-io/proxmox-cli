@@ -26,6 +26,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/config"
 	"github.com/fivetwenty-io/proxmox-cli/internal/exec"
+	"github.com/fivetwenty-io/proxmox-cli/internal/exitcode"
 	"github.com/fivetwenty-io/proxmox-cli/internal/nodeaddr"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-cli/internal/peppi"
@@ -196,6 +197,12 @@ func newCreateCmd() *cobra.Command {
 			"     (scsi2..) each node VM needs for nested Ceph OSDs\n\n" +
 			"Every step queries live state first, so re-running create against a " +
 			"partially-built lab is safe.\n\n" +
+			"With --start, create also starts each VM (one that is already running is skipped, so " +
+			"re-running it is safe), waits for its guest agent and for ssh to answer on node 0, " +
+			"and registers the lab-<name> context. A node that is still booting is retried until " +
+			"the global --wait-timeout runs out, or five minutes when --wait-timeout is 0. If the " +
+			"context still cannot be registered, create prints the table and exits non-zero (exit " +
+			"3 when the node never answered), and `pmx lab context sync <name>` retries it.\n\n" +
 			"Pass --clone-from to clone each node VM from an existing VM instead of creating " +
 			"blank disks, and --qdevice-clone-from to clone the QDevice VM. --clone-from " +
 			"assumes the source VM lives on the same node as the new lab VMs; the platform is " +
@@ -303,7 +310,7 @@ func newCreateCmd() *cobra.Command {
 			if rerr := renderCreatePlan(cmd, deps, plan, false); rerr != nil {
 				return rerr
 			}
-			return requireContextErr(requireContext, name, []error{ctxErr})
+			return createContextErr(name, ctxErr)
 		},
 	}
 
@@ -311,7 +318,9 @@ func newCreateCmd() *cobra.Command {
 	f.BoolVar(&dryRun, "dry-run", false, "preview the ordered plan without mutating anything")
 	f.BoolVar(&force, "force", false, "override the capacity gate's 85% actual-pool-fill refusal threshold")
 	f.StringVar(&node, "node", "", "node to create the lab's VMs on (defaults to --node/PMX_NODE/config default)")
-	f.BoolVar(&start, "start", false, "start every created VM after creation and verify the guest agent responds")
+	f.BoolVar(&start, "start", false,
+		"start every created VM (one already running is skipped), wait for its guest agent and for ssh, "+
+			"and register the lab-<name> context; the wait lasts the global --wait-timeout, or 5 minutes when it is 0")
 	f.BoolVar(&noContext, "no-context", false, "skip auto-registering the lab-<name> pmx context after --start")
 	registerRequireContextFlag(f, &requireContext)
 	f.IntVar(&ov.vcpu, "vcpu", 0, "override compute.vcpu (base sizing for every node before per-node overrides)")
@@ -1758,7 +1767,10 @@ func planCreateTarget(
 						}
 					}
 				}
-				if _, aerr := ac.Nodes.CreateQemuAgentPing(ctx, vmNode, vmidStr); aerr != nil {
+				if aerr := createWaitForAgent(ctx, ac, labBootWaitBound(deps), vmNode, vmidStr); aerr != nil {
+					if cerr := ctx.Err(); cerr != nil {
+						return fmt.Errorf("wait for guest agent of VM %d (%s): %w", vmid, label, cerr)
+					}
 					note := fmt.Sprintf(
 						"guest agent did not respond after starting %s (expected if the OS has not been installed yet): %v",
 						label, aerr)
@@ -2306,12 +2318,15 @@ func createListVnetSubnets(
 
 // runCreateContextHook registers or refreshes the lab-<name> pmx context after
 // a successful create, and returns the STEP-table note describing the outcome
-// along with the underlying failure, if any. It is strictly best-effort: any
-// failure yields a warning note pointing at `pmx lab context sync` and never
-// affects create's exit code unless the caller passed --require-context, which
-// is the only consumer of the returned error. When --start was not given the
-// VMs are powered off, so it emits guidance instead of polling a dead node;
-// --no-context suppresses it entirely.
+// along with the underlying failure, if any. A failure yields a warning note
+// that names `pmx lab context sync` as the retry, and the error that
+// createContextErr turns into a non-zero exit once the table is rendered. When
+// --start was not given the VMs are powered off, so it emits guidance instead
+// of polling a dead node; --no-context suppresses it entirely.
+//
+// With --start the node has only just booted, so the hook first waits for sshd
+// to answer, retrying connection-level failures until the boot wait bound (the
+// global --wait-timeout when set, five minutes otherwise).
 func runCreateContextHook(
 	cmd *cobra.Command, deps *cli.Deps, lab *config.Lab, name string, start, noContext bool,
 ) (string, error) {
@@ -2326,14 +2341,34 @@ func runCreateContextHook(
 
 	res, err := syncLabContext(cmd, deps, lab, labSyncOptions{WaitSSH: true})
 	if err != nil {
-		return fmt.Sprintf("⚠ context %s: %v; run 'pmx lab context sync %s' to retry", ctxName, err, name),
-			fmt.Errorf("register context %s: %w", ctxName, err)
+		ctxErr := fmt.Errorf("register context %s: %w", ctxName, err)
+		// ssh failing to reach the node is an infrastructure failure, not a
+		// result the remote command returned (see guestConnectError).
+		if _, ok := errors.AsType[*guestConnectError](err); ok {
+			ctxErr = &exitcode.InfraError{Err: ctxErr}
+		}
+		return fmt.Sprintf("⚠ context %s: %v; run 'pmx lab context sync %s' to retry", ctxName, err, name), ctxErr
 	}
 	verb := "reused existing token"
 	if res.Rotated {
 		verb = "rotated token"
 	}
 	return fmt.Sprintf("context %s ready (%s)", ctxName, verb), nil
+}
+
+// createContextErr is the error `pmx lab create --start` returns when the
+// lab-<name> context could not be registered, once the STEP table is on screen.
+// The VMs exist and are running, so the work is not undone, but a script that
+// moves on to the next step needs a non-zero exit to know the context it is
+// about to use does not exist. A connection failure keeps the exitcode.Infra
+// classification the hook gave it.
+func createContextErr(name string, ctxErr error) error {
+	if ctxErr == nil {
+		return nil
+	}
+	return fmt.Errorf(
+		"lab %q was created but its context is not ready; run 'pmx lab context sync %s' once the node answers: %w",
+		name, name, ctxErr)
 }
 
 // renderCreatePlan renders plan as a STEP/STATUS table. In dry-run mode every

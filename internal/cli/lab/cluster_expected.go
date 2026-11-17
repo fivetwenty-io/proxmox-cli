@@ -241,6 +241,9 @@ func clusterExpectedProbe(deps *cli.Deps, idx int, nodeIP string) (bool, error) 
 var sshTransportMarkers = []string{
 	"connection refused",
 	"connection timed out",
+	"operation timed out",
+	"stdio forwarding failed",
+	"kex_exchange_identification",
 	"connection reset",
 	"connection closed",
 	"no route to host",

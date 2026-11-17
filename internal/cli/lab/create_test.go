@@ -21,6 +21,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/config"
 	"github.com/fivetwenty-io/proxmox-cli/internal/exec"
+	"github.com/fivetwenty-io/proxmox-cli/internal/exitcode"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-cli/internal/testhelper"
 )
@@ -329,10 +330,11 @@ func TestCreate_NoStart_EmitsGuidanceRow(t *testing.T) {
 	assert.Nil(t, deps.Cfg.Contexts["lab-wayne"], "without --start no context is registered")
 }
 
-// TestCreate_ContextHookFailure_IsBestEffort covers a forced end-to-end probe
-// failure: create must still exit 0 and render the sync-guidance row, since
-// the context hook is strictly best-effort.
-func TestCreate_ContextHookFailure_IsBestEffort(t *testing.T) {
+// TestCreate_ContextHookFailure_ExitsNonZero covers a forced end-to-end probe
+// failure: the STEP table (with the retry hint naming `pmx lab context sync`)
+// is still rendered, but create exits non-zero so a script does not carry on
+// with a context that was never registered.
+func TestCreate_ContextHookFailure_ExitsNonZero(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	lab := createTestLab("wayne")
 	lab.Network.Mgmt.Subnet = "10.10.1.0/24"
@@ -347,8 +349,226 @@ func TestCreate_ContextHookFailure_IsBestEffort(t *testing.T) {
 	t.Cleanup(func() { labProbeContextVersion = origProbe })
 
 	out, err := runCreateCmd(t, cmd, "wayne", "--start")
-	require.NoError(t, err, "context-hook failure must never fail provisioning")
+	require.Error(t, err, "a context that did not register must fail the command")
+	assert.Equal(t, exitcode.Generic, exitcode.FromError(err))
+	assert.Contains(t, out, "pmx lab context sync wayne", "the table still carries the retry hint")
+	assert.Contains(t, out, "created", "the provisioning rows are still reported")
+	assert.ErrorContains(t, err, "pmx lab context sync wayne")
+}
+
+// createStartWaitDeps wires buildCreateCmd with a fake ssh runner loaded with
+// the given responses, no pre-seeded ones, so a test controls every probe the
+// start path makes. The first response is the zfs dataset probe.
+func createStartWaitDeps(
+	t *testing.T, f *testhelper.FakePVE, responses ...exec.FakeResponse,
+) (*cobra.Command, *exec.FakeRunner) {
+	t.Helper()
+	lab := createTestLab("wayne")
+	lab.Network.Mgmt.Subnet = "10.10.1.0/24"
+	createRegisterContextHookFreshVMRoutes(f, t, lab)
+	createRegisterContextHookStartRoutes(f)
+
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+	cmd := buildCreateCmd(t, path, f, "node1")
+	deps := cli.GetDeps(cmd)
+
+	fake := exec.Fake(responses...)
+	deps.Runner = fake
+	deps.Ctx = &config.Context{SSH: config.SSHBlock{User: "root", Port: 22}}
+
+	origProbe, origStore := labProbeContextVersion, labStoreSecretFn
+	labProbeContextVersion = func(*cobra.Command, *cli.Deps, string) error { return nil }
+	labStoreSecretFn = func(_ *cobra.Command, _ *cli.Deps, service, account, _ string) (string, error) {
+		return "keychain:" + service + "/" + account, nil
+	}
+	t.Cleanup(func() { labProbeContextVersion, labStoreSecretFn = origProbe, origStore })
+
+	return cmd, fake
+}
+
+const createTestFingerprint = "AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99"
+
+// createContextSuccessResponses are the ssh responses of a clean context sync,
+// after the wait-for-ssh probe: ensure user, ensure ACL, fingerprint,
+// hostname, token remove, token add.
+func createContextSuccessResponses() []exec.FakeResponse {
+	return []exec.FakeResponse{
+		{}, // ensure user
+		{}, // ensure ACL
+		{Stdout: "sha256 Fingerprint=" + createTestFingerprint + "\n"},
+		{Stdout: "lab-wayne-0\n"},
+		{},
+		{Stdout: `{"value":"the-secret"}`},
+	}
+}
+
+// TestCreate_Start_WaitsForBootingNode covers the reported failure: right
+// after `qm start` ssh answers exit 255 (no route) for a while. The wait must
+// ride that out and the context must then register, with exit 0.
+func TestCreate_Start_WaitsForBootingNode(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+
+	responses := []exec.FakeResponse{
+		{}, // buildCreatePlan's zfs dataset existence probe
+		sshConnectFailure,
+		sshConnectFailure,
+		sshConnectFailure,
+		{Stdout: "lab-wayne-0\n"}, // wait-for-ssh probe finally connects
+	}
+	responses = append(responses, createContextSuccessResponses()...)
+	cmd, fake := createStartWaitDeps(t, f, responses...)
+
+	out, err := runCreateCmd(t, cmd, "wayne", "--start")
+	require.NoError(t, err)
+	assert.Contains(t, out, "context lab-wayne ready (rotated token)")
+	assert.Len(t, fake.Calls, 1+4+6, "three failed probes, the one that connected, then the context sync")
+}
+
+// TestCreate_Start_NodeNeverBoots covers a node that never answers ssh within
+// the bound: create renders the table with the retry hint and exits with the
+// infrastructure code, not 0 and not ssh's raw 255.
+func TestCreate_Start_NodeNeverBoots(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+
+	responses := []exec.FakeResponse{{}}
+	for range 100 {
+		responses = append(responses, sshConnectFailure)
+	}
+	cmd, _ := createStartWaitDeps(t, f, responses...)
+	cli.GetDeps(cmd).WaitTimeout = 20
+
+	out, err := runCreateCmd(t, cmd, "wayne", "--start")
+	require.Error(t, err)
+	assert.Equal(t, exitcode.Infra, exitcode.FromError(err))
 	assert.Contains(t, out, "pmx lab context sync wayne")
+	assert.Contains(t, out, "timed out waiting for ssh")
+	assert.Nil(t, cli.GetDeps(cmd).Cfg.Contexts["lab-wayne"])
+}
+
+// TestCreate_Start_ACLFailureAfterWaitIsNonZero covers the ACL step failing
+// with a real remote failure after the node answered: it is not retried, and
+// the command exits non-zero with the generic code.
+func TestCreate_Start_ACLFailureAfterWaitIsNonZero(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+
+	cmd, fake := createStartWaitDeps(t, f,
+		exec.FakeResponse{}, // zfs dataset probe
+		exec.FakeResponse{}, // wait-for-ssh probe connects
+		exec.FakeResponse{}, // ensure user
+		exec.FakeResponse{ExitCode: 255, Stderr: "permission denied for pveum acl"}, // the PVE CLI died: a remote result
+	)
+
+	out, err := runCreateCmd(t, cmd, "wayne", "--start")
+	require.Error(t, err)
+	assert.Contains(t, out, "ensure ACL")
+	assert.Contains(t, out, "pmx lab context sync wayne")
+	assert.Len(t, fake.Calls, 4, "a remote command failure is not retried")
+}
+
+// TestCreate_Start_ACLConnectionDropAfterWaitIsInfra covers ssh losing the
+// node between the wait and the ACL step: the exit status is the
+// infrastructure code, not ssh's 255.
+func TestCreate_Start_ACLConnectionDropAfterWaitIsInfra(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+
+	cmd, _ := createStartWaitDeps(t, f,
+		exec.FakeResponse{}, // zfs dataset probe
+		exec.FakeResponse{}, // wait-for-ssh probe connects
+		exec.FakeResponse{}, // ensure user
+		exec.FakeResponse{
+			ExitCode: 255,
+			Stderr: "channel 0: open failed: connect failed: No route to host\nstdio forwarding failed\n" +
+				"Connection closed by UNKNOWN port 65535",
+		},
+	)
+
+	_, err := runCreateCmd(t, cmd, "wayne", "--start")
+	require.Error(t, err)
+	assert.Equal(t, exitcode.Infra, exitcode.FromError(err))
+}
+
+// TestCreate_Start_RetriesAgentUntilItAnswers covers the guest agent not
+// running yet right after start: the ping is retried, not given up on once.
+func TestCreate_Start_RetriesAgentUntilItAnswers(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	lab := createTestLab("wayne")
+	lab.Network.Mgmt.Subnet = "10.10.1.0/24"
+	createRegisterContextHookFreshVMRoutes(f, t, lab)
+
+	f.HandleFunc("POST /api2/json/nodes/node1/qemu/9500/status/start", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, nil)
+	})
+	pings := 0
+	f.HandleFunc("POST /api2/json/nodes/node1/qemu/9500/agent/ping", func(w http.ResponseWriter, _ *http.Request) {
+		pings++
+		if pings < 4 {
+			testhelper.WriteError(w, http.StatusInternalServerError, "QEMU guest agent is not running")
+			return
+		}
+		testhelper.WriteData(w, map[string]any{})
+	})
+
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+	cmd := buildCreateCmd(t, path, f, "node1")
+
+	out, err := runCreateCmd(t, cmd, "wayne", "--start", "--no-context")
+	require.NoError(t, err)
+	assert.Equal(t, 4, pings, "the agent ping is retried until it answers")
+	assert.NotContains(t, out, "guest agent did not respond")
+}
+
+// TestCreate_Start_AgentNeverAnswersIsANote covers a lab whose OS is not
+// installed: the agent never answers within the bound, which stays an
+// informational row (the documented "expected if the OS has not been installed
+// yet"), not a failure.
+func TestCreate_Start_AgentNeverAnswersIsANote(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	lab := createTestLab("wayne")
+	lab.Network.Mgmt.Subnet = "10.10.1.0/24"
+	createRegisterContextHookFreshVMRoutes(f, t, lab)
+
+	f.HandleFunc("POST /api2/json/nodes/node1/qemu/9500/status/start", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, nil)
+	})
+	pings := 0
+	f.HandleFunc("POST /api2/json/nodes/node1/qemu/9500/agent/ping", func(w http.ResponseWriter, _ *http.Request) {
+		pings++
+		testhelper.WriteError(w, http.StatusInternalServerError, "QEMU guest agent is not running")
+	})
+
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+	cmd := buildCreateCmd(t, path, f, "node1")
+	cli.GetDeps(cmd).WaitTimeout = 15
+
+	out, err := runCreateCmd(t, cmd, "wayne", "--start", "--no-context")
+	require.NoError(t, err)
+	assert.Equal(t, 4, pings, "probes at 0, 5, 10, and 15 seconds")
+	assert.Contains(t, out, "guest agent did not respond")
+}
+
+// TestCreate_Start_AgentPermissionErrorIsNotRetried covers an error no wait can
+// fix: a 403 on the ping ends the wait at once rather than burning the bound.
+func TestCreate_Start_AgentPermissionErrorIsNotRetried(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	lab := createTestLab("wayne")
+	lab.Network.Mgmt.Subnet = "10.10.1.0/24"
+	createRegisterContextHookFreshVMRoutes(f, t, lab)
+
+	f.HandleFunc("POST /api2/json/nodes/node1/qemu/9500/status/start", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, nil)
+	})
+	pings := 0
+	f.HandleFunc("POST /api2/json/nodes/node1/qemu/9500/agent/ping", func(w http.ResponseWriter, _ *http.Request) {
+		pings++
+		testhelper.WriteError(w, http.StatusForbidden, "Permission check failed")
+	})
+
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+	cmd := buildCreateCmd(t, path, f, "node1")
+
+	_, err := runCreateCmd(t, cmd, "wayne", "--start", "--no-context")
+	require.NoError(t, err)
+	assert.Equal(t, 1, pings)
 }
 
 // TestCreateHappyPath_OrderedCalls covers a lab whose zone, vnet, subnet,
@@ -770,7 +990,7 @@ func TestCreateStart_TargetsExistingVMsOwnNode(t *testing.T) {
 	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
 	cmd := buildCreateCmd(t, path, f, "node1")
 
-	out, err := runCreateCmd(t, cmd, "wayne", "--node", "node1", "--start")
+	out, err := runCreateCmd(t, cmd, "wayne", "--node", "node1", "--start", "--no-context")
 	require.NoError(t, err)
 	assert.True(t, startCalled, "start must be issued against the VM's own node")
 	assert.Contains(t, out, "node2")

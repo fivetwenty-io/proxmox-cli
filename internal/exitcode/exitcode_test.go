@@ -311,3 +311,22 @@ func TestFromError_UsageError(t *testing.T) {
 	require.Equal(t, inner.Error(), usage.Error())
 	require.ErrorIs(t, usage, inner)
 }
+
+// TestFromError_InfraError verifies that a host pmx could not reach maps to
+// Infra, including when the wrapped error carries ssh's own exit code 255,
+// which would otherwise be propagated verbatim as the process exit code.
+func TestFromError_InfraError(t *testing.T) {
+	t.Parallel()
+
+	inner := errors.New("timed out waiting for ssh on 10.0.0.10")
+	infra := &exitcode.InfraError{Err: inner}
+
+	require.Equal(t, exitcode.Infra, exitcode.FromError(infra), "direct")
+	require.Equal(t, exitcode.Infra, exitcode.FromError(wrap(infra)), "wrapped once")
+	require.Equal(t, inner.Error(), infra.Error())
+	require.ErrorIs(t, infra, inner)
+
+	sshDown := &exitcode.InfraError{Err: &exec.ExitError{Code: 255, Err: errors.New("exit status 255")}}
+	require.Equal(t, exitcode.Infra, exitcode.FromError(sshDown), "an ssh 255 inside InfraError is Infra, not 255")
+	require.Equal(t, exitcode.Infra, exitcode.FromError(wrap(sshDown)), "wrapped once")
+}

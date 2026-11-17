@@ -241,9 +241,42 @@ func runGuestSSH(deps *cli.Deps, host, remoteCmd string) (guestSSHResult, error)
 	if err != nil {
 		res.ExitCode = exec.ExitCodeOf(err)
 		wrapped := fmt.Errorf("ssh %s@%s %q: %w (stderr: %s)", f.User, host, remoteCmd, err, strings.TrimSpace(stderr.String()))
-		return res, exec.NewCapturedError(wrapped)
+		captured := exec.NewCapturedError(wrapped)
+		if res.ExitCode == sshTransportExitCode && sshTransportFailure(res.Stdout, res.Stderr) {
+			return res, &guestConnectError{Err: captured}
+		}
+		return res, captured
 	}
 	return res, nil
+}
+
+// guestConnectError marks a runGuestSSH failure that is ssh itself failing to
+// reach or authenticate to the guest, as opposed to the remote command
+// running and failing. Exit status 255 alone cannot tell the two apart,
+// because PVE's Perl CLIs (pveum, pvecm) also exit 255 when they die; the
+// ssh diagnostic on stderr is what does (see sshTransportFailure). The error
+// otherwise behaves exactly like the one it wraps, so every existing check on
+// the *exec.ExitError inside it keeps working.
+type guestConnectError struct {
+	Err error
+}
+
+// Error returns the wrapped error's text unchanged.
+func (e *guestConnectError) Error() string { return e.Err.Error() }
+
+// Unwrap returns the wrapped error.
+func (e *guestConnectError) Unwrap() error { return e.Err }
+
+// guestNotYetReachable reports whether a failed `hostname` probe means the
+// node is not accepting ssh connections yet, so a wait should try again. That
+// is a failure to run ssh at all, or ssh's own exit status 255. The probe is
+// `hostname`, which never exits 255 itself, so here 255 needs no stderr
+// corroboration the way it does for the PVE CLIs.
+func guestNotYetReachable(err error) bool {
+	if err == nil {
+		return false
+	}
+	return guestCommandTransportFailed(err) || exec.ExitCodeOf(err) == sshTransportExitCode
 }
 
 // guestCommandTransportFailed reports whether err represents a failure to

@@ -58,6 +58,26 @@ func (e *UsageError) Unwrap() error {
 	return e.Err
 }
 
+// InfraError marks a failure to reach a host that pmx's own API client did not
+// see, such as an ssh connection that never came up or a node that did not
+// finish booting within the wait. It maps to Infra, and it wins over a child
+// exit code in the chain, because the child here is ssh reporting its own
+// connection failure as 255, which a script must not read as the remote
+// command's result.
+type InfraError struct {
+	Err error
+}
+
+// Error returns the wrapped error's text unchanged.
+func (e *InfraError) Error() string {
+	return e.Err.Error()
+}
+
+// Unwrap returns the wrapped error.
+func (e *InfraError) Unwrap() error {
+	return e.Err
+}
+
 // AuditFindingsError reports an audit that completed and found something an
 // operator has to act on. Message is the whole line pmx prints on standard
 // error, so it reads the same whether a script or a person sees it.
@@ -73,6 +93,8 @@ func (e *AuditFindingsError) Error() string {
 // FromError maps a proxmox-apiclient-go error value to the appropriate exit code.
 //
 // Mapping rules (tested in priority order):
+//  0. *InfraError (a host that could not be reached, wrapping even an ssh
+//     connection failure) → Infra (3), ahead of the child-exit rule below
 //  0. *exec.ExitError (child process exit, e.g. from `pmx ssh`/`pmx rsync`) →
 //     the child's own exit code, verbatim, regardless of any other mapping
 //     the error chain might also match
@@ -91,6 +113,12 @@ func (e *AuditFindingsError) Error() string {
 func FromError(err error) int {
 	if err == nil {
 		return OK
+	}
+
+	// An explicit infrastructure failure outranks the child exit code it may
+	// wrap: ssh's own 255 means "never connected", not "the command exited 255".
+	if _, ok := errors.AsType[*InfraError](err); ok {
+		return Infra
 	}
 
 	// 0. Child process exit code takes precedence over every API-error mapping

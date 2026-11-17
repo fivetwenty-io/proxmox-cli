@@ -27,6 +27,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/config"
 	"github.com/fivetwenty-io/proxmox-cli/internal/exec"
+	"github.com/fivetwenty-io/proxmox-cli/internal/exitcode"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
@@ -641,6 +642,63 @@ func TestLabWaitForSSH_RetriesTransportThenSucceeds(t *testing.T) {
 	require.Len(t, fake.Calls, 3, "the loop must retry each transport failure until a probe connects")
 }
 
+// sshConnectFailure is the response a booting node gives: ssh itself exits 255
+// with a connection diagnostic, which is a failure to connect, not a result
+// from the remote command.
+var sshConnectFailure = exec.FakeResponse{
+	ExitCode: 255,
+	Stderr:   "ssh: connect to host 10.10.1.10 port 22: No route to host",
+}
+
+// TestLabWaitForSSH_RetriesSSHExit255 verifies the wait treats ssh's own exit
+// status 255 as "not up yet" and keeps retrying, instead of mistaking it for a
+// remote command failure and returning at once.
+func TestLabWaitForSSH_RetriesSSHExit255(t *testing.T) {
+	fake := exec.Fake(sshConnectFailure, sshConnectFailure, sshConnectFailure, exec.FakeResponse{Stdout: "node0\n"})
+	require.NoError(t, labWaitForSSH(context.Background(), waitDepsWithFake(fake), "10.10.1.10"))
+	require.Len(t, fake.Calls, 4)
+}
+
+// TestLabWaitForSSH_RemoteFailureEndsTheWait verifies a probe that connected
+// but whose remote command exited non-zero is not retried: the node answered.
+func TestLabWaitForSSH_RemoteFailureEndsTheWait(t *testing.T) {
+	fake := exec.Fake(exec.FakeResponse{ExitCode: 1, Stderr: "hostname: boom"})
+	require.NoError(t, labWaitForSSH(context.Background(), waitDepsWithFake(fake), "10.10.1.10"))
+	require.Len(t, fake.Calls, 1, "a real remote failure must not be retried")
+}
+
+// TestLabWaitForSSH_TimesOutAsInfra verifies a node that never answers ends
+// the wait at the bound with an error that maps to exitcode.Infra, and that
+// the bound is the operator's --wait-timeout rather than a fixed constant.
+func TestLabWaitForSSH_TimesOutAsInfra(t *testing.T) {
+	responses := make([]exec.FakeResponse, 200)
+	for i := range responses {
+		responses[i] = sshConnectFailure
+	}
+
+	t.Run("honors --wait-timeout", func(t *testing.T) {
+		fake := exec.Fake(responses...)
+		deps := waitDepsWithFake(fake)
+		deps.WaitTimeout = 30
+
+		err := labWaitForSSH(context.Background(), deps, "10.10.1.10")
+		require.Error(t, err)
+		assert.Equal(t, exitcode.Infra, exitcode.FromError(err))
+		assert.ErrorContains(t, err, "timed out waiting for ssh on 10.10.1.10")
+		assert.ErrorContains(t, err, "No route to host")
+		// 30s at one probe per 5s interval: the probes at 0,5,...,30.
+		assert.Len(t, fake.Calls, 7)
+	})
+
+	t.Run("defaults to five minutes when the flag is 0", func(t *testing.T) {
+		fake := exec.Fake(responses...)
+		err := labWaitForSSH(context.Background(), waitDepsWithFake(fake), "10.10.1.10")
+		require.Error(t, err)
+		assert.Equal(t, exitcode.Infra, exitcode.FromError(err))
+		assert.Len(t, fake.Calls, 61)
+	})
+}
+
 // TestLabWaitForSSH_HonorsCancelledContext verifies the loop stops on a
 // cancelled context rather than exhausting its attempt budget. Every probe
 // fails as a transport error, so the loop must rely on ctx.Err(), not on a
@@ -652,10 +710,17 @@ func TestLabWaitForSSH_HonorsCancelledContext(t *testing.T) {
 	require.Error(t, labWaitForSSH(ctx, deps, "10.10.1.10"))
 }
 
-// init disables the actual sleep in labSSHPollSleep during tests so the wait
-// loop runs at full speed without blocking.
+// labTestClock is the fake clock the boot waits run against in tests. Its
+// sleep advances it by exactly the requested duration without blocking, so a
+// wait that would take minutes of real time runs instantly and still hits its
+// deadline after the number of probes the real clock would have allowed. The
+// lab tests never run in parallel, so one clock is enough.
+var labTestClock = time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
+
+// init replaces the real clock and sleep of the boot waits with labTestClock.
 func init() {
-	labSSHPollSleep = func(time.Duration) {}
+	labWaitNow = func() time.Time { return labTestClock }
+	labSSHPollSleep = func(d time.Duration) { labTestClock = labTestClock.Add(d) }
 }
 
 // syncTestDeps builds a *cli.Deps with a temp config path, a fake ssh runner,

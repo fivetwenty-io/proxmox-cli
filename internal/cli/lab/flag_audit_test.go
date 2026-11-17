@@ -179,7 +179,7 @@ func TestCreateAuditFields_StartInvokesLifecycleStart(t *testing.T) {
 	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
 	cmd := buildCreateCmd(t, path, f, "node1")
 
-	out, err := runCreateCmd(t, cmd, "wayne", "--node", "node1", "--start")
+	out, err := runCreateCmd(t, cmd, "wayne", "--node", "node1", "--start", "--no-context")
 	require.NoError(t, err)
 	assert.True(t, startCalled, "--start must call CreateQemuStatusStart for the resolved VMID")
 	assert.Contains(t, out, "created")

@@ -8,7 +8,6 @@ import (
 	"net"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
@@ -123,19 +122,6 @@ func normalizeFingerprint(raw string) (string, error) {
 // fingerprint and hostname, and wait for SSH connectivity with bounded
 // retries.
 
-// labSSHWaitAttempts and labSSHWaitInterval bound the wait-for-SSH loop to
-// roughly two minutes (24 * 5s), long enough for a freshly-started nested
-// node to bring up sshd, short enough to fail a genuinely dead boot.
-const (
-	labSSHWaitAttempts = 24
-	labSSHWaitInterval = 5 * time.Second
-)
-
-// labSSHPollSleep is a seam for testing: it sleeps for the given duration,
-// or is overridden in tests to sleep zero time so the wait loop runs at full
-// speed.
-var labSSHPollSleep = time.Sleep
-
 // labEnsureUser creates the token-only user pmx@pve if it does not exist. A
 // non-zero exit (the user already exists) is tolerated; only a transport
 // failure aborts, matching this package's idempotency convention.
@@ -235,22 +221,30 @@ func labFetchHostname(deps *cli.Deps, ip string) (string, error) {
 	return hostname, nil
 }
 
-// labWaitForSSH blocks until a benign `hostname` probe against ip succeeds
-// over ssh, or the attempt budget or ctx is exhausted. Only transport-level
-// failures (ssh cannot connect yet) are retried; a connected-but-non-zero
-// probe returns success, since reachability is all this step needs.
+// labWaitForSSH blocks until a benign `hostname` probe against ip reaches the
+// node over ssh, retrying every connection-level failure (ssh could not
+// connect yet: no route, refused, timed out, or a key not yet accepted, all of
+// which ssh reports as exit 255) until the boot wait bound, labBootWaitBound,
+// which is the operator's --wait-timeout when set. A probe that connects
+// returns success even when the remote `hostname` exits non-zero, since
+// reachability is all this step needs. When the bound expires the error is an
+// *exitcode.InfraError wrapping a *labWaitTimeoutError, so the command exits
+// with exitcode.Infra.
 func labWaitForSSH(ctx context.Context, deps *cli.Deps, ip string) error {
-	for range labSSHWaitAttempts {
-		if err := ctx.Err(); err != nil {
-			return fmt.Errorf("waiting for ssh on %s: %w", ip, err)
+	err := labWaitUntil(ctx, labBootWaitBound(deps), func() (bool, error) {
+		_, perr := runGuestSSH(deps, ip, "hostname")
+		if !guestNotYetReachable(perr) {
+			return true, nil
 		}
-		_, err := runGuestSSH(deps, ip, "hostname")
-		if err == nil || !guestCommandTransportFailed(err) {
-			return nil
-		}
-		labSSHPollSleep(labSSHWaitInterval)
+		return false, perr
+	})
+	if err == nil {
+		return nil
 	}
-	return fmt.Errorf("timed out waiting for ssh on %s after %d attempts", ip, labSSHWaitAttempts)
+	if _, expired := errors.AsType[*labWaitTimeoutError](err); expired {
+		return labBootTimeoutExit(fmt.Errorf("timed out waiting for ssh on %s: %w", ip, err))
+	}
+	return fmt.Errorf("waiting for ssh on %s: %w", ip, err)
 }
 
 // labSyncOptions tunes syncLabContext. WaitSSH bounds-waits for the node's
