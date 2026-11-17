@@ -210,7 +210,7 @@ func TestSyncLabContext_RotationOffLegacyItemLeavesItAndNotes(t *testing.T) {
 	assert.Equal(t, []string{labTestService(t, deps, "demo") + "/pmx@pve!pmx"}, *stored)
 	assert.Empty(t, *deleted, "sync never deletes a keychain item")
 	assert.Equal(t, labTestRef(t, deps, "demo"), deps.Cfg.Contexts["lab-demo"].Auth.Secret)
-	assert.Contains(t, stderr.String(), "the previous item pmx-lab-demo/pmx@pve!pmx is no longer referenced")
+	assert.Contains(t, stderr.String(), "The previous item pmx-lab-demo/pmx@pve!pmx is no longer referenced")
 	assert.Contains(t, stderr.String(), "security delete-generic-password -s pmx-lab-demo -a 'pmx@pve!pmx'")
 }
 

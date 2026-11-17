@@ -378,8 +378,8 @@ func labSecretStoreTarget(deps *cli.Deps, ctxName, name string) (service, accoun
 	account = labCtxAccount()
 	if other := labKeychainItemReferencedBy(deps.Cfg, ctxName, service, account); other != "" {
 		return "", "", fmt.Errorf(
-			"refusing to store the token secret for context %q in keychain item %s/%s: "+
-				"context %q still references that item; point %q at a different secret or remove it first",
+			"refusing to store the token secret for context %q in keychain item %s/%s "+
+				"because context %q still references that item, so point %q at a different secret or remove it first",
 			ctxName, service, account, other, other)
 	}
 	return service, account, nil
@@ -407,7 +407,7 @@ func warnUnreferencedLabSecret(cmd *cobra.Command, deps *cli.Deps, ctxName, name
 		return
 	}
 	_, _ = fmt.Fprintf(cmd.ErrOrStderr(),
-		"NOTE: context %q now uses keychain item %s/%s; the previous item %s/%s is no longer referenced "+
+		"NOTE: context %q now uses keychain item %s/%s. The previous item %s/%s is no longer referenced "+
 			"by this config and was left in place, since a same-named lab in another config may use it. "+
 			"If nothing uses it, remove it with: %s\n",
 		ctxName, newService, newAccount, service, account, labKeychainDeleteCommand(service, account))

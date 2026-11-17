@@ -69,13 +69,13 @@ var labKeychainNamespaceSegmentRE = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 // errNoOuterContext is returned when no outer pmx context is active to
 // namespace a new lab secret under.
 var errNoOuterContext = errors.New(
-	"no active pmx context to namespace the lab's keychain secret under; " +
-		"select the outer context with --context/-c")
+	"there is no active pmx context to namespace the lab's keychain secret under, " +
+		"so select the outer context with --context/-c")
 
 // errNoConfigPath is returned when the invocation has no config file path to
 // namespace a lab secret under.
 var errNoConfigPath = errors.New(
-	"no config file path to namespace the lab's keychain secret under; pass --config")
+	"there is no config file path to namespace the lab's keychain secret under, so pass --config")
 
 // labLegacyKeychainService returns the legacy keychain service of a lab's
 // token secret, "pmx-lab-" + name. pmx never writes it any more; it is used

@@ -438,12 +438,12 @@ func (p labContextCleanup) describe(dryRun bool) string {
 		return fmt.Sprintf("context %q not found, so %s", p.ctxName,
 			pick("no keychain secret would be removed", "no keychain secret was removed"))
 	case p.kind == labSecretNone:
-		return fmt.Sprintf("%s context %q; it references no keychain secret of lab %q, so %s",
+		return fmt.Sprintf("%s context %q, which references no keychain secret of lab %q, so %s",
 			removeCtx, p.ctxName, p.labName,
 			pick("no keychain secret would be removed", "no keychain secret was removed"))
 	case p.kind == labSecretForeign:
 		return fmt.Sprintf("%s context %q and its keychain secret %s, because the secret belongs to "+
-			"another outer context or config (%s); to remove them, run `pmx lab context rm %s` "+
+			"another outer context or config (%s), and to remove them, run `pmx lab context rm %s` "+
 			"with the outer context and config that registered it, or remove them by hand with "+
 			"`pmx context rm %s` and `%s`",
 			pick("would keep", "kept"), p.ctxName, item, p.foreignReason(), p.labName,
@@ -453,10 +453,10 @@ func (p labContextCleanup) describe(dryRun bool) string {
 			removeCtx, p.ctxName, pick("keep", "kept"), item, p.sharedWith)
 	case p.kind == labSecretLegacy:
 		return fmt.Sprintf("%s context %q but %s its legacy keychain secret %s, since a same-named lab "+
-			"in another config may use it; if nothing uses it, remove it with: %s",
+			"in another config may use it. If nothing uses it, remove it with: %s",
 			removeCtx, p.ctxName, pick("keep", "kept"), item, labKeychainDeleteCommand(p.service, p.account))
 	case p.keychainUnsupported:
-		return fmt.Sprintf("%s context %q; keychain secret %s %s because this platform has no keychain",
+		return fmt.Sprintf("%s context %q, but keychain secret %s %s because this platform has no keychain",
 			removeCtx, p.ctxName, item, pick("would not be removed", "was not removed"))
 	default:
 		return fmt.Sprintf("%s context %q and its keychain secret %s", removeCtx, p.ctxName, item)

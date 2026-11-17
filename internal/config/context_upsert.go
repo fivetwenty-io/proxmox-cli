@@ -138,8 +138,8 @@ func CheckLabContextOwned(cfg *Config, name, mgmtSubnet string) error {
 		return nil
 	}
 	return fmt.Errorf(
-		"refusing to overwrite existing context %q: it does not look lab-derived "+
-			"(product=%s host=%s username=%s); rename or remove it first",
+		"refusing to overwrite existing context %q because it does not look lab-derived "+
+			"(product=%s host=%s username=%s), so rename or remove it first",
 		name, existing.ProductOrDefault(), existing.Host, existing.Auth.Username)
 }
 

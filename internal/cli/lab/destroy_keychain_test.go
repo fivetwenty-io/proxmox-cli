@@ -216,10 +216,10 @@ func destroyKeychainCases() []destroyKeychainCase {
 			name:     "context references legacy item",
 			contexts: only("pmx-lab-demo"),
 			wantDry: `would remove context "lab-demo" but keep its legacy keychain secret pmx-lab-demo/pmx@pve!pmx, ` +
-				`since a same-named lab in another config may use it; if nothing uses it, remove it with: ` +
+				`since a same-named lab in another config may use it. If nothing uses it, remove it with: ` +
 				`security delete-generic-password -s pmx-lab-demo -a 'pmx@pve!pmx'`,
 			wantReal: `removed context "lab-demo" but kept its legacy keychain secret pmx-lab-demo/pmx@pve!pmx, ` +
-				`since a same-named lab in another config may use it; if nothing uses it, remove it with: ` +
+				`since a same-named lab in another config may use it. If nothing uses it, remove it with: ` +
 				`security delete-generic-password -s pmx-lab-demo -a 'pmx@pve!pmx'`,
 		},
 		foreign("context references another outer context's item", "{otherOuter}"),
@@ -228,9 +228,9 @@ func destroyKeychainCases() []destroyKeychainCase {
 		{
 			name:     "context references a non-lab keychain item",
 			contexts: only("ops-root"),
-			wantDry: `would remove context "lab-demo"; it references no keychain secret of lab "demo", ` +
+			wantDry: `would remove context "lab-demo", which references no keychain secret of lab "demo", ` +
 				`so no keychain secret would be removed`,
-			wantReal: `removed context "lab-demo"; it references no keychain secret of lab "demo", ` +
+			wantReal: `removed context "lab-demo", which references no keychain secret of lab "demo", ` +
 				`so no keychain secret was removed`,
 		},
 		{
@@ -241,9 +241,9 @@ func destroyKeychainCases() []destroyKeychainCase {
 						labCtxAccount())),
 				}
 			},
-			wantDry: `would remove context "lab-demo"; it references no keychain secret of lab "demo", ` +
+			wantDry: `would remove context "lab-demo", which references no keychain secret of lab "demo", ` +
 				`so no keychain secret would be removed`,
-			wantReal: `removed context "lab-demo"; it references no keychain secret of lab "demo", ` +
+			wantReal: `removed context "lab-demo", which references no keychain secret of lab "demo", ` +
 				`so no keychain secret was removed`,
 		},
 		{
@@ -251,9 +251,9 @@ func destroyKeychainCases() []destroyKeychainCase {
 			contexts: func(destroyNS) map[string]*config.Context {
 				return map[string]*config.Context{"lab-demo": labTokenContext("${LAB_DEMO_TOKEN}")}
 			},
-			wantDry: `would remove context "lab-demo"; it references no keychain secret of lab "demo", ` +
+			wantDry: `would remove context "lab-demo", which references no keychain secret of lab "demo", ` +
 				`so no keychain secret would be removed`,
-			wantReal: `removed context "lab-demo"; it references no keychain secret of lab "demo", ` +
+			wantReal: `removed context "lab-demo", which references no keychain secret of lab "demo", ` +
 				`so no keychain secret was removed`,
 		},
 		{
@@ -514,13 +514,13 @@ func TestDestroy_KeychainCleanup_UnsupportedPlatform(t *testing.T) {
 	cmd, _, ns := buildDestroyCmdWithContexts(t, false, contexts)
 	out, _, err := destroyRun(t, cmd, "demo", "--dry-run")
 	require.NoError(t, err)
-	assert.Contains(t, out.String(), `would remove context "lab-demo"; keychain secret `+
+	assert.Contains(t, out.String(), `would remove context "lab-demo", but keychain secret `+
 		ns.cur+`/pmx@pve!pmx would not be removed because this platform has no keychain`)
 
 	cmd, deps, ns := buildDestroyCmdWithContexts(t, false, contexts)
 	out, _, err = destroyRun(t, cmd, "demo", "--yes")
 	require.NoError(t, err)
-	assert.Contains(t, out.String(), `removed context "lab-demo"; keychain secret `+
+	assert.Contains(t, out.String(), `removed context "lab-demo", but keychain secret `+
 		ns.cur+`/pmx@pve!pmx was not removed because this platform has no keychain`)
 	assert.Empty(t, *deleted)
 	assert.Nil(t, deps.Cfg.Contexts["lab-demo"])
