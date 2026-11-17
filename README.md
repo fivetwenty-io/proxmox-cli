@@ -894,6 +894,8 @@ pmx -c backup pbs snapshot delete --store tank vm/100/2026-07-01T02:00:00Z
 # Jobs: one-shot runs and configured schedules.
 pmx -c backup pbs gc run --store tank
 pmx -c backup pbs prune simulate vm/100 --store tank --keep-last 3
+pmx -c backup pbs prune run --store tank --keep-last 3 --dry-run
+pmx -c backup pbs prune run --store tank --keep-last 3 --yes   # prunes for real; --yes is required off a terminal
 pmx -c backup pbs sync pull --store tank --remote offsite --remote-store tank
 pmx -c backup pbs verify job add nightly --store tank --schedule daily
 

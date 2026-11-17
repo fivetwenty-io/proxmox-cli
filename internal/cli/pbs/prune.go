@@ -127,6 +127,7 @@ func newPruneRunCmd() *cobra.Command {
 		maxDepth int64
 		ka       pruneKeepArgs
 		dryRun   bool
+		yes      bool
 	)
 	cmd := &cobra.Command{
 		Use:   "run",
@@ -135,9 +136,14 @@ func newPruneRunCmd() *cobra.Command {
 			"/admin/datastore/{store}/prune-datastore): remove backup snapshots " +
 			"that fall outside the --keep-* retention window across every group " +
 			"under --ns, or the whole datastore. Runs as an asynchronous task; " +
-			"the command blocks until it finishes unless --async is set. " + cli.WaitBoundHelp,
-		Example: "  pmx pbs prune run --store tank --keep-daily 7",
-		Args:    cobra.NoArgs,
+			"the command blocks until it finishes unless --async is set. " + cli.WaitBoundHelp +
+			"\n\nPruning deletes snapshots for good, so a run without --dry-run asks for " +
+			"confirmation. On a terminal it prompts, and anywhere else it refuses unless " +
+			"--yes/-y is passed. --dry-run only previews the decisions and needs neither.",
+		Example: `  pmx pbs prune run --store tank --keep-daily 7 --dry-run
+  pmx pbs prune run --store tank --keep-daily 7 --yes
+  pmx pbs prune run --store tank --ns team-a --max-depth 0 --keep-last 3 --yes`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if store == "" {
@@ -161,6 +167,21 @@ func newPruneRunCmd() *cobra.Command {
 			params.KeepLast, params.KeepHourly, params.KeepDaily,
 				params.KeepWeekly, params.KeepMonthly, params.KeepYearly = pruneKeepPtrs(cmd, ka)
 
+			// A dry run deletes nothing, so only a real prune is gated.
+			if !dryRun {
+				ok, err := cli.ConfirmDestructive(cmd, yes,
+					fmt.Sprintf("prune datastore %q", store),
+					fmt.Sprintf("Prune datastore %q%s? Snapshots outside the retention window are deleted permanently.",
+						store, pruneScopeSuffix(ns, fl.Changed("ns"))))
+				if err != nil {
+					return err
+				}
+
+				if !ok {
+					return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: "Aborted."}, deps.Format)
+				}
+			}
+
 			resp, err := deps.PBS.Admin.CreateDatastorePruneDatastore(cmd.Context(), store, params)
 			if err != nil {
 				return fmt.Errorf("run prune on datastore %q: %w", store, err)
@@ -180,8 +201,24 @@ func newPruneRunCmd() *cobra.Command {
 		"namespace recursion depth (0 = no recursion, unset = full recursion)")
 	registerPruneKeepArgs(cmd, &ka)
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview the prune decisions without deleting anything")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm the prune without prompting")
 	cli.MustMarkRequired(cmd, "store")
 	return cmd
+}
+
+// pruneScopeSuffix names the namespace a datastore prune is limited to, for the
+// confirmation prompt. It is empty when --ns was not given, since the prune
+// then covers the whole datastore.
+func pruneScopeSuffix(ns string, set bool) string {
+	if !set {
+		return ""
+	}
+
+	if ns == "" {
+		return " (root namespace)"
+	}
+
+	return fmt.Sprintf(" (namespace %q)", ns)
 }
 
 // prunePlanEntry is the decoded shape of one element of the array returned by
@@ -712,13 +749,18 @@ func newPruneJobDeleteCmd() *cobra.Command {
 // newPruneJobRunCmd builds `pmx pbs prune job run <id>` — manually trigger a
 // scheduled prune job (POST /admin/prune/{id}/run).
 func newPruneJobRunCmd() *cobra.Command {
+	var yes bool
+
 	cmd := &cobra.Command{
 		Use:   "run <id>",
 		Short: "Manually trigger a scheduled prune job",
 		Long: "Immediately run a configured prune job (POST /admin/prune/{id}/run). " +
 			"This endpoint reports only success or failure, not a task UPID, so the " +
-			"command always completes synchronously and --async has no effect here.",
-		Example:     "  pmx pbs prune job run daily-prune",
+			"command always completes synchronously and --async has no effect here.\n\n" +
+			"The job deletes snapshots for good and has no dry-run form, so the command " +
+			"asks for confirmation. On a terminal it prompts, and anywhere else it " +
+			"refuses unless --yes/-y is passed.",
+		Example:     `  pmx pbs prune job run daily-prune --yes`,
 		Annotations: map[string]string{cli.AnnotationNoWaitBound: "true"},
 		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -728,7 +770,18 @@ func newPruneJobRunCmd() *cobra.Command {
 				return fmt.Errorf("job id must not be empty")
 			}
 
-			err := deps.PBS.Admin.CreatePruneRun(cmd.Context(), id)
+			ok, err := cli.ConfirmDestructive(cmd, yes,
+				fmt.Sprintf("run prune job %q", id),
+				fmt.Sprintf("Run prune job %q? Snapshots outside its retention window are deleted permanently.", id))
+			if err != nil {
+				return err
+			}
+
+			if !ok {
+				return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: "Aborted."}, deps.Format)
+			}
+
+			err = deps.PBS.Admin.CreatePruneRun(cmd.Context(), id)
 			if err != nil {
 				return fmt.Errorf("run prune job %q: %w", id, err)
 			}
@@ -737,5 +790,6 @@ func newPruneJobRunCmd() *cobra.Command {
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm running the job without prompting")
 	return cmd
 }

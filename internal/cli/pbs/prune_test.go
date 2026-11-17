@@ -60,7 +60,7 @@ func TestPruneRun_AsyncPrintsUPID(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, true)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newPruneCmd(), "prune", "run", "--store", pruneStore)
+	err := run(deps, &buf, newPruneCmd(), "prune", "run", "--store", pruneStore, "--yes")
 	require.NoError(t, err)
 
 	require.Contains(t, buf.String(), validUPID)
@@ -83,7 +83,7 @@ func TestPruneRun_SurfacesAPIError(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newPruneCmd(), "prune", "run", "--store", pruneStore)
+	err := run(deps, &buf, newPruneCmd(), "prune", "run", "--store", pruneStore, "--yes")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "run prune on datastore")
 }
@@ -407,7 +407,7 @@ func TestPruneJobRun_RunsJob(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newPruneCmd(), "prune", "job", "run", pruneJobID)
+	err := run(deps, &buf, newPruneCmd(), "prune", "job", "run", pruneJobID, "--yes")
 	require.NoError(t, err)
 
 	require.Equal(t, http.MethodPost, rec.method)
@@ -423,7 +423,7 @@ func TestPruneJobRun_SurfacesAPIError(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newPruneCmd(), "prune", "job", "run", pruneJobID)
+	err := run(deps, &buf, newPruneCmd(), "prune", "job", "run", pruneJobID, "--yes")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "run prune job")
 }

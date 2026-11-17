@@ -711,9 +711,9 @@ def _defers(ctx: Ctx) -> None:
     ctx.defer("gc run", "runs garbage collection, which deletes unreferenced chunks; covered by unit tests",
               "pmx pbs gc run --store main")
     ctx.defer("prune run", "prunes snapshots by retention policy (deletes data); covered by unit tests",
-              "pmx pbs prune run ct/100 --store main --keep-last 1")
+              "pmx pbs prune run --store main --keep-last 1 --yes")
     ctx.defer("prune job run", "runs a configured prune job (deletes data); covered by unit tests",
-              "pmx pbs prune job run <id>")
+              "pmx pbs prune job run <id> --yes")
     ctx.defer("prune job add", "creates a prune job; covered by unit tests",
               "pmx pbs prune job add pmx-cli-prune --store main --keep-last 3 --schedule daily")
     ctx.defer("prune job update", "modifies a prune job; covered by unit tests",

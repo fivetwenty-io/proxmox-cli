@@ -218,7 +218,7 @@ def gc_prune_verify_lifecycle(r: Runner) -> None:
                "pbs", "prune", "job", "update", PRUNE_JOB, "--keep-last", "2",
                "--comment", "pmx-cli e2e (updated)")
         r.step("datastore", "prune job run", f"prune job run {PRUNE_JOB}",
-               "pbs", "prune", "job", "run", PRUNE_JOB)
+               "pbs", "prune", "job", "run", PRUNE_JOB, "--yes")
     finally:
         r.del_step("datastore", "prune job delete", f"prune job delete {PRUNE_JOB}",
                    "pbs", "prune", "job", "delete", PRUNE_JOB, "-y")
