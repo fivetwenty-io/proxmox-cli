@@ -1255,6 +1255,11 @@ func buildCreatePlan(
 	zoneType := labZoneType(eff.Network)
 	if zoneExists {
 		zoneType = existingZone.Type
+	} else if err := labZoneCreateIssue(eff.Name, eff.Network); err != nil {
+		// pmx is about to create this zone (the dry run builds the same
+		// plan), and PVE would only refuse it when the create step runs, after
+		// earlier steps. An existing zone is accepted as it is.
+		return nil, err
 	}
 	tagAllowed := sdnZoneAllowsVnetTag(zoneType)
 	plan.steps = append(plan.steps, createStep{

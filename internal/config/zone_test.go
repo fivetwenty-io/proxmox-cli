@@ -83,7 +83,7 @@ func TestResolveLabs_ZoneNameValid_Passes(t *testing.T) {
 
 	cfg := &config.Config{
 		Labs: map[string]*config.Lab{
-			"demo":  {Mode: "nested", Network: config.LabNetwork{ZoneName: "labvxlan", ZoneType: "vxlan", ZonePeers: "192.0.2.10"}},
+			"demo":  {Mode: "nested", Network: config.LabNetwork{ZoneName: "labvxlan", ZoneType: "vxlan"}},
 			"other": {Mode: "nested"},
 		},
 	}
@@ -116,70 +116,4 @@ func TestValidateNestedNetwork_VlanZoneNameFollowsZoneRule(t *testing.T) {
 	for _, issue := range config.ValidateNestedNetwork("demo", nn("clivlan")) {
 		assert.NotContains(t, issue, "zone_name")
 	}
-}
-
-// TestValidateNetworkZone_VxlanNeedsPeers pins the PVE 9.2 rule that a VXLAN
-// zone has exactly one of peers or fabric. The lab config has no fabric key,
-// so a vxlan zone with no zone_peers (or only blanks) is refused, naming the
-// key to set.
-func TestValidateNetworkZone_VxlanNeedsPeers(t *testing.T) {
-	for _, peers := range []string{"", "   "} {
-		issues := config.ValidateNetworkZone("demo", config.LabNetwork{ZoneType: "vxlan", ZonePeers: peers})
-		require.Len(t, issues, 1, "peers %q", peers)
-		assert.Contains(t, issues[0], `lab "demo"`)
-		assert.Contains(t, issues[0], "network.zone_peers")
-		assert.Contains(t, issues[0], "peers or fabric")
-	}
-
-	assert.Empty(t, config.ValidateNetworkZone("demo",
-		config.LabNetwork{ZoneType: "vxlan", ZonePeers: "192.0.2.10,192.0.2.11"}))
-}
-
-// TestValidateNetworkZone_SimpleNeedsNoPeers covers the default and an
-// explicit simple zone, neither of which has a peers concept.
-func TestValidateNetworkZone_SimpleNeedsNoPeers(t *testing.T) {
-	assert.Empty(t, config.ValidateNetworkZone("demo", config.LabNetwork{ZoneType: "simple"}))
-	assert.Empty(t, config.ValidateNetworkZone("demo", config.LabNetwork{ZoneType: "simple", ZonePeers: "192.0.2.10"}))
-}
-
-// TestValidateNetworkZone_UnsupportedType covers zone types PVE knows but the
-// lab config cannot describe (each needs zone fields it has no key for), and
-// a misspelling. The unsupported type is reported on its own, with no
-// misleading peers message on top.
-func TestValidateNetworkZone_UnsupportedType(t *testing.T) {
-	for _, zt := range []string{"vlan", "qinq", "evpn", "faucet", "VXLAN", "vxlna"} {
-		issues := config.ValidateNetworkZone("demo", config.LabNetwork{ZoneType: zt})
-		require.Len(t, issues, 1, "zone_type %q", zt)
-		assert.Contains(t, issues[0], "network.zone_type")
-		assert.Contains(t, issues[0], `"`+zt+`"`)
-		assert.Contains(t, issues[0], "simple, vxlan")
-	}
-}
-
-// TestValidateNetworkZone_ReportsNameAndPeersTogether covers a lab with two
-// problems at once: both are reported in one pass.
-func TestValidateNetworkZone_ReportsNameAndPeersTogether(t *testing.T) {
-	issues := config.ValidateNetworkZone("demo", config.LabNetwork{ZoneName: "labsvxlan", ZoneType: "vxlan"})
-	require.Len(t, issues, 2)
-	joined := strings.Join(issues, "\n")
-	assert.Contains(t, joined, "network.zone_name")
-	assert.Contains(t, joined, "network.zone_peers")
-}
-
-// TestResolveLabs_VxlanWithoutPeers_Errors covers the load-time wiring for
-// the peers rule, which every verb reaches through ResolveLabs.
-func TestResolveLabs_VxlanWithoutPeers_Errors(t *testing.T) {
-	dir := t.TempDir()
-	configPath := writeConfigFile(t, dir, "config.yml", 0o600)
-
-	cfg := &config.Config{
-		Labs: map[string]*config.Lab{
-			"demo": {Mode: "nested", Network: config.LabNetwork{ZoneName: "haclvx", ZoneType: "vxlan"}},
-		},
-	}
-
-	_, err := config.ResolveLabs(cfg, configPath)
-	require.Error(t, err)
-	require.ErrorContains(t, err, "demo")
-	require.ErrorContains(t, err, "network.zone_peers")
 }

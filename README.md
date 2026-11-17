@@ -1208,9 +1208,11 @@ The zone each lab's vnet lives in is part of that config, not fixed
 architecture. `network.zone_name` names the zone and defaults to `labs`;
 `network.zone_type` selects the PVE zone plugin and defaults to `simple`,
 with `vxlan` the other type the lab verbs model; `network.zone_peers` is
-the VXLAN underlay peer list, required for a `vxlan` zone (PVE 9.2 refuses
-one without peers or a fabric, and the lab config has no fabric key) and
-ignored for a `simple` one. `pmx lab create` and `pmx lab net apply` reconcile that zone
+the VXLAN underlay peer list, meaningful only for a `vxlan` zone and
+ignored for a `simple` one. It is required only when pmx will create the
+zone (PVE 9.2 refuses a VXLAN zone without peers or a fabric, and the lab
+config has no fabric key), so a lab that points at an existing zone needs
+none. A zone of any other type must already exist in PVE. `pmx lab create` and `pmx lab net apply` reconcile that zone
 idempotently: creating it when absent, otherwise updating only the fields
 that have drifted (MTU, peers on a `vxlan` zone, node membership). A
 `simple` zone has no vnet-level tag concept and PVE rejects one, so

@@ -210,7 +210,6 @@ func TestNetApply_RefusesExplicitSnatOnNonSimpleZone(t *testing.T) {
 	lab := netTestLab("wayne")
 	lab.Network.Snat = new(true)
 	lab.Network.ZoneType = "vxlan"
-	lab.Network.ZonePeers = "192.0.2.10"
 
 	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
 	cmd := buildNetCmd(t, path, f, "node1")

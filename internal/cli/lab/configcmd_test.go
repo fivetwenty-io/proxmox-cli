@@ -620,21 +620,6 @@ func TestConfigShow_ZoneNameTooLong_Refused(t *testing.T) {
 	assert.ErrorContains(t, err, "2-8 characters")
 }
 
-// TestConfigShow_VxlanZoneWithoutPeers_Refused covers `config show` against a
-// vxlan zone with no zone_peers: refused with the key to set, not printed as
-// if PVE would accept it.
-func TestConfigShow_VxlanZoneWithoutPeers_Refused(t *testing.T) {
-	lab := cleanLab("alpha")
-	lab.Network.ZoneName = "haclvx"
-	lab.Network.ZoneType = "vxlan"
-	cfgPath := writeConfigCmdYAML(t, &config.Config{Labs: map[string]*config.Lab{"alpha": lab}})
-
-	_, err := runConfigCmd(t, cfgPath, "show", "alpha")
-	require.Error(t, err)
-	assert.ErrorContains(t, err, "network.zone_peers")
-	assert.ErrorContains(t, err, "peers or fabric")
-}
-
 func TestConfigShow_FileLab_ProvenanceNamesFile(t *testing.T) {
 	cfgPath := writeConfigCmdYAML(t, &config.Config{LabsDir: "labs.d"})
 

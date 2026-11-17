@@ -620,17 +620,20 @@ those are documented on **pmx-lab-config-add(1)**, not repeated here.
 
 **network.zone_type**
 : PVE SDN zone plugin used when this lab's zone is created. Defaults to
-  **simple**; **vxlan** is the other type the lab verbs model, and any
-  other value is refused when the lab loads. Only consulted when the zone
-  does not yet exist; an existing zone keeps its live type.
+  **simple**; **vxlan** is the other type the lab verbs model. Only
+  consulted when the zone does not yet exist; an existing zone keeps its
+  live type. When the zone is absent, **pmx lab create** (and its
+  **--dry-run**) and **pmx lab net apply** refuse any other type and ask
+  for that zone to be created in PVE first.
 
 **network.zone_peers**
 : Underlay peer list for a **vxlan** zone, as comma-separated node IPs.
-  Required when the effective **network.zone_type** is **vxlan**, because
-  PVE 9.2 refuses a VXLAN zone unless it has exactly one of peers or
-  fabric and the lab config has no fabric key; a lab without it is refused
-  when it loads. Ignored when the effective **network.zone_type** is
-  **simple**, whose plugin has no peers field.
+  Required only when pmx will create the zone, because PVE 9.2 refuses a
+  VXLAN zone unless it has exactly one of peers or fabric and the lab
+  config has no fabric key. A lab that points at an existing zone needs
+  no peers, and an unset value never changes an existing zone's peers.
+  Ignored when the effective **network.zone_type** is **simple**, whose
+  plugin has no peers field.
 
 **network.vxlan_tag**
 : VXLAN tag assigned to the vnet. Must be unique across every lab on a

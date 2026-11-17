@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net"
 	"regexp"
-	"slices"
 	"sort"
 	"strings"
 )
@@ -130,14 +129,12 @@ type LabNetwork struct {
 	ZoneName string `yaml:"zone_name,omitempty" json:"zone_name,omitempty"`
 
 	// ZoneType is the SDN zone plugin type for ZoneName ("simple" or
-	// "vxlan"; ValidateNetworkZone refuses any other value). Empty defaults
-	// to "simple" (EffectiveZoneType), matching ZoneName's "labs" default.
+	// "vxlan"). Empty defaults to "simple" (EffectiveZoneType), matching
+	// ZoneName's "labs" default.
 	ZoneType string `yaml:"zone_type,omitempty" json:"zone_type,omitempty"`
 
-	// ZonePeers is the VXLAN zone's underlay peer list. Required when
-	// ZoneType (effective) is "vxlan", because PVE 9.2 refuses a VXLAN zone
-	// without exactly one of peers or fabric and the lab config has no
-	// fabric key (ValidateNetworkZone); ignored for "simple", which has no
+	// ZonePeers is the VXLAN zone's underlay peer list. Only meaningful when
+	// ZoneType (effective) is "vxlan"; ignored for "simple", which has no
 	// peers concept.
 	ZonePeers string `yaml:"zone_peers,omitempty" json:"zone_peers,omitempty"`
 
@@ -439,54 +436,18 @@ func ZoneIDIssue(field, id string) string {
 	}
 }
 
-// labZoneTypes are the SDN zone plugin types the lab config can provision.
-// PVE knows more (vlan, qinq, evpn, faucet), but each of those requires zone
-// fields the lab config has no key for (bridge for vlan and qinq, tag for
-// qinq, controller and vrf-vxlan for evpn, dp-id for faucet), so PVE would
-// refuse the zone when `pmx lab create` got to it.
-var labZoneTypes = []string{DefaultZoneType, "vxlan"}
-
-// ValidateNetworkZone checks the lab's SDN zone settings against what PVE
-// enforces when it creates the zone, so `config show`, the dry run, and
-// create refuse a lab PVE would reject partway through:
-//
-//   - network.zone_name must be a valid PVE zone ID (see ZoneIDIssue). An
-//     empty zone_name resolves to DefaultZoneName, which satisfies the rule.
-//   - network.zone_type must be a type the lab config can fully describe
-//     (labZoneTypes).
-//   - A "vxlan" zone needs exactly one of peers or fabric: PVE 9.2 refuses
-//     the zone with "peers: must have exactly one of peers / fabric defined"
-//     otherwise. The lab config has no fabric key, so network.zone_peers is
-//     the only way to satisfy the rule and must be set.
-//
-// Returns one message per problem, each prefixed with the lab name, like
-// ValidateTopology.
+// ValidateNetworkZone checks the lab's network.zone_name against the PVE SDN
+// zone ID rule (see ZoneIDIssue). An empty zone_name is valid: it resolves to
+// DefaultZoneName, which satisfies the rule. Returns one message per problem,
+// each prefixed with the lab name, like ValidateTopology.
 func ValidateNetworkZone(name string, n LabNetwork) []string {
-	var issues []string
-
-	if n.ZoneName != "" {
-		if issue := ZoneIDIssue("network.zone_name", n.ZoneName); issue != "" {
-			issues = append(issues, fmt.Sprintf("lab %q: %s", name, issue))
-		}
+	if n.ZoneName == "" {
+		return nil
 	}
-
-	zoneType := n.EffectiveZoneType()
-	if !slices.Contains(labZoneTypes, zoneType) {
-		return append(issues, fmt.Sprintf(
-			"lab %q: network.zone_type %q is not supported: set it to one of %s (other PVE zone types need "+
-				"zone fields the lab config cannot express)",
-			name, n.ZoneType, strings.Join(labZoneTypes, ", ")))
+	if issue := ZoneIDIssue("network.zone_name", n.ZoneName); issue != "" {
+		return []string{fmt.Sprintf("lab %q: %s", name, issue)}
 	}
-
-	if zoneType == "vxlan" && strings.TrimSpace(n.ZonePeers) == "" {
-		issues = append(issues, fmt.Sprintf(
-			"lab %q: network.zone_peers is required when network.zone_type is \"vxlan\": PVE 9.2 refuses a "+
-				"VXLAN zone unless it has exactly one of peers or fabric, and the lab config has no fabric key; "+
-				"set network.zone_peers to the comma-separated underlay IPs of the nodes in the zone, "+
-				"for example the outer host's address", name))
-	}
-
-	return issues
+	return nil
 }
 
 // ifaceNameRE is the charset a Linux interface (bridge) name must match:

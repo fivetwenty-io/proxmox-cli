@@ -199,7 +199,7 @@ func appendLabZoneBlock(b *strings.Builder, net LabNetwork) {
 	fmt.Fprint(b, "  # the shared outer zone; labs may sit in different zones.\n")
 	fmt.Fprint(b, "  # zone_type: PVE zone plugin used when that zone is created (only\n")
 	fmt.Fprintf(b, "  # consulted when it does not exist yet). Omitted means %q;\n", DefaultZoneType)
-	fmt.Fprint(b, "  # \"vxlan\" is the other type the lab verbs model, and it requires\n")
+	fmt.Fprint(b, "  # \"vxlan\" is the other type the lab verbs model, and it takes\n")
 	fmt.Fprint(b, "  # zone_peers, the underlay peer list (ignored for a simple zone,\n")
 	fmt.Fprint(b, "  # which also has no vnet tag: vxlan_tag below is skipped there).\n")
 	if net.ZoneName != "" {

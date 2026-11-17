@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -38,6 +39,46 @@ func labZoneType(net config.LabNetwork) string {
 // concept) and net.ZonePeers verbatim for a "vxlan"-type zone.
 func labZonePeers(net config.LabNetwork) string {
 	return net.EffectiveZonePeers()
+}
+
+// labZoneBuildableTypes are the zone plugin types pmx can create from the lab
+// config. PVE knows more (vlan, qinq, evpn, faucet), but each needs zone
+// fields the lab config has no key for, so those zones must already exist.
+var labZoneBuildableTypes = []string{config.DefaultZoneType, "vxlan"}
+
+// labZoneCreateIssue checks that pmx can build the lab's zone, and is called
+// only at the point a verb has found the zone ABSENT and is about to create
+// it (the create plan, whose dry run shares that code, and `net apply`). A
+// zone that already exists is accepted whatever its type and peers, so a lab
+// pointed at an existing zone keeps working with no zone_type or zone_peers.
+//
+// Two things make PVE refuse a zone only when it is created, after earlier
+// plan steps may have run: a type the lab config cannot fully describe, and a
+// vxlan zone without exactly one of peers or fabric ("peers: must have
+// exactly one of peers / fabric defined" on PVE 9.2). The lab config has no
+// fabric key, so network.zone_peers is the only way to satisfy the second.
+// It returns nil when the zone can be created.
+func labZoneCreateIssue(labName string, net config.LabNetwork) error {
+	zoneName, zoneType := labZoneName(net), labZoneType(net)
+
+	if !slices.Contains(labZoneBuildableTypes, zoneType) {
+		return fmt.Errorf(
+			"lab %q: zone %q does not exist and pmx cannot create a %q zone (it builds only %s zones, "+
+				"because other types need zone fields the lab config cannot express); "+
+				"create that zone in PVE first, then rerun",
+			labName, zoneName, zoneType, strings.Join(labZoneBuildableTypes, " and "))
+	}
+
+	if zoneType == "vxlan" && strings.TrimSpace(net.ZonePeers) == "" {
+		return fmt.Errorf(
+			"lab %q: zone %q does not exist and pmx would create it as a vxlan zone, but network.zone_peers is "+
+				"not set; PVE 9.2 refuses a VXLAN zone unless it has exactly one of peers or fabric, and the lab "+
+				"config has no fabric key, so set network.zone_peers to the comma-separated underlay IPs of the "+
+				"nodes in the zone (for a single outer host, that host's address)",
+			labName, zoneName)
+	}
+
+	return nil
 }
 
 // newNetCmd builds `pmx lab net` and its subcommands.
@@ -128,7 +169,7 @@ func newNetApplyCmd() *cobra.Command {
 			ctx := cmd.Context()
 
 			if !dryRun {
-				zoneType, err := ensureLabSdnZone(ctx, deps.API, lab.Network, deps.Node, int64(lab.Network.MTU))
+				zoneType, err := ensureLabSdnZone(ctx, deps.API, lab.Name, lab.Network, deps.Node, int64(lab.Network.MTU))
 				if err != nil {
 					return err
 				}
@@ -352,7 +393,15 @@ func labZoneCreateParams(net config.LabNetwork, node string, mtu int64) *cluster
 // type it was just created as) — so a caller (ensureLabSdnVnets) can decide
 // per-zone vnet-create behavior (e.g. omitting the tag param a "simple" zone
 // rejects) without a second ListSdnZones round trip.
-func ensureLabSdnZone(ctx context.Context, api *apiclient.APIClient, net config.LabNetwork, node string, mtu int64) (string, error) {
+//
+// The zone is built only when labZoneCreateIssue allows it (a type pmx can
+// create, and zone_peers set for a vxlan zone); an existing zone is accepted
+// whatever its type and peers. Its peers are rewritten only when
+// network.zone_peers is set, differs from the live value, and the live zone
+// is a vxlan zone; an unset zone_peers never touches them.
+func ensureLabSdnZone(
+	ctx context.Context, api *apiclient.APIClient, labName string, net config.LabNetwork, node string, mtu int64,
+) (string, error) {
 	zoneName := labZoneName(net)
 
 	list, err := api.Cluster.ListSdnZones(ctx, nil)
@@ -366,6 +415,9 @@ func ensureLabSdnZone(ctx context.Context, api *apiclient.APIClient, net config.
 	}
 
 	if !found {
+		if err := labZoneCreateIssue(labName, net); err != nil {
+			return "", err
+		}
 		if err := api.Cluster.CreateSdnZones(ctx, labZoneCreateParams(net, node, mtu)); err != nil {
 			return "", fmt.Errorf("create SDN zone %q: %w", zoneName, err)
 		}
@@ -379,7 +431,7 @@ func ensureLabSdnZone(ctx context.Context, api *apiclient.APIClient, net config.
 		params.Mtu = new(mtu)
 		changed = true
 	}
-	if peers := labZonePeers(net); peers != "" && existing.Peers != peers {
+	if peers := labZonePeers(net); peers != "" && existing.Type == "vxlan" && existing.Peers != peers {
 		params.Peers = new(peers)
 		changed = true
 	}

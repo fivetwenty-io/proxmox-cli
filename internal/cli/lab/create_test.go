@@ -1169,35 +1169,6 @@ func TestCreate_ZoneNameTooLong_RefusedBeforeAnyCall(t *testing.T) {
 	}
 }
 
-// TestCreate_VxlanZoneWithoutPeers_RefusedBeforeAnyCall covers a vxlan zone
-// with no zone_peers, which PVE 9.2 only rejects when the zone is created
-// ("peers: must have exactly one of peers / fabric defined"). Both the dry
-// run and the real create must refuse it at config load, naming the key to
-// set, before a single PVE request is made.
-func TestCreate_VxlanZoneWithoutPeers_RefusedBeforeAnyCall(t *testing.T) {
-	for _, args := range [][]string{
-		{"wayne", "--node", "node1", "--dry-run"},
-		{"wayne", "--node", "node1"},
-	} {
-		t.Run(strings.Join(args, " "), func(t *testing.T) {
-			f := testhelper.NewFakePVE(t)
-			createForbid(f, t, "GET /api2/json")
-			createForbid(f, t, "POST /api2/json")
-
-			lab := createTestLab("wayne")
-			lab.Network.ZoneName = "haclvx"
-			lab.Network.ZoneType = "vxlan"
-			path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
-			cmd := buildCreateCmd(t, path, f, "node1")
-
-			_, err := runCreateCmd(t, cmd, args...)
-			require.Error(t, err)
-			assert.ErrorContains(t, err, "network.zone_peers")
-			assert.ErrorContains(t, err, "peers or fabric")
-		})
-	}
-}
-
 // TestCreateDryRun_AbsentVnetIsNeverListedForSubnets pins the bug the fixture
 // above hid. Line for line, TestCreateDryRun_NoMutationsShowsPlaceholderVMID
 // answers a subnet listing for a vnet that does not exist with an empty 200,
