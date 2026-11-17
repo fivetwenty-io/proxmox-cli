@@ -277,6 +277,59 @@ func guestNotYetReachable(err error) bool {
 	return guestCommandTransportFailed(err) || exec.ExitCodeOf(err) == sshTransportExitCode
 }
 
+// sshAuthFailure is a failure ssh will repeat on every attempt, so a wait must
+// stop at once instead of retrying it until its deadline.
+type sshAuthFailure int
+
+const (
+	// sshNoAuthFailure means the stderr holds no such failure.
+	sshNoAuthFailure sshAuthFailure = iota
+
+	// sshDeniedKey means the guest refused the key or password.
+	sshDeniedKey
+
+	// sshChangedHostKey means ssh refused the guest's host key, which is what
+	// re-creating a lab on the same IPs causes.
+	sshChangedHostKey
+)
+
+// sshAuthFailureIn reports which retry-proof ssh failure, if any, the ssh
+// client printed on stderr. It reads only the client's own diagnostics (see
+// sshClientLine), so a remote command's text never counts.
+func sshAuthFailureIn(stderr string) sshAuthFailure {
+	found := sshNoAuthFailure
+	for line := range strings.SplitSeq(stderr, "\n") {
+		line = strings.ToLower(strings.TrimSpace(line))
+		switch {
+		case strings.HasPrefix(line, "host key verification failed"):
+			return sshChangedHostKey
+		case sshClientLine(line) && (strings.Contains(line, "permission denied") ||
+			strings.Contains(line, "too many authentication failures")):
+			found = sshDeniedKey
+		}
+	}
+	return found
+}
+
+// guestAuthHint turns a retry-proof ssh failure against host into the advice
+// that clears it, or "" when there is none to give. A changed host key is
+// ordinary after a lab is re-created on the same addresses, and the fix is to
+// drop the stale known_hosts entry.
+func guestAuthHint(kind sshAuthFailure, host string) string {
+	switch kind {
+	case sshChangedHostKey:
+		return fmt.Sprintf(
+			"the guest's host key differs from the one in known_hosts, which is usual after a lab is "+
+				"re-created on the same addresses; run `ssh-keygen -R %s` and retry", host)
+	case sshDeniedKey:
+		return fmt.Sprintf(
+			"%s refused the ssh key; check that ssh.identity or your ssh agent holds the key the lab "+
+				"was provisioned with", host)
+	default:
+		return ""
+	}
+}
+
 // guestCommandTransportFailed reports whether err represents a failure to
 // even reach the remote host/command (a non-*exec.ExitError, e.g. ssh itself
 // could not be found, or the process could not be started) as opposed to the

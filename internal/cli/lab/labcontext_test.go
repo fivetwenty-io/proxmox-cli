@@ -667,6 +667,66 @@ func TestLabWaitForSSH_RemoteFailureEndsTheWait(t *testing.T) {
 	require.Len(t, fake.Calls, 1, "a real remote failure must not be retried")
 }
 
+// TestLabWaitForSSH_AuthFailuresAreTerminal verifies a failure that no wait can
+// clear, a refused key or a changed host key, ends the wait at the first probe
+// as an infrastructure error, instead of retrying it until the deadline. The
+// host key case also tells the operator how to clear the stale entry.
+func TestLabWaitForSSH_AuthFailuresAreTerminal(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		stderr string
+		want   []string
+	}{
+		{
+			"publickey denied",
+			"root@10.10.1.10: Permission denied (publickey).",
+			[]string{"refused the ssh key", "ssh.identity"},
+		},
+		{
+			"password prompts exhausted",
+			"Permission denied, please try again.\nroot@10.10.1.10: Permission denied (publickey,password).",
+			[]string{"refused the ssh key"},
+		},
+		{
+			"too many authentication failures",
+			"Received disconnect from 10.10.1.10 port 22:2: Too many authentication failures\n" +
+				"Disconnected from 10.10.1.10 port 22\n" +
+				"root@10.10.1.10: Permission denied (publickey).",
+			[]string{"refused the ssh key"},
+		},
+		{
+			"host key changed",
+			"@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n" +
+				"@    WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!     @\n" +
+				"Host key verification failed.",
+			[]string{"`ssh-keygen -R 10.10.1.10`", "known_hosts"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fake := exec.Fake(
+				exec.FakeResponse{ExitCode: 255, Stderr: tc.stderr},
+				sshConnectFailure, sshConnectFailure,
+			)
+
+			err := labWaitForSSH(context.Background(), waitDepsWithFake(fake), "10.10.1.10")
+			require.Error(t, err)
+			for _, want := range tc.want {
+				assert.ErrorContains(t, err, want)
+			}
+			assert.Len(t, fake.Calls, 1, "a failure that repeats on every attempt is not retried")
+			_, isConnect := errors.AsType[*guestConnectError](err)
+			assert.True(t, isConnect,
+				"the failure stays an ssh connection failure, which create --start maps to an infrastructure exit")
+		})
+	}
+
+	t.Run("a remote command saying permission denied is not an auth failure", func(t *testing.T) {
+		fake := exec.Fake(exec.FakeResponse{ExitCode: 1, Stderr: "hostname: Permission denied"})
+		require.NoError(t, labWaitForSSH(context.Background(), waitDepsWithFake(fake), "10.10.1.10"))
+		assert.Len(t, fake.Calls, 1)
+	})
+}
+
 // TestLabWaitForSSH_TimesOutAsInfra verifies a node that never answers ends
 // the wait at the bound with an error that maps to exitcode.Infra, and that
 // the bound is the operator's --wait-timeout rather than a fixed constant.

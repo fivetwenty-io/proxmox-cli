@@ -232,9 +232,14 @@ func labFetchHostname(deps *cli.Deps, ip string) (string, error) {
 // with exitcode.Infra.
 func labWaitForSSH(ctx context.Context, deps *cli.Deps, ip string) error {
 	err := labWaitUntil(ctx, labBootWaitBound(deps), func() (bool, error) {
-		_, perr := runGuestSSH(deps, ip, "hostname")
+		res, perr := runGuestSSH(deps, ip, "hostname")
 		if !guestNotYetReachable(perr) {
 			return true, nil
+		}
+		// A refused key or a changed host key fails the same way on every
+		// attempt, so waiting longer cannot help: stop and say how to fix it.
+		if kind := sshAuthFailureIn(res.Stderr); kind != sshNoAuthFailure {
+			return true, fmt.Errorf("%s: %w", guestAuthHint(kind, ip), perr)
 		}
 		return false, perr
 	})
