@@ -136,6 +136,56 @@ func labEnsureACL(deps *cli.Deps, ip string) error {
 	return nil
 }
 
+// labDryRunLiteralSecret stands in for a literal secret in a dry run on a
+// platform with no keychain. The real secret does not exist yet, so the
+// simulated config write uses a marker that is never saved.
+const labDryRunLiteralSecret = "(secret stored literally in the config file)"
+
+// labReadUserAndACL reports, with read-only `pveum ... list` calls, whether the
+// node already has the pmx@pve user and its Administrator ACL on /. A dry-run
+// sync uses it in place of labEnsureUser and labEnsureACL, which create them.
+// A failed read is an error: the preview would otherwise claim something it
+// never checked.
+func labReadUserAndACL(deps *cli.Deps, ip string) (userExists, aclExists bool, err error) {
+	res, err := runGuestSSH(deps, ip, "pveum user list --output-format json")
+	if err != nil {
+		return false, false, fmt.Errorf("read users on %s: %w", ip, err)
+	}
+	var users []struct {
+		UserID string `json:"userid"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(res.Stdout)), &users); err != nil {
+		return false, false, fmt.Errorf("parse user list from %s: %w", ip, err)
+	}
+	for _, u := range users {
+		if u.UserID == labCtxUser {
+			userExists = true
+			break
+		}
+	}
+
+	res, err = runGuestSSH(deps, ip, "pveum acl list --output-format json")
+	if err != nil {
+		return false, false, fmt.Errorf("read ACLs on %s: %w", ip, err)
+	}
+	var acls []struct {
+		Path   string `json:"path"`
+		Type   string `json:"type"`
+		UGID   string `json:"ugid"`
+		RoleID string `json:"roleid"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(res.Stdout)), &acls); err != nil {
+		return false, false, fmt.Errorf("parse ACL list from %s: %w", ip, err)
+	}
+	for _, a := range acls {
+		if a.Path == "/" && a.Type == "user" && a.UGID == labCtxUser && a.RoleID == "Administrator" {
+			aclExists = true
+			break
+		}
+	}
+	return userExists, aclExists, nil
+}
+
 // labMintToken rotates the pmx@pve!pmx token: it removes any existing token
 // (ignoring not-found) then creates a fresh one with --privsep 0 and returns
 // the one-time secret parsed from the JSON output. Rotation is the only way
@@ -274,15 +324,45 @@ func labWaitForSSH(ctx context.Context, deps *cli.Deps, ip string) error {
 // labSyncOptions tunes syncLabContext. WaitSSH bounds-waits for the node's
 // sshd (used right after `create --start`, when the VM has only just booted);
 // context sync leaves it false and fails fast if the node is unreachable.
+//
+// DryRun makes syncLabContext read and decide exactly as a real run does, but
+// never mutate: it runs only read-only commands on the node, creates and
+// rotates nothing, stores no secret, and leaves the config as it found it. The
+// result then carries a Plan instead of a completed outcome.
 type labSyncOptions struct {
 	WaitSSH bool
+	DryRun  bool
 }
 
-// labSyncResult reports what a sync did, for row/message rendering.
+// labSyncResult reports what a sync did, for row/message rendering. A dry run
+// sets Plan and leaves Rotated false, since nothing was rotated.
 type labSyncResult struct {
 	ContextName string
 	Rotated     bool
 	Changed     []string
+	Plan        *labSyncPlan
+}
+
+// labSyncPlan is what a dry-run sync found it would do.
+type labSyncPlan struct {
+	// UserExists and ACLExists report what the node already has.
+	UserExists, ACLExists bool
+	// ContextExists reports whether lab-<name> is already in the config.
+	ContextExists bool
+	// Reuse is true when the stored secret would be kept, in which case
+	// ReusedRef is the reference the context keeps.
+	Reuse     bool
+	ReusedRef string
+	// StoreService and StoreAccount name the keychain item a rotation would
+	// write, and StoreLiteral reports that this platform has no keychain, so
+	// the secret would go into the config file instead.
+	StoreService, StoreAccount string
+	StoreLiteral               bool
+	// Dropped names the item the context would stop referencing, when that
+	// item is a lab-owned one nothing else in the config references.
+	Dropped *labSecretMove
+	// Changed lists the context fields the config write would change.
+	Changed []string
 }
 
 // labProbeContextVersion connects to the named context's API with its
@@ -392,25 +472,48 @@ func labSecretStoreTarget(deps *cli.Deps, ctxName, name string) (service, accoun
 // another config may still use the legacy item, and only that config can tell.
 // The note goes to stderr and is advisory only.
 func warnUnreferencedLabSecret(cmd *cobra.Command, deps *cli.Deps, ctxName, name, previousRef, newRef string) {
-	if previousRef == "" || previousRef == newRef {
-		return
-	}
-	newService, newAccount, isKeychain := config.ParseKeychainRef(newRef)
-	if !isKeychain {
-		return
-	}
-	service, account, owned := labOwnedSecretRef(previousRef, name)
-	if !owned || (service == newService && account == newAccount) {
-		return
-	}
-	if labKeychainItemReferencedBy(deps.Cfg, "", service, account) != "" {
+	move, ok := labSecretMovedAway(deps.Cfg, name, previousRef, newRef)
+	if !ok {
 		return
 	}
 	_, _ = fmt.Fprintf(cmd.ErrOrStderr(),
 		"NOTE: context %q now uses keychain item %s/%s. The previous item %s/%s is no longer referenced "+
 			"by this config and was left in place, since a same-named lab in another config may use it. "+
 			"If nothing uses it, remove it with: %s\n",
-		ctxName, newService, newAccount, service, account, labKeychainDeleteCommand(service, account))
+		ctxName, move.newService, move.newAccount, move.service, move.account,
+		labKeychainDeleteCommand(move.service, move.account))
+}
+
+// labSecretMove describes a context moving off one lab-owned keychain item and
+// onto another.
+type labSecretMove struct {
+	// service and account name the item the context stopped referencing.
+	service, account string
+	// newService and newAccount name the item it references now.
+	newService, newAccount string
+}
+
+// labSecretMovedAway reports whether a context for the lab named name that
+// referenced previousRef and now references newRef has moved off a lab-owned
+// keychain item that no context in cfg references any more. cfg must already
+// hold the context's new reference. The NOTE a real sync prints and the
+// dry-run plan both use it, so the preview names exactly what the run will say.
+func labSecretMovedAway(cfg *config.Config, name, previousRef, newRef string) (labSecretMove, bool) {
+	if previousRef == "" || previousRef == newRef {
+		return labSecretMove{}, false
+	}
+	newService, newAccount, isKeychain := config.ParseKeychainRef(newRef)
+	if !isKeychain {
+		return labSecretMove{}, false
+	}
+	service, account, owned := labOwnedSecretRef(previousRef, name)
+	if !owned || (service == newService && account == newAccount) {
+		return labSecretMove{}, false
+	}
+	if labKeychainItemReferencedBy(cfg, "", service, account) != "" {
+		return labSecretMove{}, false
+	}
+	return labSecretMove{service: service, account: account, newService: newService, newAccount: newAccount}, true
 }
 
 // snapshotLabContext records the in-memory state of the context named name in
@@ -485,11 +588,20 @@ func syncLabContext(cmd *cobra.Command, deps *cli.Deps, lab *config.Lab, opts la
 		}
 	}
 
-	if err := labEnsureUser(deps, node0IP); err != nil {
-		return res, err
-	}
-	if err := labEnsureACL(deps, node0IP); err != nil {
-		return res, err
+	var plan *labSyncPlan
+	if opts.DryRun {
+		plan = &labSyncPlan{}
+		res.Plan = plan
+		if plan.UserExists, plan.ACLExists, err = labReadUserAndACL(deps, node0IP); err != nil {
+			return res, err
+		}
+	} else {
+		if err := labEnsureUser(deps, node0IP); err != nil {
+			return res, err
+		}
+		if err := labEnsureACL(deps, node0IP); err != nil {
+			return res, err
+		}
 	}
 
 	// Reuse a still-valid stored secret rather than rotating (a re-run must
@@ -525,6 +637,9 @@ func syncLabContext(cmd *cobra.Command, deps *cli.Deps, lab *config.Lab, opts la
 	// again (see failBeforeSave).
 	storedService, storedAccount := "", ""
 	if existing, ok := deps.Cfg.Contexts[res.ContextName]; ok && existing != nil {
+		if plan != nil {
+			plan.ContextExists = true
+		}
 		previousRef = existing.Auth.Secret
 		if existing.Auth.Secret != "" && existing.Auth.Username == labCtxUser &&
 			existing.Auth.TokenID == labCtxTokenName {
@@ -544,23 +659,36 @@ func syncLabContext(cmd *cobra.Command, deps *cli.Deps, lab *config.Lab, opts la
 			return res, err
 		}
 
-		secret, err := labMintToken(deps, node0IP)
-		if err != nil {
-			return res, err
-		}
-		// Rotated is set before the store: the token on the node has already
-		// been replaced, so every failure from here on is a post-rotation
-		// failure whether or not the new secret was persisted.
-		res.Rotated = true
+		if opts.DryRun {
+			// Report the item a rotation would write and stop short of the
+			// mint, which destroys the previous token, and of the store.
+			plan.StoreService, plan.StoreAccount = service, account
+			plan.StoreLiteral = !labKeychainSupported()
+			secretRef = config.KeychainRef(service, account)
+			if plan.StoreLiteral {
+				secretRef = labDryRunLiteralSecret
+			}
+		} else {
+			secret, err := labMintToken(deps, node0IP)
+			if err != nil {
+				return res, err
+			}
+			// Rotated is set before the store: the token on the node has already
+			// been replaced, so every failure from here on is a post-rotation
+			// failure whether or not the new secret was persisted.
+			res.Rotated = true
 
-		ref, err := labStoreSecretFn(cmd, deps, service, account, secret)
-		if err != nil {
-			return res, afterRotation(res.Rotated, err)
+			ref, err := labStoreSecretFn(cmd, deps, service, account, secret)
+			if err != nil {
+				return res, afterRotation(res.Rotated, err)
+			}
+			secretRef = ref
+			if s, a, ok := config.ParseKeychainRef(ref); ok && s == service && a == account {
+				storedService, storedAccount = service, account
+			}
 		}
-		secretRef = ref
-		if s, a, ok := config.ParseKeychainRef(ref); ok && s == service && a == account {
-			storedService, storedAccount = service, account
-		}
+	} else if plan != nil {
+		plan.Reuse, plan.ReusedRef = true, secretRef
 	}
 
 	// Until the config is saved, a failure must leave both the in-memory
@@ -595,6 +723,25 @@ func syncLabContext(cmd *cobra.Command, deps *cli.Deps, lab *config.Lab, opts la
 		DefaultNode: hostname,
 		MgmtSubnet:  lab.Network.Mgmt.Subnet,
 	}
+	if opts.DryRun {
+		// Run the real upsert against the in-memory config so the preview
+		// reports the same field changes and the same validation failures a real
+		// run would, then put the context back. Nothing is saved.
+		changed, uerr := config.UpsertLabContext(deps.Cfg, res.ContextName, in)
+		if uerr == nil {
+			plan.Changed = changed
+			if move, moved := labSecretMovedAway(deps.Cfg, lab.Name, previousRef, secretRef); moved {
+				plan.Dropped = &move
+			}
+		}
+		restoreContext()
+		if uerr != nil {
+			return res, uerr
+		}
+		res.Changed = plan.Changed
+		return res, nil
+	}
+
 	changed, err := config.UpsertLabContext(deps.Cfg, res.ContextName, in)
 	if err != nil {
 		return failBeforeSave(err)
@@ -651,7 +798,9 @@ func newContextCmd() *cobra.Command {
 // cleaning up a context orphaned by removing its lab definition. Reversible
 // while the lab's node 0 is running: `context sync` re-registers.
 func newContextRmCmd() *cobra.Command {
-	return &cobra.Command{
+	var dryRun bool
+
+	cmd := &cobra.Command{
 		Use:     "rm <name>",
 		Aliases: []string{"remove", "delete"},
 		Short:   "Remove a lab's pmx context and the keychain secret it references",
@@ -670,9 +819,13 @@ func newContextRmCmd() *cobra.Command {
 			"be defined, so it cleans up a context left orphaned by removing its lab. If " +
 			"`lab-<name>` is the active context, it is unset.\n\n" +
 			"Re-register at any time with `pmx lab context sync <name>`, while the lab's node " +
-			"0 is running.",
-		Example: `  pmx lab context rm demo`,
-		Args:    cobra.ExactArgs(1),
+			"0 is running.\n\n" +
+			"With --dry-run the command reports whether it would remove the context and " +
+			"whether it would delete or keep the keychain secret, and why, using the same " +
+			"plan as the real run. It changes nothing.",
+		Example: `  pmx lab context rm demo
+  pmx lab context rm demo --dry-run`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -684,6 +837,11 @@ func newContextRmCmd() *cobra.Command {
 				return err
 			}
 
+			if dryRun {
+				msg := "[dry-run] " + planLabContextCleanup(deps, name).describe(true)
+				return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: msg}, deps.Format)
+			}
+
 			plan, err := cleanupLabContext(deps, name)
 			if err != nil {
 				return fmt.Errorf("remove context for lab %q: %w", name, err)
@@ -692,11 +850,69 @@ func newContextRmCmd() *cobra.Command {
 			return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: msg}, deps.Format)
 		},
 	}
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false,
+		"preview the context and keychain cleanup without changing anything")
+	return cmd
+}
+
+// labSyncPlanResult renders a dry-run sync's plan as STEP/STATUS rows, the
+// shape `lab access grant --dry-run` uses, so -o json and -o yaml carry the
+// same structured data as the table.
+func labSyncPlanResult(ctxName string, plan *labSyncPlan) output.Result {
+	existsOrCreate := func(exists bool) string {
+		if exists {
+			return "already exists (skip)"
+		}
+		return "would be created"
+	}
+
+	rows := [][]string{
+		{fmt.Sprintf("user %q", labCtxUser), existsOrCreate(plan.UserExists)},
+		{fmt.Sprintf("ACL Administrator on / for %q", labCtxUser), existsOrCreate(plan.ACLExists)},
+	}
+
+	tokenID := labCtxAccount()
+	if plan.Reuse {
+		rows = append(rows,
+			[]string{fmt.Sprintf("token %q", tokenID), "would be reused, since the stored secret still authenticates"},
+			[]string{"keychain", fmt.Sprintf("no write, the context keeps %s", plan.ReusedRef)},
+		)
+	} else {
+		rows = append(rows, []string{fmt.Sprintf("token %q", tokenID),
+			"would be rotated: the existing token is removed and a new one minted"})
+		if plan.StoreLiteral {
+			rows = append(rows, []string{"keychain",
+				"no keychain on this platform, so the new secret would be stored literally in the config file"})
+		} else {
+			rows = append(rows, []string{"keychain", fmt.Sprintf("would store the new secret in item %s/%s",
+				plan.StoreService, plan.StoreAccount)})
+		}
+	}
+	if plan.Dropped != nil {
+		rows = append(rows, []string{"previous keychain item", fmt.Sprintf(
+			"would stop being referenced by %q and would be left in place: %s/%s",
+			ctxName, plan.Dropped.service, plan.Dropped.account)})
+	}
+
+	switch {
+	case !plan.ContextExists:
+		rows = append(rows, []string{fmt.Sprintf("context %q", ctxName), "would be created in the config file"})
+	case len(plan.Changed) == 0:
+		rows = append(rows, []string{fmt.Sprintf("context %q", ctxName), "would be left unchanged"})
+	default:
+		rows = append(rows, []string{fmt.Sprintf("context %q", ctxName),
+			fmt.Sprintf("would be updated in the config file (%s)", strings.Join(plan.Changed, ", "))})
+	}
+	rows = append(rows, []string{"summary", "[dry-run] nothing was created, rotated, stored, or written"})
+
+	return output.Result{Headers: []string{"STEP", "STATUS"}, Rows: rows}
 }
 
 // newContextSyncCmd builds `pmx lab context sync <name>`.
 func newContextSyncCmd() *cobra.Command {
-	return &cobra.Command{
+	var dryRun bool
+
+	cmd := &cobra.Command{
 		Use:   "sync <name>",
 		Short: "Register or refresh a lab's pmx context",
 		Long: "Ensure the `lab-<name>` pmx context exists and works:\n\n" +
@@ -719,9 +935,15 @@ func newContextSyncCmd() *cobra.Command {
 			"An existing `lab-<name>` context that does not look lab-derived is refused before " +
 			"anything runs on the node, so no token is minted and nothing is stored. When a step " +
 			"after the keychain store fails before the config is saved, sync removes the item it " +
-			"just wrote unless a context still references it.",
-		Example: `  pmx -c fleet lab context sync demo`,
-		Args:    cobra.ExactArgs(1),
+			"just wrote unless a context still references it.\n\n" +
+			"With --dry-run the command makes the same checks and decisions, reading the " +
+			"node's users, ACLs, certificate, and hostname over ssh and probing the stored " +
+			"secret against the API, and prints what it would create or reuse and what it " +
+			"would write to the config and the keychain. It creates and rotates nothing on " +
+			"the node, stores no secret, and writes no config.",
+		Example: `  pmx -c fleet lab context sync demo
+  pmx -c fleet lab context sync demo --dry-run`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -731,9 +953,13 @@ func newContextSyncCmd() *cobra.Command {
 				return err
 			}
 
-			res, err := syncLabContext(cmd, deps, lab, labSyncOptions{WaitSSH: false})
+			res, err := syncLabContext(cmd, deps, lab, labSyncOptions{WaitSSH: false, DryRun: dryRun})
 			if err != nil {
 				return fmt.Errorf("sync context for lab %q: %w", name, err)
+			}
+
+			if res.Plan != nil {
+				return deps.Out.Render(cmd.OutOrStdout(), labSyncPlanResult(res.ContextName, res.Plan), deps.Format)
 			}
 
 			verb := "reused existing token"
@@ -744,4 +970,7 @@ func newContextSyncCmd() *cobra.Command {
 			return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: msg}, deps.Format)
 		},
 	}
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false,
+		"preview what would be created, reused, and written to the config and keychain, without changing anything")
+	return cmd
 }
