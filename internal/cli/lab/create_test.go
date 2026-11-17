@@ -550,6 +550,44 @@ func TestCreate_Start_AgentNeverAnswersIsANote(t *testing.T) {
 	assert.Contains(t, out, "guest agent did not respond")
 }
 
+// TestCreate_Start_OneDeadlineForTheWholeRun covers the shared boot deadline:
+// the agent wait and the ssh wait of one run spend a single --wait-timeout
+// between them. The agent never answers and uses the whole bound, so the ssh
+// wait that follows probes once and fails, where a bound of its own would have
+// let it probe four more times.
+func TestCreate_Start_OneDeadlineForTheWholeRun(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	pings := 0
+	responses := []exec.FakeResponse{{}} // buildCreatePlan's zfs dataset existence probe
+	for range 20 {
+		responses = append(responses, sshConnectFailure)
+	}
+	cmd, fake := createStartWaitDeps(t, f, responses...)
+	f.HandleFunc("POST /api2/json/nodes/node1/qemu/9500/agent/ping", func(w http.ResponseWriter, _ *http.Request) {
+		pings++
+		testhelper.WriteError(w, http.StatusInternalServerError, "QEMU guest agent is not running")
+	})
+	cli.GetDeps(cmd).WaitTimeout = 15
+
+	out, err := runCreateCmd(t, cmd, "wayne", "--start")
+	require.Error(t, err)
+	assert.Equal(t, exitcode.Infra, exitcode.FromError(err))
+	assert.Equal(t, 4, pings, "the agent wait takes the whole 15 seconds")
+	assert.Len(t, fake.Calls, 1+1, "the zfs probe, then one ssh probe against the spent deadline")
+	assert.Contains(t, out, "timed out waiting for ssh")
+}
+
+// TestCreateHelp_NamesTheSharedBootDeadline keeps the help from promising each
+// wait a bound of its own.
+func TestCreateHelp_NamesTheSharedBootDeadline(t *testing.T) {
+	cmd := newCreateCmd()
+	start := cmd.Flags().Lookup("start")
+	require.NotNil(t, start)
+
+	assert.Contains(t, start.Usage, "share one deadline")
+	assert.Contains(t, cmd.Long, "one deadline runs out, shared by the agent wait of every VM and the ssh wait")
+}
+
 // TestCreate_Start_AgentPermissionErrorIsNotRetried covers an error no wait can
 // fix: a 403 on the ping ends the wait at once rather than burning the bound.
 func TestCreate_Start_AgentPermissionErrorIsNotRetried(t *testing.T) {

@@ -200,7 +200,9 @@ func newCreateCmd() *cobra.Command {
 			"With --start, create also starts each VM (one that is already running is skipped, so " +
 			"re-running it is safe), waits for its guest agent and for ssh to answer on node 0, " +
 			"and registers the lab-<name> context. A node that is still booting is retried until " +
-			"the global --wait-timeout runs out, or five minutes when --wait-timeout is 0. If the " +
+			"one deadline runs out, shared by the agent wait of every VM and the ssh wait, not " +
+			"restarted for each. The deadline is the global --wait-timeout, or five minutes when " +
+			"--wait-timeout is 0, and it starts with the first wait. If the " +
 			"context still cannot be registered, create prints the table and exits non-zero (exit " +
 			"3 when the node never answered), and `pmx lab context sync <name>` retries it.\n\n" +
 			"Pass --clone-from to clone each node VM from an existing VM instead of creating " +
@@ -296,6 +298,13 @@ func newCreateCmd() *cobra.Command {
 				return renderCreatePlan(cmd, deps, plan, true)
 			}
 
+			// Every boot wait of this run, one agent wait per started VM and
+			// the ssh wait of the context step, shares one deadline, so a lab
+			// of several VMs that never boot costs one bound, not one each.
+			if start {
+				cmd.SetContext(withBootBudget(cmd.Context(), labBootWaitBound(deps)))
+			}
+
 			for _, step := range plan.steps {
 				if step.skip || step.apply == nil {
 					continue
@@ -320,7 +329,8 @@ func newCreateCmd() *cobra.Command {
 	f.StringVar(&node, "node", "", "node to create the lab's VMs on (defaults to --node/PMX_NODE/config default)")
 	f.BoolVar(&start, "start", false,
 		"start every created VM (one already running is skipped), wait for its guest agent and for ssh, "+
-			"and register the lab-<name> context; the wait lasts the global --wait-timeout, or 5 minutes when it is 0")
+			"and register the lab-<name> context; all the waits together share one deadline, the "+
+			"global --wait-timeout, or 5 minutes when it is 0")
 	f.BoolVar(&noContext, "no-context", false, "skip auto-registering the lab-<name> pmx context after --start")
 	registerRequireContextFlag(f, &requireContext)
 	f.IntVar(&ov.vcpu, "vcpu", 0, "override compute.vcpu (base sizing for every node before per-node overrides)")

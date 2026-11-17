@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
@@ -46,6 +47,43 @@ func labBootWaitBound(deps *cli.Deps) time.Duration {
 	return labBootWaitDefault
 }
 
+// bootBudgetKey is the context key under which a run's shared boot budget
+// travels.
+type bootBudgetKey struct{}
+
+// bootBudget is one deadline shared by every boot wait of a run: each VM's
+// agent wait and the ssh wait that follows. Without it each wait would take a
+// full bound of its own, and a five-VM lab whose guests never answer would
+// wait five bounds end to end. The clock starts when the first wait does, not
+// when the budget is created, so the plan building and the creation steps that
+// come first do not spend it.
+type bootBudget struct {
+	bound time.Duration
+
+	mu       sync.Mutex
+	started  bool
+	deadline time.Time
+}
+
+// deadlineAt returns the budget's deadline, fixing it on the first call.
+func (b *bootBudget) deadlineAt() time.Time {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if !b.started {
+		b.started = true
+		b.deadline = labWaitNow().Add(b.bound)
+	}
+
+	return b.deadline
+}
+
+// withBootBudget returns ctx carrying one boot budget of the given bound, so
+// every labWaitUntil run under it shares a single deadline.
+func withBootBudget(ctx context.Context, bound time.Duration) context.Context {
+	return context.WithValue(ctx, bootBudgetKey{}, &bootBudget{bound: bound})
+}
+
 // labWaitTimeoutError reports that a wait ran out its bound with the last
 // probe still failing at the connection level.
 type labWaitTimeoutError struct {
@@ -60,13 +98,20 @@ func (e *labWaitTimeoutError) Error() string {
 	return fmt.Sprintf("no answer within %s (last attempt: %v)", e.Bound, e.Last)
 }
 
-// labWaitUntil runs probe until it reports done, ctx ends, or bound elapses.
+// labWaitUntil runs probe until it reports done, ctx ends, or the deadline
+// passes. The deadline is bound from now, unless ctx carries a boot budget
+// (withBootBudget), in which case it is the budget's deadline, shared with
+// every other wait under that ctx; a wait that starts after the budget is
+// spent still probes once. The timeout error reports the budget's own bound.
 // A probe returns done=false for a connection-level failure that is worth
 // retrying, and done=true to stop, with a non-nil error when the stop is a
 // failure. It never sleeps past the deadline: when another interval would
 // overshoot, the wait ends at once with a *labWaitTimeoutError.
 func labWaitUntil(ctx context.Context, bound time.Duration, probe func() (done bool, err error)) error {
 	deadline := labWaitNow().Add(bound)
+	if budget, ok := ctx.Value(bootBudgetKey{}).(*bootBudget); ok {
+		deadline, bound = budget.deadlineAt(), budget.bound
+	}
 	for {
 		if err := ctx.Err(); err != nil {
 			return err
