@@ -912,7 +912,7 @@ func labSyncPlanResult(ctxName string, plan *labSyncPlan) output.Result {
 	if plan.Reuse {
 		status := "would be reused, since the stored secret still authenticates"
 		if plan.ProbeUnverified {
-			status = "would be reused; the secret would be kept but could not be checked because the API was unreachable"
+			status = "would be reused; the secret would be kept but could not be checked because the API probe failed before authenticating"
 		}
 		rows = append(rows,
 			[]string{fmt.Sprintf("token %q", tokenID), status},
@@ -981,7 +981,7 @@ func newContextSyncCmd() *cobra.Command {
 			"already references that keychain item. A reused secret keeps the reference the " +
 			"context already has, including the older `pmx-lab-<name>` form. When a rotation " +
 			"moves a context off such an older item, sync leaves the item in place and prints " +
-			"the command that removes it, since a same-named lab in another config may still use it.\n\n" +
+			"a NOTE, since a same-named lab in another config may still reference it.\n\n" +
 			"An existing `lab-<name>` context that does not look lab-derived is refused before " +
 			"anything runs on the node, so no token is minted and nothing is stored. When a step " +
 			"after the keychain store fails before the config is saved, sync removes the item it " +

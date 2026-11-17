@@ -207,7 +207,7 @@ func TestSyncLabContext_DryRunWordsAnUnreachableAPIProbe(t *testing.T) {
 
 	out := renderPlan(t, deps, res)
 	assert.NotContains(t, out, "still authenticates")
-	assert.Contains(t, out, "could not be checked because the API was unreachable")
+	assert.Contains(t, out, "could not be checked because the API probe failed before authenticating")
 }
 
 // TestSyncLabContext_DryRunRotateStatesTheRevocation covers --rotate: the
