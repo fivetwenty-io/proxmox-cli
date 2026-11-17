@@ -289,7 +289,8 @@ func newCreateCmd() *cobra.Command {
 			}
 
 			plan, err := buildCreatePlan(
-				cmd.Context(), deps, eff, targetNode, ov.cloneFrom, ov.qdeviceCloneFrom, start, dryRun, force)
+				cmd.Context(), deps, eff, targetNode, ov.cloneFrom, ov.qdeviceCloneFrom, start, dryRun, force,
+				createDatasetCheck{verb: "lab create"})
 			if err != nil {
 				return err
 			}
@@ -1201,6 +1202,16 @@ func createZfsDatasetEnsure(deps *cli.Deps, host, dataset string, refquotaGB int
 	return nil
 }
 
+// createDatasetCheck tells buildCreatePlan how to treat the ssh target of the
+// lab's ZFS dataset. verb is the command building the plan ("lab create" or
+// "lab scale"), and it names that command in a refusal. verified says the
+// caller already proved the target is the API's node before its own first
+// change, so the plan build must not repeat the proof.
+type createDatasetCheck struct {
+	verb     string
+	verified bool
+}
+
 // buildCreatePlan queries live PVE state for every resource `pmx lab create`
 // composes (SDN zone/vnet/subnet, storage, pool, and one VM per configured
 // node plus, when applicable, the QDevice) and returns the full ordered plan
@@ -1222,8 +1233,13 @@ func createZfsDatasetEnsure(deps *cli.Deps, host, dataset string, refquotaGB int
 // refusal aborts here (returning an error) before any VMID is allocated for
 // any target, so a lab over the pool-fill refuse threshold never even
 // reserves VMIDs it will not use.
+//
+// check says which verb is building the plan, so a refusal names it, and
+// whether that verb already proved the dataset's ssh target before its first
+// change (createDatasetCheck).
 func buildCreatePlan(
 	ctx context.Context, deps *cli.Deps, eff *config.Lab, node, cloneFrom, qdeviceCloneFrom string, start, dryRun, force bool,
+	check createDatasetCheck,
 ) (*createPlan, error) {
 	ac := deps.API
 	plan := &createPlan{
@@ -1513,8 +1529,10 @@ func buildCreatePlan(
 	case dryRun:
 		datasetStep = createStep{desc: datasetDesc + " (verified at apply time, not previewed)"}
 	default:
-		if perr := labDatasetProxyRefusal(deps, "lab create"); perr != nil {
-			return nil, perr
+		if !check.verified {
+			if perr := labDatasetProxyRefusal(deps, check.verb); perr != nil {
+				return nil, perr
+			}
 		}
 		datasetHost, herr := createDatasetSSHHost(ctx, ac, node, deps.Log)
 		if herr != nil {
@@ -1524,10 +1542,15 @@ func buildCreatePlan(
 		// ssh command reaches it, so neither the probe below nor the zfs create
 		// can land on another cluster's machine that shares the address. This
 		// runs while the plan is still being built, before any step applies.
-		if verr := verifyLabDatasetTarget(
-			ctx, deps, "lab create", node, createDatasetSSHFlags(deps), datasetHost); verr != nil {
-			return nil, fmt.Errorf("%w; lab create had not applied any step (SDN, storage, pool, or VM) "+
-				"when it stopped, so there is nothing to undo", verr)
+		// A verb that already ran the same proof before its own first change
+		// (lab scale, see scaleDatasetPreflight) skips it here, so the target
+		// is checked once per run.
+		if !check.verified {
+			if verr := verifyLabDatasetTarget(
+				ctx, deps, check.verb, node, createDatasetSSHFlags(deps), datasetHost); verr != nil {
+				return nil, fmt.Errorf("%w; %s had not applied any step (SDN, storage, pool, or VM) "+
+					"when it stopped, so there is nothing to undo", verr, check.verb)
+			}
 		}
 		exists, perr := createZfsDatasetExists(deps, datasetHost, dataset)
 		if perr != nil {

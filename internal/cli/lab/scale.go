@@ -220,6 +220,30 @@ func runScale(
 			name, node0IP)
 	}
 
+	plan := buildScalePlan(currentN, currentQdevicePresent, targetN, targetQdeviceRequired)
+
+	targetNode := deps.Node
+	if cmd.Flags().Changed("node") {
+		targetNode = nodeFlag
+	}
+
+	// Dataset identity preflight, before the first mutating step (the legacy
+	// rename just below is the first one). A run that creates a VM shell goes
+	// through buildCreatePlan, which reaches the lab's ZFS dataset over ssh,
+	// and it does so only after the QDevice removal, the VM shells, and the
+	// joins of the same run have already happened. Proving the ssh target here
+	// means a target that is not the API's node refuses the whole scale while
+	// nothing has been changed, and buildCreatePlan then skips its own copy of
+	// the proof (scaleDatasetCheck).
+	if len(plan.growIndices) > 0 || plan.qdeviceAddNeeded {
+		if targetNode == "" {
+			return fmt.Errorf("no node specified: use --node, set PMX_NODE, or configure a default node")
+		}
+		if perr := scaleDatasetPreflight(ctx, deps, targetNode); perr != nil {
+			return perr
+		}
+	}
+
 	// Legacy-rename safety net (decision D3): a bare `lab-<member>` VM (no
 	// index suffix) surviving past the fleet rebuild is renamed to
 	// `lab-<member>-0`. API-only (no ssh), idempotent.
@@ -236,13 +260,6 @@ func runScale(
 			"lab %q is already at the target topology (%d node(s), qdevice=%v); nothing to do.",
 			name, targetN, targetQdeviceRequired)}
 		return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
-	}
-
-	plan := buildScalePlan(currentN, currentQdevicePresent, targetN, targetQdeviceRequired)
-
-	targetNode := deps.Node
-	if cmd.Flags().Changed("node") {
-		targetNode = nodeFlag
 	}
 
 	// Capacity gate (plan §9 step 1, BEFORE step 2's QDevice removal): a
@@ -288,6 +305,41 @@ func runScale(
 		}
 	}
 	return execErr
+}
+
+// scaleDatasetCheck is what executeScalePlan hands buildCreatePlan: the verb to
+// name in a refusal, and the fact that runScale already proved the dataset's
+// ssh target in scaleDatasetPreflight.
+var scaleDatasetCheck = createDatasetCheck{verb: "lab scale", verified: true}
+
+// scaleDatasetPreflight proves, before `lab scale` changes anything, that the
+// ssh target of the lab's ZFS dataset on node is the node the API described,
+// by the same checks `lab create` runs while it builds its plan: the API must
+// not be reached through a proxy, the node's address must resolve, and the
+// machine at that address must carry the node's host name and pve-ssl.pem
+// fingerprint. It does nothing when the command has no ssh context or runner,
+// which is when buildCreatePlan builds no dataset step either. A refusal names
+// `lab scale` and says nothing was changed, which is true because this runs
+// ahead of every mutating step.
+func scaleDatasetPreflight(ctx context.Context, deps *cli.Deps, node string) error {
+	if deps.Ctx == nil || deps.Runner == nil {
+		return nil
+	}
+
+	const verb = "lab scale"
+	const unchanged = "; lab scale had not changed anything when it stopped"
+
+	if err := labDatasetProxyRefusal(deps, verb); err != nil {
+		return fmt.Errorf("%w%s", err, unchanged)
+	}
+	host, err := createDatasetSSHHost(ctx, deps.API, node, deps.Log)
+	if err != nil {
+		return fmt.Errorf("%s: %w%s", verb, err, unchanged)
+	}
+	if err := verifyLabDatasetTarget(ctx, deps, verb, node, createDatasetSSHFlags(deps), host); err != nil {
+		return fmt.Errorf("%w%s", err, unchanged)
+	}
+	return nil
 }
 
 // scaleEffectiveLab returns a copy of lab with Topology.Nodes set to
@@ -635,7 +687,8 @@ func executeScalePlan(
 		}
 
 		growEff := scaleCopyLabWithTopology(eff, eff.Topology.Nodes, config.QdeviceNever)
-		createPlan, err := buildCreatePlan(ctx, deps, growEff, targetNode, "", "", false, false, force)
+		createPlan, err := buildCreatePlan(
+			ctx, deps, growEff, targetNode, "", "", false, false, force, scaleDatasetCheck)
 		if err != nil {
 			return nil, fmt.Errorf("plan new node VM shell(s): %w", err)
 		}
@@ -707,7 +760,8 @@ func executeScalePlan(
 		}
 
 		qdeviceEff := scaleCopyLabWithTopology(eff, eff.Topology.Nodes, config.QdeviceAuto)
-		createPlan, err := buildCreatePlan(ctx, deps, qdeviceEff, targetNode, "", "", false, false, force)
+		createPlan, err := buildCreatePlan(
+			ctx, deps, qdeviceEff, targetNode, "", "", false, false, force, scaleDatasetCheck)
 		if err != nil {
 			return nil, fmt.Errorf("plan QDevice VM shell: %w", err)
 		}

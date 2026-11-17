@@ -673,7 +673,7 @@ func TestScale_RefusesWithoutYesNonInteractively(t *testing.T) {
 		map[string]any{"total": 10000000000000, "used": 100000000000})
 	cmd, _ := buildGuestSSHAndAPICmd(t, path, f, newScaleCmd())
 	fake := exec.Fake(exec.FakeResponse{Stdout: samplePvecmStatusNotClustered, ExitCode: 1}) // preflight membership probe
-	cli.GetDeps(cmd).Runner = fake
+	cli.GetDeps(cmd).Runner = createIdentityRunner(f, fake, "node1")
 	cmd.SetIn(strings.NewReader(""))
 
 	out, err := runGuestCmd(t, cmd, "wayne", "--nodes", "3", "--node", "node1")
@@ -705,13 +705,123 @@ func TestScale_CapacityGateRefusesBeforeQdeviceRemove(t *testing.T) {
 
 	cmd, _ := buildGuestSSHAndAPICmd(t, path, f, newScaleCmd())
 	fake := exec.Fake(exec.FakeResponse{Stdout: samplePvecmStatusWithQdevice}) // preflight membership probe: 2+Q
-	cli.GetDeps(cmd).Runner = fake
+	cli.GetDeps(cmd).Runner = createIdentityRunner(f, fake, "node1")
 
 	_, err := runGuestCmd(t, cmd, "wayne", "--nodes", "3", "--node", "node1", "--yes")
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "capacity gate")
 	require.Len(t, fake.Calls, 1,
 		"only the preflight membership probe; zero ssh mutations, in particular no pvecm qdevice remove")
+}
+
+// scaleDatasetRefusalFixture wires a scale run whose dataset ssh target answers
+// the identity check as another machine, and forbids every mutating API call.
+// It returns the command and the runner, whose recorded calls the tests count.
+func scaleDatasetRefusalFixture(
+	t *testing.T, lab *config.Lab, currentStatus string, members []map[string]any,
+) (*cobra.Command, *exec.FakeRunner) {
+	t.Helper()
+
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+	f := testhelper.NewFakePVE(t)
+
+	resources := []map[string]any{
+		{"vmid": 9200, "node": "node1", "pool": "lab-wayne", "status": "running", "type": "qemu", "name": "lab-wayne-0"},
+		{"vmid": 9201, "node": "node1", "pool": "lab-wayne", "status": "running", "type": "qemu", "name": "lab-wayne-1"},
+		{"vmid": 9299, "node": "node1", "pool": "lab-wayne", "status": "running", "type": "qemu", "name": "lab-wayne-q"},
+	}
+	args := make([]map[string]any, 0, len(members))
+	args = append(args, resources[:len(members)]...)
+	rs := make([]any, len(args))
+	for i, r := range args {
+		rs[i] = r
+	}
+	handleClusterResources(f, args...)
+
+	qemus := make([]map[string]any, len(members))
+	for i, m := range members {
+		qemus[i] = map[string]any{"vmid": m["vmid"], "name": m["name"]}
+	}
+	scaleGrowFixture(t, f, lab, members, qemus)
+
+	// Nothing may change: no VM is created, destroyed, or renamed.
+	createForbid(f, t, "POST /api2/json/nodes/node1/qemu")
+	createForbid(f, t, "DELETE /api2/json/nodes")
+	createForbid(f, t, "PUT /api2/json/nodes")
+
+	cmd, _ := buildGuestSSHAndAPICmd(t, path, f, newScaleCmd())
+	fake := exec.Fake(exec.FakeResponse{Stdout: currentStatus}) // preflight membership probe
+	runner := createIdentityRunner(f, fake, "node1")
+	runner.Reply = func(string) (string, error) {
+		return "pve7\nsha256 Fingerprint=" + strings.ToLower(preflightFingerprint("pve7")) + "\n", nil
+	}
+	cli.GetDeps(cmd).Runner = runner
+	return cmd, fake
+}
+
+// TestScale_DatasetIdentityRefusesBeforeAnyChange_Grow covers a grow whose
+// dataset ssh target is not the API's node. The identity check runs before the
+// QDevice removal, so the run refuses naming `lab scale`, says nothing was
+// changed, and reaches the lab with the one membership probe only.
+func TestScale_DatasetIdentityRefusesBeforeAnyChange_Grow(t *testing.T) {
+	lab := scaleTestLab("wayne", 1, "")
+	cmd, fake := scaleDatasetRefusalFixture(t, lab, samplePvecmStatusWithQdevice, []map[string]any{
+		{"id": "qemu/9200", "node": "node1", "type": "qemu", "vmid": 9200, "name": "lab-wayne-0"},
+		{"id": "qemu/9201", "node": "node1", "type": "qemu", "vmid": 9201, "name": "lab-wayne-1"},
+	})
+
+	_, err := runGuestCmd(t, cmd, "wayne", "--nodes", "3", "--node", "node1", "--yes")
+	require.Error(t, err)
+	assert.ErrorContains(t, err, `reached a machine named "pve7", not node "node1"`)
+	assert.ErrorContains(t, err, "lab scale had not changed anything")
+	assert.NotContains(t, err.Error(), "lab create")
+	assert.NotContains(t, err.Error(), "nothing to undo")
+	require.Len(t, fake.Calls, 1, "only the membership probe; no pvecm qdevice remove, no join")
+}
+
+// TestScale_DatasetIdentityRefusesBeforeAnyChange_QdeviceAdd covers the other
+// path into buildCreatePlan, the QDevice VM shell: the same refusal, with no
+// ssh beyond the membership probe.
+func TestScale_DatasetIdentityRefusesBeforeAnyChange_QdeviceAdd(t *testing.T) {
+	lab := scaleTestLab("wayne", 2, "auto")
+	cmd, fake := scaleDatasetRefusalFixture(t, lab, scaleClusteredNoQdevice2of2, []map[string]any{
+		{"id": "qemu/9200", "node": "node1", "type": "qemu", "vmid": 9200, "name": "lab-wayne-0"},
+		{"id": "qemu/9201", "node": "node1", "type": "qemu", "vmid": 9201, "name": "lab-wayne-1"},
+	})
+
+	_, err := runGuestCmd(t, cmd, "wayne", "--nodes", "2", "--node", "node1", "--yes")
+	require.Error(t, err)
+	assert.ErrorContains(t, err, `reached a machine named "pve7", not node "node1"`)
+	assert.ErrorContains(t, err, "lab scale had not changed anything")
+	assert.NotContains(t, err.Error(), "lab create")
+	require.Len(t, fake.Calls, 1, "only the membership probe")
+}
+
+// TestScale_DatasetIdentityNotCheckedWhenNoVMShellIsCreated covers a shrink,
+// which never builds a create plan and so never reaches the dataset: the
+// identity check does not run, so a wrong target cannot refuse it.
+func TestScale_DatasetIdentityNotCheckedWhenNoVMShellIsCreated(t *testing.T) {
+	lab := scaleTestLab("wayne", 2, "")
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+	f := testhelper.NewFakePVE(t)
+	handleClusterResources(f,
+		map[string]any{"vmid": 9200, "node": "node1", "pool": "lab-wayne", "status": "running", "type": "qemu", "name": "lab-wayne-0"},
+		map[string]any{"vmid": 9201, "node": "node1", "pool": "lab-wayne", "status": "running", "type": "qemu", "name": "lab-wayne-1"},
+	)
+
+	cmd, _ := buildGuestSSHAndAPICmd(t, path, f, newScaleCmd())
+	fake := exec.Fake(exec.FakeResponse{Stdout: scaleClusteredNoQdevice2of2})
+	runner := createIdentityRunner(f, fake, "node1")
+	runner.Reply = func(string) (string, error) {
+		t.Error("the dataset identity check ran for a run that creates no VM shell")
+		return "", nil
+	}
+	cli.GetDeps(cmd).Runner = runner
+
+	// The shrink itself runs into the unscripted fake and fails, which is not
+	// what this test is about; the identity check must simply never run.
+	_, _ = runGuestCmd(t, cmd, "wayne", "--nodes", "1", "--node", "node1", "--yes")
+	assert.Empty(t, identityProbes(t, cli.GetDeps(cmd)))
 }
 
 // --- full grow + QDevice-remove-first integration (2+Q -> 3) ---------------
