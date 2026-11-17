@@ -316,7 +316,7 @@ func TestLabCephMon_CreatesMissingMonsOnly(t *testing.T) {
 	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"ceph": lab}})
 	f := testhelper.NewFakePVE(t)
 	f.HandleJSON("GET /api2/json/nodes/lab-ceph-0/ceph/mon", []any{
-		map[string]any{"name": "lab-ceph-0"},
+		map[string]any{"name": "lab-ceph-0", "state": "running"},
 	})
 
 	var createRec []hostnetRecordedRequest
@@ -345,7 +345,7 @@ func TestLabCephMgr_CreatesMissingMgrs(t *testing.T) {
 	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"ceph": lab}})
 	f := testhelper.NewFakePVE(t)
 	f.HandleJSON("GET /api2/json/nodes/lab-ceph-0/ceph/mgr", []any{
-		map[string]any{"name": "lab-ceph-0"},
+		map[string]any{"name": "lab-ceph-0", "state": "active"},
 	})
 
 	var createRec []hostnetRecordedRequest
@@ -367,6 +367,164 @@ func TestLabCephMgr_CreatesMissingMgrs(t *testing.T) {
 	assert.Contains(t, out, "mgr lab-ceph-1")
 	assert.Contains(t, out, "mgr lab-ceph-2")
 	assert.Contains(t, out, "created")
+}
+
+// cephDaemonStateCase is one row of the mon/mgr state tests: the listing
+// PVE returns for node 0 and what the verb must do about each daemon.
+type cephDaemonStateCase struct {
+	name string
+	kind string
+	// listing is the ceph/<kind> listing node 0 answers with.
+	listing []any
+	// created lists the nodes whose daemon the verb must create.
+	created []string
+	// brokenState, when set, is the state of lab-ceph-1's daemon, which the
+	// verb must report and leave alone (no create, no delete) and fail on.
+	brokenState string
+}
+
+// cephDaemonStateCases covers a running, an unknown, a stopped, and an absent
+// daemon for both kinds. Node 0 always runs a healthy daemon; the case varies
+// lab-ceph-1 and leaves lab-ceph-2 absent.
+func cephDaemonStateCases() []cephDaemonStateCase {
+	var cases []cephDaemonStateCase
+	for _, k := range []struct{ kind, healthy string }{{"mgr", "active"}, {"mon", "running"}} {
+		node0 := map[string]any{"name": "lab-ceph-0", "state": k.healthy}
+		cases = append(cases,
+			cephDaemonStateCase{
+				name: k.kind + " running", kind: k.kind,
+				listing: []any{node0, map[string]any{"name": "lab-ceph-1", "state": k.healthy}},
+				created: []string{"lab-ceph-2"},
+			},
+			cephDaemonStateCase{
+				name: k.kind + " absent", kind: k.kind,
+				listing: []any{node0},
+				created: []string{"lab-ceph-1", "lab-ceph-2"},
+			},
+			cephDaemonStateCase{
+				name: k.kind + " unknown", kind: k.kind,
+				listing:     []any{node0, map[string]any{"name": "lab-ceph-1", "state": "unknown"}},
+				created:     []string{"lab-ceph-2"},
+				brokenState: "unknown",
+			},
+			cephDaemonStateCase{
+				name: k.kind + " stopped", kind: k.kind,
+				listing:     []any{node0, map[string]any{"name": "lab-ceph-1", "state": "stopped"}},
+				created:     []string{"lab-ceph-2"},
+				brokenState: "stopped",
+			},
+			cephDaemonStateCase{
+				name: k.kind + " no state reported", kind: k.kind,
+				listing:     []any{node0, map[string]any{"name": "lab-ceph-1"}},
+				created:     []string{"lab-ceph-2"},
+				brokenState: "none reported",
+			},
+		)
+	}
+	// A mgr that is not "active" or "standby" is broken, and a mon that is not
+	// "running" is broken, even when the state is healthy for the other kind.
+	cases = append(cases,
+		cephDaemonStateCase{
+			name: "mgr standby counts as present", kind: "mgr",
+			listing: []any{
+				map[string]any{"name": "lab-ceph-0", "state": "active"},
+				map[string]any{"name": "lab-ceph-1", "state": "standby"},
+				map[string]any{"name": "lab-ceph-2", "state": "standby"},
+			},
+		},
+		cephDaemonStateCase{
+			name: "mon state running is not a mgr state", kind: "mgr",
+			listing: []any{
+				map[string]any{"name": "lab-ceph-0", "state": "active"},
+				map[string]any{"name": "lab-ceph-1", "state": "running"},
+			},
+			created:     []string{"lab-ceph-2"},
+			brokenState: "running",
+		},
+	)
+	return cases
+}
+
+// TestLabCephDaemons_CountsOnlyRunningDaemonsAsPresent pins that mon and mgr
+// treat a daemon as present only when its reported state shows it running. A
+// daemon in a bad state is named with its state and the delete command, is
+// neither recreated nor deleted, and fails the verb after the healthy and
+// absent nodes are handled.
+func TestLabCephDaemons_CountsOnlyRunningDaemonsAsPresent(t *testing.T) {
+	for _, tc := range cephDaemonStateCases() {
+		t.Run(tc.name, func(t *testing.T) {
+			lab := cephTestLab("ceph", 3)
+			path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"ceph": lab}})
+			f := testhelper.NewFakePVE(t)
+			f.HandleJSON("GET /api2/json/nodes/lab-ceph-0/ceph/"+tc.kind, tc.listing)
+
+			// Nothing is ever deleted, and a broken daemon is never recreated
+			// over its own name.
+			createForbid(f, t, "DELETE /api2/json/nodes")
+			if tc.brokenState != "" {
+				createForbid(f, t, "POST /api2/json/nodes/lab-ceph-1/ceph/"+tc.kind+"/lab-ceph-1")
+			}
+
+			var createRec []hostnetRecordedRequest
+			for _, node := range tc.created {
+				upid := cephTaskUPID(node)
+				hostnetRecord(f, &createRec, nil, "", "POST /api2/json/nodes/"+node+"/ceph/"+tc.kind+"/"+node, upid, 200)
+				cephHandleTaskStatus(f, node, upid)
+			}
+
+			cmd, _ := buildGuestSSHCmd(t, path, newCephCmd())
+			stubInnerAPIClient(t, f)
+
+			out, err := runGuestCmd(t, cmd, tc.kind, "ceph")
+
+			require.Len(t, createRec, len(tc.created), "created exactly the absent daemons")
+			for i, node := range tc.created {
+				assert.Equal(t, "/api2/json/nodes/"+node+"/ceph/"+tc.kind+"/"+node, createRec[i].path)
+			}
+
+			if tc.brokenState == "" {
+				require.NoError(t, err)
+				assert.NotContains(t, out, "not running")
+				return
+			}
+
+			require.Error(t, err)
+			assert.ErrorContains(t, err, tc.kind+` "lab-ceph-1"`)
+			assert.ErrorContains(t, err, `state "`+tc.brokenState+`"`)
+			assert.ErrorContains(t, err, "pmx pve --node lab-ceph-1 node ceph "+tc.kind+" delete lab-ceph-1 --yes")
+			assert.NotContains(t, err.Error(), "lab-ceph-0")
+			assert.NotContains(t, err.Error(), "lab-ceph-2")
+			assert.Contains(t, out, "present but not running (state: "+tc.brokenState+")")
+			assert.NotContains(t, out, tc.kind+" lab-ceph-1  already present")
+		})
+	}
+}
+
+// TestLabCephDaemons_NamesEveryBrokenDaemon covers two broken daemons in one
+// run: each is named with its own state and delete command, so the operator
+// sees the whole repair list at once.
+func TestLabCephDaemons_NamesEveryBrokenDaemon(t *testing.T) {
+	lab := cephTestLab("ceph", 3)
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"ceph": lab}})
+	f := testhelper.NewFakePVE(t)
+	f.HandleJSON("GET /api2/json/nodes/lab-ceph-0/ceph/mgr", []any{
+		map[string]any{"name": "lab-ceph-0", "state": "unknown"},
+		map[string]any{"name": "lab-ceph-1", "state": "active"},
+		map[string]any{"name": "lab-ceph-2", "state": "stopped"},
+	})
+	createForbid(f, t, "POST /api2/json/nodes")
+	createForbid(f, t, "DELETE /api2/json/nodes")
+
+	cmd, _ := buildGuestSSHCmd(t, path, newCephCmd())
+	stubInnerAPIClient(t, f)
+
+	_, err := runGuestCmd(t, cmd, "mgr", "ceph")
+	require.Error(t, err)
+	assert.ErrorContains(t, err, `state "unknown"`)
+	assert.ErrorContains(t, err, "pmx pve --node lab-ceph-0 node ceph mgr delete lab-ceph-0 --yes")
+	assert.ErrorContains(t, err, `state "stopped"`)
+	assert.ErrorContains(t, err, "pmx pve --node lab-ceph-2 node ceph mgr delete lab-ceph-2 --yes")
+	assert.NotContains(t, err.Error(), "lab-ceph-1")
 }
 
 // --- osd / pool / status ----------------------------------------------------

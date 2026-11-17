@@ -3,7 +3,9 @@ package lab
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -283,12 +285,46 @@ func cephCreateDaemon(ctx context.Context, api *apiclient.APIClient, node, kind 
 	return nil, fmt.Errorf("unknown ceph daemon kind %q", kind)
 }
 
-// cephListDaemonNames returns the set of daemon names (one per node they run
-// on, by lab convention) already present on node0 for kind ("mon" or
-// "mgr"). ListCephMon/ListCephMgr return []json.RawMessage (nodes_gen.go:
-// 2577, :2478) — one element per daemon — so each element is unmarshalled
-// individually into struct{ Name string }, not the whole response.
-func cephListDaemonNames(ctx context.Context, api *apiclient.APIClient, node0, kind string) (map[string]bool, error) {
+// cephDaemonHealthyStates are the PVE-reported states that count a daemon as
+// present for the ensure verbs, per the response schema of
+// GET /nodes/{node}/ceph/mgr and /ceph/mon in the PVE API. A mgr reports
+// "active" or "standby" when the mgr cluster sees it, and "stopped" or
+// "unknown" when it is configured but not visible. A mon reports "running"
+// when it is in quorum, "stopped" when its unit is configured but the daemon
+// is not visible, and "unknown" when there is no rados access (the field is
+// optional, so an absent state is not healthy either).
+var cephDaemonHealthyStates = map[string][]string{
+	"mgr": {"active", "standby"},
+	"mon": {"running"},
+}
+
+// cephDaemon is one entry of a ceph mon or mgr listing: the daemon's name and
+// the run state PVE reports for it ("" when the listing carried none).
+type cephDaemon struct {
+	Name  string
+	State string
+}
+
+// healthy reports whether the daemon's state shows it running for kind.
+func (d cephDaemon) healthy(kind string) bool {
+	return slices.Contains(cephDaemonHealthyStates[kind], d.State)
+}
+
+// cephDaemonDeleteCommand is the pmx command that removes a mon or mgr named
+// name from the node it runs on. By lab convention a daemon is named after
+// its node. The ensure verbs print it for a daemon in a bad state and never
+// run it: deleting a daemon is the operator's call.
+func cephDaemonDeleteCommand(kind, name string) string {
+	return fmt.Sprintf("pmx pve --node %s node ceph %s delete %s --yes", name, kind, name)
+}
+
+// cephListDaemons returns the daemons already listed on node0 for kind ("mon"
+// or "mgr"), keyed by name (one per node they run on, by lab convention),
+// with the state PVE reports for each. ListCephMon/ListCephMgr return
+// []json.RawMessage (nodes_gen.go: 2577, :2478) — one element per daemon — so
+// each element is unmarshalled individually into struct{ Name, State string
+// }, not the whole response.
+func cephListDaemons(ctx context.Context, api *apiclient.APIClient, node0, kind string) (map[string]cephDaemon, error) {
 	var raws []json.RawMessage
 	switch kind {
 	case "mon":
@@ -311,36 +347,59 @@ func cephListDaemonNames(ctx context.Context, api *apiclient.APIClient, node0, k
 		return nil, fmt.Errorf("unknown ceph daemon kind %q", kind)
 	}
 
-	names := make(map[string]bool, len(raws))
+	daemons := make(map[string]cephDaemon, len(raws))
 	for _, raw := range raws {
 		var d struct {
-			Name string `json:"name"`
+			Name  string `json:"name"`
+			State string `json:"state"`
 		}
 		if err := json.Unmarshal(raw, &d); err != nil {
 			return nil, fmt.Errorf("decode ceph %s entry: %w", kind, err)
 		}
-		names[d.Name] = true
+		daemons[d.Name] = cephDaemon{Name: d.Name, State: d.State}
 	}
-	return names, nil
+	return daemons, nil
 }
 
 // ensureCephDaemons creates a mon or mgr on every node of lab that does not
-// already have one, named after the node it runs on. kind is "mon" or
-// "mgr". Existing daemons are probed once, from node0, since the nested
+// already have a running one, named after the node it runs on. kind is "mon"
+// or "mgr". Existing daemons are probed once, from node0, since the nested
 // cluster's ceph/mon and ceph/mgr listings are cluster-wide regardless of
 // which node answers.
+//
+// A daemon counts as present only when its reported state shows it running
+// (cephDaemonHealthyStates). A daemon listed in any other state, such as the
+// "unknown" a timed-out create leaves behind, is neither counted nor
+// recreated over its own name and never deleted: the verb finishes the other
+// nodes, then fails naming each such daemon, its state, and the command that
+// removes it.
 func ensureCephDaemons(ctx context.Context, api *apiclient.APIClient, lab *config.Lab, kind string) ([]cephStepResult, error) {
 	n := config.EffectiveTopologyNodes(lab.Topology)
 	node0 := labNodeVMName(lab.Name, 0)
-	existing, err := cephListDaemonNames(ctx, api, node0, kind)
+	existing, err := cephListDaemons(ctx, api, node0, kind)
 	if err != nil {
 		return nil, err
 	}
 	rows := make([]cephStepResult, 0, n)
+	var broken []string
 	for i := range n {
 		name := labNodeVMName(lab.Name, i)
-		if existing[name] {
-			rows = append(rows, cephStepResult{Step: kind + " " + name, Status: "already present"})
+		if d, listed := existing[name]; listed {
+			if d.healthy(kind) {
+				rows = append(rows, cephStepResult{Step: kind + " " + name, Status: "already present"})
+				continue
+			}
+			state := d.State
+			if state == "" {
+				state = "none reported"
+			}
+			rows = append(rows, cephStepResult{
+				Step: kind + " " + name, Status: fmt.Sprintf("present but not running (state: %s)", state)})
+			broken = append(broken, fmt.Sprintf(
+				"ceph %s %q exists in state %q, not %s, and was left alone; "+
+					"remove it with `%s`, then rerun this command",
+				kind, name, state, strings.Join(cephDaemonHealthyStates[kind], " or "),
+				cephDaemonDeleteCommand(kind, name)))
 			continue
 		}
 		raw, err := cephCreateDaemon(ctx, api, name, kind)
@@ -351,6 +410,9 @@ func ensureCephDaemons(ctx context.Context, api *apiclient.APIClient, lab *confi
 			return rows, fmt.Errorf("wait for %s create on %s: %w", kind, name, err)
 		}
 		rows = append(rows, cephStepResult{Step: kind + " " + name, Status: "created"})
+	}
+	if len(broken) > 0 {
+		return rows, errors.New(strings.Join(broken, "; "))
 	}
 	return rows, nil
 }
@@ -421,8 +483,12 @@ func newCephDaemonCmd(kind, short string) *cobra.Command {
 		Short: short,
 		Long: fmt.Sprintf("Create a Ceph %s daemon on every node of a lab's nested cluster that does not "+
 			"already have one, named after the node it runs on.\n\n"+
-			"Idempotent: a node already listed as running a %s is skipped.\n\n"+
-			"Requires topology.nodes >= 3: Ceph needs at least a 3-node lab.", kind, kind),
+			"Idempotent: a node whose %s is listed as running (%s) is skipped. A %s that is listed in "+
+			"any other state, such as the \"unknown\" a timed-out create leaves behind, is reported by "+
+			"name and state with the `pmx pve --node <node> node ceph %s delete <name> --yes` command that "+
+			"removes it, and the verb exits non-zero; it is never deleted or recreated for you.\n\n"+
+			"Requires topology.nodes >= 3: Ceph needs at least a 3-node lab.",
+			kind, kind, strings.Join(cephDaemonHealthyStates[kind], " or "), kind, kind),
 		Example: fmt.Sprintf("  pmx lab ceph %s wayne\n  pmx lab ceph %s wayne --dry-run", kind, kind),
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
