@@ -79,11 +79,8 @@ func UpsertLabContext(cfg *Config, name string, in LabContextInput) ([]string, e
 		return []string{"host", "port", "username", "token-id", "secret", "fingerprint", "default-node"}, nil
 	}
 
-	if !labContextOwned(existing, in.MgmtSubnet) {
-		return nil, fmt.Errorf(
-			"refusing to overwrite existing context %q: it does not look lab-derived "+
-				"(product=%s host=%s username=%s); rename or remove it first",
-			name, existing.ProductOrDefault(), existing.Host, existing.Auth.Username)
+	if err := CheckLabContextOwned(cfg, name, in.MgmtSubnet); err != nil {
+		return nil, err
 	}
 
 	var changed []string
@@ -121,6 +118,29 @@ func UpsertLabContext(cfg *Config, name string, in LabContextInput) ([]string, e
 		return nil, fmt.Errorf("invalid lab context %q after update: %s", name, strings.Join(errs, "; "))
 	}
 	return changed, nil
+}
+
+// CheckLabContextOwned returns nil when the context named name in cfg is
+// absent (or a nil entry), or present and owned by the lab machinery (see
+// labContextOwned), and the refusal UpsertLabContext would raise otherwise.
+// Callers that do irreversible work before the upsert, such as rotating a lab
+// token and storing it in the keychain, run it first so a context the operator
+// owns is refused before anything changes.
+func CheckLabContextOwned(cfg *Config, name, mgmtSubnet string) error {
+	if cfg == nil || cfg.Contexts == nil {
+		return nil
+	}
+	existing, present := cfg.Contexts[name]
+	if !present || existing == nil {
+		return nil
+	}
+	if labContextOwned(existing, mgmtSubnet) {
+		return nil
+	}
+	return fmt.Errorf(
+		"refusing to overwrite existing context %q: it does not look lab-derived "+
+			"(product=%s host=%s username=%s); rename or remove it first",
+		name, existing.ProductOrDefault(), existing.Host, existing.Auth.Username)
 }
 
 // labContextOwned reports whether an existing context named lab-<name> looks

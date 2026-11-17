@@ -412,6 +412,48 @@ func warnUnreferencedLabSecret(cmd *cobra.Command, deps *cli.Deps, ctxName, name
 		ctxName, newService, newAccount, service, account, service, account)
 }
 
+// snapshotLabContext records the in-memory state of the context named name in
+// cfg and returns a func that puts it back: an absent entry is deleted again,
+// a nil entry is restored as nil, and a present context gets its pre-snapshot
+// field values back through the same pointer, so any alias stays consistent.
+// UpsertLabContext mutates a present context in place, so a failure between
+// the upsert and the save would otherwise leave memory out of step with disk.
+func snapshotLabContext(cfg *config.Config, name string) func() {
+	existing, present := cfg.Contexts[name]
+	switch {
+	case !present:
+		return func() { delete(cfg.Contexts, name) }
+	case existing == nil:
+		return func() { cfg.Contexts[name] = nil }
+	default:
+		saved := *existing
+		return func() {
+			*existing = saved
+			cfg.Contexts[name] = existing
+		}
+	}
+}
+
+// removeUnreferencedLabSecret deletes the keychain item (service, account)
+// when no context in cfg references it, and reports whether it did. It is the
+// rollback for an item a failed sync had just written; an item any context
+// still references is left alone. A build without a keychain backend has
+// nothing to remove, so config.ErrKeychainUnsupported counts as not removed.
+func removeUnreferencedLabSecret(cfg *config.Config, service, account string) (bool, error) {
+	if labKeychainItemReferencedBy(cfg, "", service, account) != "" {
+		return false, nil
+	}
+	err := labDeleteSecretFn(service, account)
+	switch {
+	case errors.Is(err, config.ErrKeychainUnsupported):
+		return false, nil
+	case err != nil:
+		return false, fmt.Errorf("remove the unreferenced keychain item %s/%s: %w", service, account, err)
+	default:
+		return true, nil
+	}
+}
+
 // syncLabContext performs the full mint/probe/rotate + upsert routine against
 // a lab's node 0, then verifies the resulting context end to end. It ensures
 // the pmx@pve user and ACL exist, reuses a still-valid stored secret (or
@@ -422,6 +464,14 @@ func warnUnreferencedLabSecret(cmd *cobra.Command, deps *cli.Deps, ctxName, name
 func syncLabContext(cmd *cobra.Command, deps *cli.Deps, lab *config.Lab, opts labSyncOptions) (labSyncResult, error) {
 	var res labSyncResult
 	res.ContextName = labContextName(lab.Name)
+
+	// Refuse a lab-<name> context the operator owns before anything changes:
+	// UpsertLabContext would refuse it anyway, but only after the token on
+	// the node had been rotated and the new secret stored in the keychain,
+	// leaving a minted token and an unreferenced keychain item behind.
+	if err := config.CheckLabContextOwned(deps.Cfg, res.ContextName, lab.Network.Mgmt.Subnet); err != nil {
+		return res, err
+	}
 
 	node0IP, err := labNodeMgmtIP(lab.Network, 0)
 	if err != nil {
@@ -469,6 +519,10 @@ func syncLabContext(cmd *cobra.Command, deps *cli.Deps, lab *config.Lab, opts la
 
 	secretRef := ""
 	previousRef := ""
+	// storedService and storedAccount name the keychain item this run wrote,
+	// if any; a failure before the context referencing it is saved removes it
+	// again (see failBeforeSave).
+	storedService, storedAccount := "", ""
 	if existing, ok := deps.Cfg.Contexts[res.ContextName]; ok && existing != nil {
 		previousRef = existing.Auth.Secret
 		if existing.Auth.Secret != "" && existing.Auth.Username == labCtxUser &&
@@ -503,6 +557,31 @@ func syncLabContext(cmd *cobra.Command, deps *cli.Deps, lab *config.Lab, opts la
 			return res, afterRotation(res.Rotated, err)
 		}
 		secretRef = ref
+		if s, a, ok := config.ParseKeychainRef(ref); ok && s == service && a == account {
+			storedService, storedAccount = service, account
+		}
+	}
+
+	// Until the config is saved, a failure must leave both the in-memory
+	// config and the keychain as they were persisted: restore the context's
+	// pre-run state, then remove the item this run wrote unless some context
+	// still references it (the context being written may have referenced it
+	// before this run, in which case the item now holds the only valid
+	// secret and must stay).
+	restoreContext := snapshotLabContext(deps.Cfg, res.ContextName)
+	failBeforeSave := func(err error) (labSyncResult, error) {
+		restoreContext()
+		if storedService != "" {
+			removed, rerr := removeUnreferencedLabSecret(deps.Cfg, storedService, storedAccount)
+			switch {
+			case rerr != nil:
+				err = fmt.Errorf("%w; %w", err, rerr)
+			case removed:
+				err = fmt.Errorf("%w; removed the keychain item %s/%s it had just written",
+					err, storedService, storedAccount)
+			}
+		}
+		return res, afterRotation(res.Rotated, err)
 	}
 
 	in := config.LabContextInput{
@@ -517,12 +596,12 @@ func syncLabContext(cmd *cobra.Command, deps *cli.Deps, lab *config.Lab, opts la
 	}
 	changed, err := config.UpsertLabContext(deps.Cfg, res.ContextName, in)
 	if err != nil {
-		return res, afterRotation(res.Rotated, err)
+		return failBeforeSave(err)
 	}
 	res.Changed = changed
 
 	if err := config.Save(deps.ConfigPath, deps.Cfg); err != nil {
-		return res, afterRotation(res.Rotated, fmt.Errorf("save config: %w", err))
+		return failBeforeSave(fmt.Errorf("save config: %w", err))
 	}
 	warnUnreferencedLabSecret(cmd, deps, res.ContextName, lab.Name, previousRef, secretRef)
 
@@ -629,7 +708,11 @@ func newContextSyncCmd() *cobra.Command {
 			"already references that keychain item. A reused secret keeps the reference the " +
 			"context already has, including the older `pmx-lab-<name>` form. When a rotation " +
 			"moves a context off such an older item, sync leaves the item in place and prints " +
-			"the command that removes it, since a same-named lab in another config may still use it.",
+			"the command that removes it, since a same-named lab in another config may still use it.\n\n" +
+			"An existing `lab-<name>` context that does not look lab-derived is refused before " +
+			"anything runs on the node, so no token is minted and nothing is stored. When a step " +
+			"after the keychain store fails before the config is saved, sync removes the item it " +
+			"just wrote unless a context still references it.",
 		Example: `  pmx -c fleet lab context sync demo`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

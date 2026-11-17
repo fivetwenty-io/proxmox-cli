@@ -1347,6 +1347,8 @@ func TestSyncLabContext_PostRotationFailuresNameTheRotation(t *testing.T) {
 				// A directory where the config file belongs makes the write
 				// fail without any stubbing of the config package.
 				deps.ConfigPath = t.TempDir()
+				// The failed save rolls back the item the store just wrote.
+				recordKeychainDeletes(t)
 			},
 		},
 		{

@@ -154,6 +154,43 @@ func TestUpsertLabContext_OwnershipGuardRefusesUnrelated(t *testing.T) {
 	assert.Equal(t, "keep", cfg.Contexts["lab-demo"].Auth.Secret)
 }
 
+func TestCheckLabContextOwned(t *testing.T) {
+	const subnet = "10.10.1.0/24"
+	cfg := &Config{Contexts: map[string]*Context{
+		"lab-pmx": {
+			Host: "192.0.2.50", Product: ProductPVE,
+			Auth: AuthBlock{Type: "token", Username: "pmx@pve", TokenID: "pmx", Secret: "s"},
+		},
+		"lab-subnet": {
+			Host: "10.10.1.10", Product: ProductPVE,
+			Auth: AuthBlock{Type: "token", Username: "someone@pve", TokenID: "t", Secret: "s"},
+		},
+		"lab-ops": {
+			Host: "192.0.2.50", Product: ProductPVE,
+			Auth: AuthBlock{Type: "token", Username: "root@pam", TokenID: "ops", Secret: "s"},
+		},
+		"lab-pbs": {
+			Host: "10.10.1.10", Product: ProductPBS,
+			Auth: AuthBlock{Type: "token", Username: "pmx@pve", TokenID: "pmx", Secret: "s"},
+		},
+		"lab-nil": nil,
+	}}
+
+	require.NoError(t, CheckLabContextOwned(nil, "lab-x", subnet))
+	require.NoError(t, CheckLabContextOwned(&Config{}, "lab-x", subnet))
+	require.NoError(t, CheckLabContextOwned(cfg, "lab-absent", subnet))
+	require.NoError(t, CheckLabContextOwned(cfg, "lab-nil", subnet))
+	require.NoError(t, CheckLabContextOwned(cfg, "lab-pmx", subnet))
+	require.NoError(t, CheckLabContextOwned(cfg, "lab-subnet", subnet))
+
+	for _, name := range []string{"lab-ops", "lab-pbs"} {
+		err := CheckLabContextOwned(cfg, name, subnet)
+		require.Error(t, err, name)
+		assert.Contains(t, err.Error(), `refusing to overwrite existing context "`+name+`"`)
+		assert.Contains(t, err.Error(), "does not look lab-derived")
+	}
+}
+
 func TestUpsertLabContext_OwnedByMgmtSubnetHostMatch(t *testing.T) {
 	cfg := &Config{Contexts: map[string]*Context{
 		"lab-demo": {
