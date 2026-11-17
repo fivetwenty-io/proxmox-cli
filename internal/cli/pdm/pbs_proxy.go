@@ -482,7 +482,7 @@ func finishRemoteAsync(cmd *cobra.Command, deps *cli.Deps, remote string, raw js
 func finishRemoteTaskAsync(
 	cmd *cobra.Command, deps *cli.Deps, product, remote string, raw json.RawMessage, msg string, poll remoteTaskStatusFunc,
 ) error {
-	upid, err := apiclient.UPIDFromRaw(raw)
+	upid, err := apiclient.RemoteUPIDFromRaw(raw)
 	if err != nil {
 		return err
 	}

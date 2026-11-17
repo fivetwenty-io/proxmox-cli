@@ -2,11 +2,16 @@ package pdm
 
 import (
 	"bytes"
+	"context"
+	"net/http"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
+	"github.com/fivetwenty-io/proxmox-cli/internal/exitcode"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
+	"github.com/fivetwenty-io/proxmox-cli/internal/testhelper"
 )
 
 // TestPveQemuCmd_WiresAllVerbs asserts that `pve qemu` exposes the full
@@ -161,4 +166,97 @@ func TestPveQemuRemoteMigrate_WaitsForRemoteTask(t *testing.T) {
 	require.Equal(t, []string{"vmbr0"}, rec.form["target-bridge"])
 	require.Equal(t, []string{"local"}, rec.form["target-storage"])
 	require.Contains(t, buf.String(), "remote-migrated")
+}
+
+// prefixedUPID is the task handle PDM returns for a task it proxies on a
+// managed remote: the remote's product and name ahead of the node's UPID.
+const prefixedUPID = "pve:cluster1!UPID:pve-0:0000A1B2:00C3D4E5:66F0A1B2:qmigrate:104:root@pam!pdm:"
+
+// TestPveQemuMigrate_AcceptsPDMPrefixedTaskID covers the handle shape PDM
+// really emits for proxied tasks. The command must print the handle with
+// --async, and must wait on it through the PDM remote-task endpoint without
+// --async, both with exit code 0.
+func TestPveQemuMigrate_AcceptsPDMPrefixedTaskID(t *testing.T) {
+	for _, async := range []bool{true, false} {
+		f, pc := newFakeClient(t)
+		deps := depsFor(t, pc, output.FormatJSON, async)
+
+		var rec recordedRequest
+		recordJSON(f, "POST /api2/json/pve/remotes/cluster1/qemu/104/migrate", &rec, prefixedUPID)
+
+		polled := false
+		f.HandleFunc("GET /api2/json/pve/remotes/cluster1/tasks/"+prefixedUPID+"/status",
+			func(w http.ResponseWriter, _ *http.Request) {
+				polled = true
+				testhelper.WriteData(w, map[string]any{
+					"id": "qmigrate", "node": "pve-0", "pid": 1, "pstart": 1, "starttime": 1, "type": "qmigrate",
+					"upid": prefixedUPID, "user": "root@pam", "status": "stopped", "exitstatus": "OK",
+				})
+			})
+
+		var buf bytes.Buffer
+		err := run(deps, &buf, newPveQemuMigrateCmd(), "migrate", "cluster1", "104",
+			"--target-node", "pve2", "--online", "--yes")
+		require.NoError(t, err, "async=%v", async)
+		require.Equal(t, exitcode.OK, exitcode.FromError(err), "async=%v", async)
+
+		if async {
+			require.Contains(t, buf.String(), prefixedUPID)
+			require.False(t, polled, "--async must not poll the task")
+		} else {
+			require.True(t, polled, "a blocking migrate must poll the remote-task status endpoint")
+			require.Contains(t, buf.String(), "migrated")
+		}
+	}
+}
+
+// TestPveQemuMigrate_PrefixedTaskFailureExitsNonZero asserts that a proxied
+// task that stops with an error status fails the command with a nonzero code.
+func TestPveQemuMigrate_PrefixedTaskFailureExitsNonZero(t *testing.T) {
+	f, pc := newFakeClient(t)
+	deps := depsFor(t, pc, output.FormatJSON, false)
+
+	f.HandleJSON("POST /api2/json/pve/remotes/cluster1/qemu/104/migrate", prefixedUPID)
+	f.HandleJSON("GET /api2/json/pve/remotes/cluster1/tasks/"+prefixedUPID+"/status", map[string]any{
+		"id": "qmigrate", "node": "pve-0", "pid": 1, "pstart": 1, "starttime": 1, "type": "qmigrate",
+		"upid": prefixedUPID, "user": "root@pam", "status": "stopped", "exitstatus": "migration aborted",
+	})
+
+	var buf bytes.Buffer
+	err := run(deps, &buf, newPveQemuMigrateCmd(), "migrate", "cluster1", "104",
+		"--target-node", "pve2", "--yes")
+	require.ErrorContains(t, err, "migration aborted")
+	require.NotEqual(t, exitcode.OK, exitcode.FromError(err))
+}
+
+// TestFinishRemoteAsync_AcceptsPDMPrefixedTaskID covers the PBS side of the
+// shared remote-task path: PDM prefixes a proxied PBS task with `pbs:<remote>!`.
+func TestFinishRemoteAsync_AcceptsPDMPrefixedTaskID(t *testing.T) {
+	const pbsUPID = "pbs:store1!UPID:pbs-0:0000A1B2:00C3D4E5:66F0A1B2:aptupdate::root@pam:"
+
+	for _, async := range []bool{true, false} {
+		f, pc := newFakeClient(t)
+		deps := depsFor(t, pc, output.FormatJSON, async)
+
+		f.HandleJSON("GET /api2/json/pbs/remotes/store1/tasks/"+pbsUPID+"/status", map[string]any{
+			"node": "pbs-0", "pid": 1, "pstart": 1, "starttime": 1, "worker_type": "aptupdate",
+			"upid": pbsUPID, "user": "root@pam", "status": "stopped", "exitstatus": "OK",
+		})
+
+		cmd := &cobra.Command{Use: "test"}
+		cmd.SetContext(context.Background())
+
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+
+		err := finishRemoteAsync(cmd, deps, "store1", mustJSONString(t, pbsUPID), "Remote task completed")
+		require.NoError(t, err, "async=%v", async)
+		require.Equal(t, exitcode.OK, exitcode.FromError(err))
+
+		if async {
+			require.Contains(t, buf.String(), pbsUPID)
+		} else {
+			require.Contains(t, buf.String(), "Remote task completed")
+		}
+	}
 }

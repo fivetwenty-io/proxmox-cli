@@ -567,3 +567,58 @@ func TestBuildOptions_BoundsConnectionEstablishment(t *testing.T) {
 	require.Equal(t, 5, opts.DialTimeoutSec)
 	require.Equal(t, 10, opts.TLSHandshakeTimeoutSec)
 }
+
+// ---------------------------------------------------------------------------
+// RemoteUPIDFromRaw
+// ---------------------------------------------------------------------------
+
+// PDM proxies tasks that run on a managed remote and prefixes their UPID with
+// the remote's product and name. Every one of these forms must decode to the
+// handle exactly as the server sent it.
+func TestRemoteUPIDFromRaw_AcceptsEveryPrefixForm(t *testing.T) {
+	t.Parallel()
+
+	const tail = "UPID:pve-0:0000A1B2:00C3D4E5:66F0A1B2:qmigrate:104:root@pam!pdm:"
+
+	for _, handle := range []string{
+		tail,
+		"lab!" + tail,
+		"pve:lab!" + tail,
+		"pbs:store-1!" + tail,
+	} {
+		raw, err := json.Marshal(handle)
+		require.NoError(t, err)
+
+		got, err := apiclient.RemoteUPIDFromRaw(raw)
+		require.NoError(t, err, "handle=%s", handle)
+		require.Equal(t, handle, got)
+	}
+}
+
+func TestRemoteUPIDFromRaw_RejectsNonHandles(t *testing.T) {
+	t.Parallel()
+
+	for _, raw := range []json.RawMessage{
+		json.RawMessage(``),
+		json.RawMessage(`"ok"`),
+		json.RawMessage(`"!UPID:x"`),
+		json.RawMessage(`"pve:!UPID:x"`),
+		json.RawMessage(`":lab!UPID:x"`),
+		json.RawMessage(`"lab!UPID:"`),
+		json.RawMessage(`"has space!UPID:x"`),
+		json.RawMessage(`"lab!notupid"`),
+		json.RawMessage(`42`),
+		json.RawMessage(`{"upid":"UPID:x"}`),
+	} {
+		_, err := apiclient.RemoteUPIDFromRaw(raw)
+		require.Error(t, err, "raw=%s", raw)
+		require.NotErrorIs(t, err, apiclient.ErrNoTask, "raw=%s", raw)
+	}
+}
+
+func TestRemoteUPIDFromRaw_EmptyStringIsNoTask(t *testing.T) {
+	t.Parallel()
+
+	_, err := apiclient.RemoteUPIDFromRaw(json.RawMessage(`""`))
+	require.ErrorIs(t, err, apiclient.ErrNoTask)
+}

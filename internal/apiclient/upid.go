@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"sync/atomic"
 
@@ -31,17 +32,9 @@ var ErrNoTask = errors.New("response carries no task handle (the server complete
 // sync — e.g. disk resize and SDN apply — rely on this rejecting a non-UPID
 // body rather than mistaking it for a task handle.
 func UPIDFromRaw(raw json.RawMessage) (string, error) {
-	if len(raw) == 0 {
-		return "", fmt.Errorf("decode UPID: empty raw message")
-	}
-
-	var upid string
-	if err := json.Unmarshal(raw, &upid); err != nil {
-		return "", fmt.Errorf("decode UPID: %w", err)
-	}
-
-	if upid == "" {
-		return "", ErrNoTask
+	upid, err := taskStringFromRaw(raw)
+	if err != nil {
+		return "", err
 	}
 
 	if !strings.HasPrefix(upid, "UPID:") {
@@ -49,6 +42,61 @@ func UPIDFromRaw(raw json.RawMessage) (string, error) {
 	}
 
 	return upid, nil
+}
+
+// RemoteUPIDFromRaw extracts the task handle from the response of a Proxmox
+// Datacenter Manager verb that proxies a task running on a managed remote.
+//
+// PDM does not hand back a bare UPID for those tasks. It prefixes the UPID with
+// the remote that owns it and, on current releases, the remote's product, so
+// the handle reads `pve:<remote>!UPID:...` (or `<remote>!UPID:...` on older
+// releases). A plain `UPID:...` is accepted too, so one decoder serves every
+// release. The handle is returned exactly as the server sent it, because PDM's
+// remote-task endpoints address tasks by that same form.
+//
+// An empty response reports ErrNoTask, as UPIDFromRaw does. Anything whose
+// remainder after the remote prefix is not a UPID is rejected, so a response
+// that carries no task handle is still never mistaken for one.
+func RemoteUPIDFromRaw(raw json.RawMessage) (string, error) {
+	handle, err := taskStringFromRaw(raw)
+	if err != nil {
+		return "", err
+	}
+
+	if strings.HasPrefix(handle, "UPID:") {
+		return handle, nil
+	}
+
+	prefix, rest, found := strings.Cut(handle, "!UPID:")
+	if !found || prefix == "" || strings.ContainsAny(prefix, " \t\r\n") || rest == "" {
+		return "", fmt.Errorf("decode UPID: %q is not a UPID or a remote UPID", handle)
+	}
+
+	// The prefix is `<remote>` or `<product>:<remote>`; neither part may be empty.
+	if slices.Contains(strings.Split(prefix, ":"), "") {
+		return "", fmt.Errorf("decode UPID: %q is not a UPID or a remote UPID", handle)
+	}
+
+	return handle, nil
+}
+
+// taskStringFromRaw unmarshals a task-handle response to its string, reporting
+// an empty string as ErrNoTask. Callers validate the shape of the string.
+func taskStringFromRaw(raw json.RawMessage) (string, error) {
+	if len(raw) == 0 {
+		return "", fmt.Errorf("decode UPID: empty raw message")
+	}
+
+	var handle string
+	if err := json.Unmarshal(raw, &handle); err != nil {
+		return "", fmt.Errorf("decode UPID: %w", err)
+	}
+
+	if handle == "" {
+		return "", ErrNoTask
+	}
+
+	return handle, nil
 }
 
 // WaitTask blocks until the Proxmox task identified by upid reaches a terminal
