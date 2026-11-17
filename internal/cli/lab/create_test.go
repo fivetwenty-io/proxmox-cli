@@ -270,6 +270,7 @@ func buildCreateCmdWithSSH(
 	)
 	deps.Runner = createIdentityRunner(f, fake, node)
 	deps.Ctx = &config.Context{SSH: config.SSHBlock{User: "root", Port: 22}}
+	deps.CtxName = "fleet"
 
 	origProbe, origStore := labProbeContextVersion, labStoreSecretFn
 	labProbeContextVersion = func(*cobra.Command, *cli.Deps, string) error { return nil }
@@ -418,6 +419,7 @@ func createStartWaitDeps(
 	fake := exec.Fake(responses...)
 	deps.Runner = createIdentityRunner(f, fake, "node1")
 	deps.Ctx = &config.Context{SSH: config.SSHBlock{User: "root", Port: 22}}
+	deps.CtxName = "fleet"
 
 	origProbe, origStore := labProbeContextVersion, labStoreSecretFn
 	labProbeContextVersion = func(*cobra.Command, *cli.Deps, string) error { return nil }

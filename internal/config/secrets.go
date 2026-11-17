@@ -58,6 +58,30 @@ func ResolveSecret(s string) (string, error) {
 	}
 }
 
+// KeychainRef builds the "keychain:<service>/<account>" secret reference that
+// ResolveSecret reads back with keychainLookup. It is the single place the
+// reference shape is spelled, so writers and ParseKeychainRef agree on it.
+func KeychainRef(service, account string) string {
+	return "keychain:" + service + "/" + account
+}
+
+// ParseKeychainRef splits a "keychain:<service>[/<account>]" reference into
+// its service and account, splitting on the first "/" exactly as
+// keychainLookup does. ok is false when s is not a keychain reference or names
+// no service. A bare "keychain:<service>" reference yields an empty account,
+// which keychainLookup treats as "any account under that service".
+func ParseKeychainRef(s string) (service, account string, ok bool) {
+	path, found := strings.CutPrefix(s, "keychain:")
+	if !found {
+		return "", "", false
+	}
+	service, account, _ = strings.Cut(path, "/")
+	if service == "" {
+		return "", "", false
+	}
+	return service, account, true
+}
+
 // IsSecretReference reports whether s is a secret reference rather than a
 // literal value, using the same syntax ResolveSecret dispatches on: ${NAME},
 // $NAME where NAME is a syntactically valid environment variable name, or

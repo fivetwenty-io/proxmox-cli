@@ -345,3 +345,29 @@ func TestDeleteKeychainSecret_RealErrorPropagates(t *testing.T) {
 	require.Error(t, err)
 	assert.True(t, strings.Contains(err.Error(), "keychain is locked"))
 }
+
+// TestKeychainPurge_MatchesOnlyTheExactService pins that the duplicate purge
+// run by both store and delete addresses one (service, account) pair exactly.
+// security(1) matches -s and -a as whole attribute values, so purging a lab's
+// namespaced item can never reach the legacy item or another namespace's item
+// for the same lab name.
+func TestKeychainPurge_MatchesOnlyTheExactService(t *testing.T) {
+	var deletes [][]string
+	orig := keychainRun
+	keychainRun = func(_ string, args ...string) (string, error) {
+		if len(args) > 0 && args[0] == "delete-generic-password" {
+			deletes = append(deletes, args)
+			return notFoundStderr, errors.New("exit 44")
+		}
+		return "", nil
+	}
+	defer func() { keychainRun = orig }()
+
+	require.NoError(t, StoreKeychainSecret("pmx-lab.fleet.demo", "pmx@pve!pmx", "s3cr3t-value"))
+	require.NoError(t, DeleteKeychainSecret("pmx-lab.fleet.demo", "pmx@pve!pmx"))
+
+	require.Len(t, deletes, 2)
+	for _, args := range deletes {
+		assert.Equal(t, []string{"delete-generic-password", "-s", "pmx-lab.fleet.demo", "-a", "pmx@pve!pmx"}, args)
+	}
+}

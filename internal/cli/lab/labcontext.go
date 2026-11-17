@@ -38,15 +38,6 @@ func labContextName(name string) string {
 	return "lab-" + name
 }
 
-// labKeychainService returns the keychain service identifier for a lab
-// context's token secret, given the base lab name: "pmx-lab-" + name. The
-// keychain service name is passed to the platform keychain API when storing or
-// retrieving the secret portion of the lab context's token, where it serves as
-// a namespace key, and must match the value used when the secret was stored.
-func labKeychainService(name string) string {
-	return "pmx-lab-" + name
-}
-
 // labCtxAccount returns the full account identifier for derived lab contexts:
 // the concatenation of labCtxUser and labCtxTokenName joined by "!". Token
 // accounts in Proxmox use the format "user!tokenname" to identify both the
@@ -357,7 +348,7 @@ var labStoreSecretFn = func(cmd *cobra.Command, deps *cli.Deps, service, account
 	err := config.StoreKeychainSecret(service, account, secret)
 	switch {
 	case err == nil:
-		return "keychain:" + service + "/" + account, nil
+		return config.KeychainRef(service, account), nil
 	case errors.Is(err, config.ErrKeychainUnsupported):
 		_, _ = fmt.Fprintf(cmd.ErrOrStderr(),
 			"WARN: no macOS keychain on this platform; storing the lab token secret literally in %s (0600). "+
@@ -371,6 +362,55 @@ var labStoreSecretFn = func(cmd *cobra.Command, deps *cli.Deps, service, account
 // labDeleteSecretFn removes a lab's stored keychain secret; a package var so
 // destroy tests can bypass the real keychain.
 var labDeleteSecretFn = config.DeleteKeychainSecret
+
+// labSecretStoreTarget returns the keychain item a freshly minted token secret
+// for the lab named name is stored under: the namespaced service for the
+// outer context this invocation runs against, and the lab token account. It
+// refuses when any context other than ctxName (the one being written) still
+// references that item, since storing would overwrite a credential that
+// context depends on.
+func labSecretStoreTarget(deps *cli.Deps, ctxName, name string) (service, account string, err error) {
+	outer, err := labOuterContextName(deps)
+	if err != nil {
+		return "", "", err
+	}
+	service, account = labKeychainService(outer, name), labCtxAccount()
+	if other := labKeychainItemReferencedBy(deps.Cfg, ctxName, service, account); other != "" {
+		return "", "", fmt.Errorf(
+			"refusing to store the token secret for context %q in keychain item %s/%s: "+
+				"context %q still references that item; point %q at a different secret or remove it first",
+			ctxName, service, account, other, other)
+	}
+	return service, account, nil
+}
+
+// warnUnreferencedLabSecret tells the operator when a rotation moved the lab
+// context named ctxName off a keychain item that belongs to the lab named name
+// (typically the legacy name-only item) and nothing in this config references
+// that item any more. pmx never deletes it here: a same-named lab reached from
+// another config may still use the legacy item, and only that config can tell.
+// The note goes to stderr and is advisory only.
+func warnUnreferencedLabSecret(cmd *cobra.Command, deps *cli.Deps, ctxName, name, previousRef, newRef string) {
+	if previousRef == "" || previousRef == newRef {
+		return
+	}
+	newService, newAccount, isKeychain := config.ParseKeychainRef(newRef)
+	if !isKeychain {
+		return
+	}
+	service, account, owned := labOwnedSecretRef(previousRef, name)
+	if !owned || (service == newService && account == newAccount) {
+		return
+	}
+	if labKeychainItemReferencedBy(deps.Cfg, "", service, account) != "" {
+		return
+	}
+	_, _ = fmt.Fprintf(cmd.ErrOrStderr(),
+		"NOTE: context %q now uses keychain item %s/%s; the previous item %s/%s is no longer referenced "+
+			"by this config and was left in place, since a same-named lab in another config may use it. "+
+			"If nothing uses it, remove it with: security delete-generic-password -s %s -a '%s'\n",
+		ctxName, newService, newAccount, service, account, service, account)
+}
 
 // syncLabContext performs the full mint/probe/rotate + upsert routine against
 // a lab's node 0, then verifies the resulting context end to end. It ensures
@@ -401,9 +441,6 @@ func syncLabContext(cmd *cobra.Command, deps *cli.Deps, lab *config.Lab, opts la
 		return res, err
 	}
 
-	service := labKeychainService(lab.Name)
-	account := labCtxAccount()
-
 	// Reuse a still-valid stored secret rather than rotating (a re-run must
 	// never invalidate a working credential). Only reuse a context that
 	// already carries this lab's own pmx@pve!pmx identity and a secret: a
@@ -431,15 +468,27 @@ func syncLabContext(cmd *cobra.Command, deps *cli.Deps, lab *config.Lab, opts la
 	}
 
 	secretRef := ""
-	if existing, ok := deps.Cfg.Contexts[res.ContextName]; ok && existing != nil &&
-		existing.Auth.Secret != "" && existing.Auth.Username == labCtxUser &&
-		existing.Auth.TokenID == labCtxTokenName {
-		switch perr := labProbeContextVersion(cmd, deps, res.ContextName); {
-		case perr == nil, labProbeTransportFailed(perr):
-			secretRef = existing.Auth.Secret
+	previousRef := ""
+	if existing, ok := deps.Cfg.Contexts[res.ContextName]; ok && existing != nil {
+		previousRef = existing.Auth.Secret
+		if existing.Auth.Secret != "" && existing.Auth.Username == labCtxUser &&
+			existing.Auth.TokenID == labCtxTokenName {
+			switch perr := labProbeContextVersion(cmd, deps, res.ContextName); {
+			case perr == nil, labProbeTransportFailed(perr):
+				secretRef = existing.Auth.Secret
+			}
 		}
 	}
 	if secretRef == "" {
+		// A fresh secret goes to this lab's namespaced keychain item, never
+		// to the legacy name-only item. The target is resolved and checked
+		// before the mint, because the mint destroys the previous token and
+		// a refusal after it would leave the lab with no valid credential.
+		service, account, err := labSecretStoreTarget(deps, res.ContextName, lab.Name)
+		if err != nil {
+			return res, err
+		}
+
 		secret, err := labMintToken(deps, node0IP)
 		if err != nil {
 			return res, err
@@ -475,6 +524,7 @@ func syncLabContext(cmd *cobra.Command, deps *cli.Deps, lab *config.Lab, opts la
 	if err := config.Save(deps.ConfigPath, deps.Cfg); err != nil {
 		return res, afterRotation(res.Rotated, fmt.Errorf("save config: %w", err))
 	}
+	warnUnreferencedLabSecret(cmd, deps, res.ContextName, lab.Name, previousRef, secretRef)
 
 	// Mandatory end-to-end proof the context actually works.
 	if err := labProbeContextVersion(cmd, deps, res.ContextName); err != nil {
@@ -492,6 +542,15 @@ func newContextCmd() *cobra.Command {
 		Long: "Register or refresh the pmx context (named `lab-<name>`) that points at a lab's " +
 			"nested Proxmox VE API, minting a dedicated admin token over ssh and storing its " +
 			"secret in the macOS keychain.\n\n" +
+			"A newly minted secret is stored under the keychain service " +
+			"`pmx-lab.<outer-context>.<name>` with account `pmx@pve!pmx`, where " +
+			"<outer-context> is the pmx context the lab was reached through (a name outside " +
+			"letters, digits, and hyphens is sanitized and given a hash suffix). Same-named labs " +
+			"on different outer contexts therefore never share a keychain item. The context " +
+			"records the full `keychain:<service>/<account>` reference, and everything that reads " +
+			"the secret follows that reference. Contexts written before namespacing reference the " +
+			"older `pmx-lab-<name>` service and keep working unchanged until their token is " +
+			"next rotated.\n\n" +
 			"`pmx lab create --start` runs this automatically. Use `sync` to register or " +
 			"re-register a lab, rotate a lost secret, or refresh the pinned TLS fingerprint.",
 	}
@@ -501,19 +560,27 @@ func newContextCmd() *cobra.Command {
 }
 
 // newContextRmCmd builds `pmx lab context rm <name>`. It removes the lab-<name>
-// pmx context from config and deletes its keychain secret, reusing the same
-// cleanupLabContext helper that `lab destroy` runs. Unlike destroy it touches
-// no VMs and does not need the lab to still be defined, so it is the primitive
-// for cleaning up a context orphaned by removing its lab definition (or a
-// partially-registered lab that has a stray context or keychain secret).
-// Reversible while the lab's node 0 is running: `context sync` re-registers.
+// pmx context from config and deletes the keychain secret that context
+// references, reusing the same cleanupLabContext helper that `lab destroy`
+// runs, so it follows the same rule: only the item the context's own secret
+// reference names is deleted, and only when it is one of this lab's token
+// items that no other context references. Unlike destroy it touches no VMs and
+// does not need the lab to still be defined, so it is the primitive for
+// cleaning up a context orphaned by removing its lab definition. Reversible
+// while the lab's node 0 is running: `context sync` re-registers.
 func newContextRmCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:     "rm <name>",
 		Aliases: []string{"remove", "delete"},
-		Short:   "Remove a lab's pmx context and keychain secret",
-		Long: "Remove the `lab-<name>` pmx context from config and delete its token secret from " +
-			"the macOS keychain.\n\n" +
+		Short:   "Remove a lab's pmx context and the keychain secret it references",
+		Long: "Remove the `lab-<name>` pmx context from config and delete the token secret it " +
+			"references from the macOS keychain.\n\n" +
+			"Only the keychain item named by the context's own `keychain:<service>/<account>` " +
+			"reference is deleted, and only when it is one of this lab's token items " +
+			"(`pmx-lab.<outer-context>.<name>`, or the older `pmx-lab-<name>`) that no other " +
+			"context references. When `lab-<name>` is not in the active config, nothing is " +
+			"removed from the keychain, because a same-named lab reached through another outer " +
+			"context or config may own the item.\n\n" +
 			"Unlike `pmx lab destroy` this touches no VMs and does not need the lab to still " +
 			"be defined, so it cleans up a context left orphaned by removing its lab. If " +
 			"`lab-<name>` is the active context, it is unset.\n\n" +
@@ -531,23 +598,12 @@ func newContextRmCmd() *cobra.Command {
 			if err := validateLabNameCharset(name); err != nil {
 				return err
 			}
-			ctxName := labContextName(name)
 
-			// Match cleanupLabContext's own comma-ok presence test (a nil-valued
-			// map entry still counts as present and is removed) so the success
-			// message never claims "not found" for a context it just deleted.
-			present := false
-			if deps.Cfg != nil && deps.Cfg.Contexts != nil {
-				_, present = deps.Cfg.Contexts[ctxName]
-			}
-			if err := cleanupLabContext(deps, name); err != nil {
+			plan, err := cleanupLabContext(deps, name)
+			if err != nil {
 				return fmt.Errorf("remove context for lab %q: %w", name, err)
 			}
-
-			msg := fmt.Sprintf("removed context %q and its keychain secret", ctxName)
-			if !present {
-				msg = fmt.Sprintf("context %q not found; cleared any keychain secret for it", ctxName)
-			}
+			msg := plan.describe(false)
 			return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: msg}, deps.Format)
 		},
 	}
@@ -566,7 +622,14 @@ func newContextSyncCmd() *cobra.Command {
 			"  3. refresh the pinned TLS fingerprint\n" +
 			"  4. verify the context end to end with GET /version\n\n" +
 			"Requires an active pmx context (--context/-c) as the source of ssh connection " +
-			"defaults, and the lab's node 0 to be running.",
+			"defaults, and the lab's node 0 to be running.\n\n" +
+			"A rotated secret is stored in the keychain under service " +
+			"`pmx-lab.<outer-context>.<name>`, named for that active context, and the context " +
+			"records the full reference. Sync refuses before rotating when another context " +
+			"already references that keychain item. A reused secret keeps the reference the " +
+			"context already has, including the older `pmx-lab-<name>` form. When a rotation " +
+			"moves a context off such an older item, sync leaves the item in place and prints " +
+			"the command that removes it, since a same-named lab in another config may still use it.",
 		Example: `  pmx -c fleet lab context sync demo`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

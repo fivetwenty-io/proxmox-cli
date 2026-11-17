@@ -51,8 +51,9 @@ func TestLabContextName(t *testing.T) {
 	}
 }
 
-// TestLabKeychainService verifies keychain service name formation.
-func TestLabKeychainService(t *testing.T) {
+// TestLabLegacyKeychainService verifies the legacy, name-only keychain service
+// form that contexts written before namespacing still reference.
+func TestLabLegacyKeychainService(t *testing.T) {
 	tests := []struct {
 		input    string
 		expected string
@@ -65,7 +66,7 @@ func TestLabKeychainService(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			result := labKeychainService(tt.input)
+			result := labLegacyKeychainService(tt.input)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -899,6 +900,7 @@ func syncTestDeps(t *testing.T, fake *exec.FakeRunner) (*cobra.Command, *cli.Dep
 		Format:     output.FormatPlain,
 		Runner:     fake,
 		Ctx:        &config.Context{SSH: config.SSHBlock{User: "root", Port: 22}},
+		CtxName:    "fleet",
 	}
 
 	origProbe, origStore := labProbeContextVersion, labStoreSecretFn
@@ -939,7 +941,8 @@ func TestSyncLabContext_FreshMintsAndWritesContext(t *testing.T) {
 	ctx := deps.Cfg.Contexts["lab-demo"]
 	require.NotNil(t, ctx)
 	assert.Equal(t, "10.10.1.10", ctx.Host)
-	assert.Equal(t, "keychain:pmx-lab-demo/pmx@pve!pmx", ctx.Auth.Secret)
+	assert.Equal(t, "keychain:pmx-lab.fleet.demo/pmx@pve!pmx", ctx.Auth.Secret,
+		"a fresh secret is namespaced by the outer context")
 	assert.Equal(t, fp, ctx.TLS.Fingerprint)
 	assert.Equal(t, "lab-demo-0", ctx.DefaultNode)
 
@@ -1021,7 +1024,7 @@ func TestSyncLabContext_RefusesReuseWhenIdentityDiffers(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, res.Rotated, "a foreign identity must force a fresh mint, not reuse")
 	assert.True(t, mintedAToken(fake), "must mint when the stored context is not the lab's own identity")
-	assert.Equal(t, "keychain:pmx-lab-demo/pmx@pve!pmx", deps.Cfg.Contexts["lab-demo"].Auth.Secret)
+	assert.Equal(t, "keychain:pmx-lab.fleet.demo/pmx@pve!pmx", deps.Cfg.Contexts["lab-demo"].Auth.Secret)
 }
 
 func TestSyncLabContext_ReusesOnTransportProbeFailure(t *testing.T) {
@@ -1274,9 +1277,10 @@ func TestContextRm_RejectsInvalidName(t *testing.T) {
 	assert.False(t, called, "an invalid name must be rejected before any keychain call")
 }
 
-// TestContextRm_AbsentContext covers the orphaned-secret path: no lab-<name>
-// context exists in config, but rm must still attempt the keychain delete
-// (the secret may outlive its context) and report the absence without error.
+// TestContextRm_AbsentContext covers rm with no lab-<name> context in config.
+// A lab name alone does not identify a keychain item (a same-named lab reached
+// through another outer context or config may own pmx-lab-<name>), so rm must
+// leave the keychain untouched and say so.
 func TestContextRm_AbsentContext(t *testing.T) {
 	called := false
 	orig := labDeleteSecretFn
@@ -1289,8 +1293,8 @@ func TestContextRm_AbsentContext(t *testing.T) {
 
 	out, err := runGuestCmd(t, root, "rm", "demo")
 	require.NoError(t, err)
-	assert.True(t, called, "rm must still attempt to clear a possibly-stray keychain secret")
-	assert.Contains(t, out, `context "lab-demo" not found`)
+	assert.False(t, called, "rm must not touch the keychain without a context that references an item")
+	assert.Contains(t, out, `context "lab-demo" not found, so no keychain secret was removed`)
 }
 
 // writeLabConfig writes a minimal config.yml at path containing one inline lab

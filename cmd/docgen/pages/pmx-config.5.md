@@ -200,6 +200,7 @@ Each entry under **contexts** is a mapping with the following keys.
      generic password in the macOS login keychain (macOS only; on other
      platforms this form errors, telling the operator to use **${VAR}**
      instead).
+     The lab contexts that **pmx lab create --start** and **pmx lab context sync** register store new token secrets as **keychain:pmx-lab.<outer-context>.<name>/pmx@pve!pmx**, where **<outer-context>** is the pmx context the lab was reached through, so same-named labs on different outer contexts never share an item. Contexts registered before that scheme reference **keychain:pmx-lab-<name>/pmx@pve!pmx** and keep working unchanged. pmx always reads a lab secret through the context's stored reference, and **pmx lab destroy** and **pmx lab context rm** delete only the item that reference names.
   4. Anything else: used verbatim as a plaintext literal. pmx emits a
      one-time warning to stderr the first time a literal secret is resolved,
      since committing this file then leaks the credential.

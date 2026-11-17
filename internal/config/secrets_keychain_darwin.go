@@ -211,3 +211,7 @@ func StoreKeychainSecret(service, account, secret string) error {
 func DeleteKeychainSecret(service, account string) error {
 	return purgeKeychainItems(service, account)
 }
+
+// KeychainSupported reports whether this build has a keychain backend. It is
+// true on macOS, where the login keychain is reached through security(1).
+func KeychainSupported() bool { return true }

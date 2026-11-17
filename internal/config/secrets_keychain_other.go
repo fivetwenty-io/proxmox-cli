@@ -19,3 +19,8 @@ func StoreKeychainSecret(_, _, _ string) error { return ErrKeychainUnsupported }
 // DeleteKeychainSecret is unavailable off macOS; it always returns
 // ErrKeychainUnsupported. Cleanup callers treat this as a no-op.
 func DeleteKeychainSecret(_, _ string) error { return ErrKeychainUnsupported }
+
+// KeychainSupported reports whether this build has a keychain backend. It is
+// false off macOS, where StoreKeychainSecret and DeleteKeychainSecret always
+// return ErrKeychainUnsupported.
+func KeychainSupported() bool { return false }
