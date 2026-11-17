@@ -350,18 +350,21 @@ func verifyLabDatasetTarget(
 			verb, f.User, host, node, err)
 	}
 
-	argv := append(sshcmd.OptionArgs(&f), "-o", fmt.Sprintf("ConnectTimeout=%d", datasetPreflightConnectTimeoutSec),
+	argv := append(sshcmd.OptionArgs(f.ForHost(host)), "-o", fmt.Sprintf("ConnectTimeout=%d", datasetPreflightConnectTimeoutSec),
 		sshcmd.Dest(&f, host), datasetIdentityCommand)
 
 	var stdout, stderr bytes.Buffer
 	if err := deps.Runner.Run("ssh", argv, nil, nil, &stdout, &stderr); err != nil {
+		// The runner's stderr is captured, never shown, so the error must be
+		// marked for printCommandError to print it.
 		reach := "could not be reached"
 		if code := exec.ExitCodeOf(err); code != sshTransportExitCode {
 			reach = fmt.Sprintf("did not answer the identity check (exit %d)", code)
 		}
 
-		return fmt.Errorf("%s: ssh %s@%s %s, so it cannot confirm the target is node %q and stops before changing "+
-			"anything: %w (stderr: %s)", verb, f.User, host, reach, node, err, strings.TrimSpace(stderr.String()))
+		return exec.NewCapturedError(fmt.Errorf(
+			"%s: ssh %s@%s %s, so it cannot confirm the target is node %q and stops before changing "+
+				"anything: %w (stderr: %s)", verb, f.User, host, reach, node, err, strings.TrimSpace(stderr.String())))
 	}
 
 	gotHost, gotFP, err := parseDatasetIdentity(stdout.String())

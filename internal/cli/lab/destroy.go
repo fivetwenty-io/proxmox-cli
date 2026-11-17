@@ -20,6 +20,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/config"
+	"github.com/fivetwenty-io/proxmox-cli/internal/exec"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-cli/internal/peppi"
 	"github.com/fivetwenty-io/proxmox-cli/internal/sshcmd"
@@ -635,9 +636,9 @@ func destroyDatasetOnHost(deps *cli.Deps, lab *config.Lab, f sshcmd.Flags, host 
 	var stderr bytes.Buffer
 	if err := deps.Runner.Run("ssh", argv, nil, nil, io.Discard, &stderr); err != nil {
 		if msg := strings.TrimSpace(stderr.String()); msg != "" {
-			return fmt.Errorf("destroy dataset %s on %s: %w (stderr: %s)", ds, host, err, msg)
+			return exec.NewCapturedError(fmt.Errorf("destroy dataset %s on %s: %w (stderr: %s)", ds, host, err, msg))
 		}
-		return fmt.Errorf("destroy dataset %s on %s: %w", ds, host, err)
+		return exec.NewCapturedError(fmt.Errorf("destroy dataset %s on %s: %w", ds, host, err))
 	}
 	return nil
 }

@@ -3,6 +3,7 @@ package lab
 import (
 	"bytes"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -19,6 +20,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/config"
 	"github.com/fivetwenty-io/proxmox-cli/internal/exec"
+	"github.com/fivetwenty-io/proxmox-cli/internal/sshcmd"
 	"github.com/fivetwenty-io/proxmox-cli/internal/testhelper"
 )
 
@@ -375,6 +377,7 @@ func TestDestroy_PurgeDataset_IdentityPreflight(t *testing.T) {
 			}
 			assert.Empty(t, *events, "nothing is deleted before the preflight passes")
 			assert.Empty(t, fake.Calls, "no zfs command is issued")
+			assertCapturedWhenSSHFailed(t, err)
 		})
 	}
 
@@ -450,6 +453,7 @@ func TestLabQuota_IdentityPreflight(t *testing.T) {
 				assert.ErrorContains(t, err, want)
 			}
 			assert.Empty(t, fake.Calls, "zfs set never runs")
+			assertCapturedWhenSSHFailed(t, err)
 		})
 	}
 
@@ -669,4 +673,46 @@ func TestDestroyHelp_PurgeDatasetFlagMatchesTheLongHelp(t *testing.T) {
 	assert.Contains(t, flag.Usage, "node that hosts the lab's VMs")
 	assert.Contains(t, cmd.Long, "pve-ssl.pem fingerprint")
 	assert.Contains(t, cmd.Long, "goes through a proxy")
+}
+
+// assertCapturedWhenSSHFailed checks that a preflight refusal carrying ssh's
+// exit error is marked as captured. The runner's stderr goes to a buffer, so
+// without the mark the top-level handler would treat the failure as already
+// shown and exit 255 with nothing on the terminal.
+func assertCapturedWhenSSHFailed(t *testing.T, err error) {
+	t.Helper()
+
+	if _, ok := errors.AsType[*exec.ExitError](err); !ok {
+		return
+	}
+
+	var captured *exec.CapturedError
+	assert.ErrorAs(t, err, &captured, "an ssh failure whose stderr was captured must be printed")
+}
+
+// TestDestroyDatasetOnHostMarksSSHFailureCaptured covers the delete step, which
+// reads ssh's stderr into a buffer, so its failure has to reach the terminal.
+func TestDestroyDatasetOnHostMarksSSHFailureCaptured(t *testing.T) {
+	fake := exec.Fake(exec.FakeResponse{Stderr: "jumphost loop via 192.168.1.180", ExitCode: 255})
+	deps := &cli.Deps{Runner: fake}
+
+	err := destroyDatasetOnHost(deps, &config.Lab{Name: "alpha"}, sshcmd.Flags{User: "root", Port: 22}, "192.168.1.180")
+	require.Error(t, err)
+
+	var captured *exec.CapturedError
+	require.ErrorAs(t, err, &captured)
+	assert.ErrorContains(t, err, "jumphost loop via 192.168.1.180")
+}
+
+// TestDatasetSSHArgsDropSelfJump covers a jump that ends at the node itself,
+// which ssh refuses as a jumphost loop.
+func TestDatasetSSHArgsDropSelfJump(t *testing.T) {
+	f := sshcmd.Flags{User: "root", Port: 22, Jump: "root@192.168.1.10"}
+
+	argv := createDatasetSSHArgs(f, "192.168.1.10", nil)
+	assert.NotContains(t, argv, "-J")
+	assert.Contains(t, argv, "ProxyJump=none")
+
+	argv = createDatasetSSHArgs(f, "192.168.1.20", nil)
+	assert.Contains(t, argv, "-J")
 }
