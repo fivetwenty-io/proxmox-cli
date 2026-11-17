@@ -69,8 +69,18 @@ func quotaFlagValues(t *testing.T, cmd *cobra.Command) (refquotaGB int, dryRun, 
 func wireQuotaDeps(t *testing.T, cmd *cobra.Command, stdin string, stdout, stderr *bytes.Buffer) *exec.FakeRunner {
 	t.Helper()
 
+	return wireQuotaDepsOn(t, cmd, testhelper.NewFakePVE(t), stdin, stdout, stderr)
+}
+
+// wireQuotaDepsOn is wireQuotaDeps against a FakePVE the test has already
+// given the routes it needs, such as the lab's VMs.
+func wireQuotaDepsOn(
+	t *testing.T, cmd *cobra.Command, f *testhelper.FakePVE, stdin string, stdout, stderr *bytes.Buffer,
+) *exec.FakeRunner {
+	t.Helper()
+
 	deps := cli.GetDeps(cmd)
-	api, err := apiclient.NewAPIClient(testhelper.NewFakePVE(t).Options)
+	api, err := apiclient.NewAPIClient(f.Options)
 	require.NoError(t, err)
 	deps.API = api
 	deps.Node = "pve1"
@@ -205,6 +215,119 @@ func TestLabQuota_UsesContextSSHJump(t *testing.T) {
 	t.Run("an empty jump dials direct", func(t *testing.T) {
 		assert.NotContains(t, run(t, ""), "-J")
 	})
+}
+
+// TestLabQuota_NodeFollowsTheVMs covers which node quota set acts on. The node
+// the lab's VMs live on decides and an ambient node never overrides it, VMs on
+// several nodes and an explicit --node that disagrees with them are refused,
+// and a lab with no VMs keeps using the ambient node.
+func TestLabQuota_NodeFollowsTheVMs(t *testing.T) {
+	cfg := &config.Config{
+		Labs: map[string]*config.Lab{"alpha": cleanLab("alpha")},
+	}
+	path := writeConfig(t, cfg)
+
+	vm := func(vmid int, node, pool string) map[string]any {
+		return map[string]any{
+			"vmid": vmid, "node": node, "pool": pool, "name": "lab-alpha", "status": "running", "type": "qemu",
+		}
+	}
+	twoNodes := []any{
+		map[string]any{"type": "node", "name": "pve1", "ip": quotaTestNodeIP, "online": 1},
+		map[string]any{"type": "node", "name": "pve2", "ip": "192.168.1.20", "online": 1},
+	}
+
+	run := func(
+		t *testing.T, resources []any, explicit bool, ambient string,
+	) (*exec.FakeRunner, error) {
+		t.Helper()
+
+		f := testhelper.NewFakePVE(t)
+		f.HandleJSON("GET /api2/json/cluster/status", twoNodes)
+		f.HandleJSON("GET /api2/json/cluster/resources", resources)
+
+		cmd := quotaTestCmd(t, path, "--yes")
+		var stdout, stderr bytes.Buffer
+		fake := wireQuotaDepsOn(t, cmd, f, "", &stdout, &stderr)
+		deps := cli.GetDeps(cmd)
+		deps.Node, deps.NodeExplicit = ambient, explicit
+
+		refquotaGB, dryRun, yes := quotaFlagValues(t, cmd)
+		return fake, runQuotaSet(cmd, "alpha", refquotaGB, dryRun, yes)
+	}
+
+	t.Run("the VMs' node beats an ambient node", func(t *testing.T) {
+		fake, err := run(t, []any{vm(100, "pve2", "lab-alpha")}, false, "pve1")
+		require.NoError(t, err)
+		require.Len(t, fake.Calls, 1)
+		assert.Contains(t, fake.Calls[0].Args, "root@192.168.1.20")
+		assert.NotContains(t, fake.Calls[0].Args, "root@"+quotaTestNodeIP)
+	})
+
+	t.Run("VMs of another pool do not count", func(t *testing.T) {
+		fake, err := run(t, []any{vm(100, "pve2", "lab-other")}, false, "pve1")
+		require.NoError(t, err)
+		require.Len(t, fake.Calls, 1)
+		assert.Contains(t, fake.Calls[0].Args, "root@"+quotaTestNodeIP, "no VM of this lab, so the ambient node stands")
+	})
+
+	t.Run("an explicit node that agrees with the VMs is accepted", func(t *testing.T) {
+		fake, err := run(t, []any{vm(100, "pve2", "lab-alpha")}, true, "pve2")
+		require.NoError(t, err)
+		require.Len(t, fake.Calls, 1)
+		assert.Contains(t, fake.Calls[0].Args, "root@192.168.1.20")
+	})
+
+	t.Run("an explicit node that disagrees with the VMs is refused", func(t *testing.T) {
+		fake, err := run(t, []any{vm(100, "pve2", "lab-alpha")}, true, "pve1")
+		require.Error(t, err)
+		assert.ErrorContains(t, err, `--node "pve1" disagrees with node "pve2"`)
+		assert.Empty(t, fake.Calls)
+	})
+
+	t.Run("VMs on more than one node are refused", func(t *testing.T) {
+		fake, err := run(t, []any{vm(100, "pve1", "lab-alpha"), vm(101, "pve2", "lab-alpha")}, false, "pve1")
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "more than one node (pve1, pve2)")
+		assert.Empty(t, fake.Calls)
+	})
+}
+
+// TestLabQuota_JumpOverrideReplacesStoredJump covers the quota ssh call under
+// --api-jump or $PMX_API_JUMP: the jump of the route the API dials wins over
+// the context's stored ssh.jump, and an override of "none" dials direct.
+func TestLabQuota_JumpOverrideReplacesStoredJump(t *testing.T) {
+	cfg := &config.Config{
+		Labs: map[string]*config.Lab{"alpha": cleanLab("alpha")},
+	}
+	path := writeConfig(t, cfg)
+
+	run := func(t *testing.T, override string) []string {
+		t.Helper()
+
+		cmd := quotaTestCmd(t, path, "--yes")
+		var stdout, stderr bytes.Buffer
+		fake := wireQuotaDeps(t, cmd, "", &stdout, &stderr)
+		deps := cli.GetDeps(cmd)
+		deps.CtxName = "sm"
+		deps.Ctx.SSH.Jump = "ops@stored.example:2200"
+		conn, err := cli.ResolveConnection("sm", deps.Ctx, cli.ConnectionOverrides{
+			Jump: override, JumpSource: "$PMX_API_JUMP",
+		})
+		require.NoError(t, err)
+		deps.Route = conn
+
+		refquotaGB, dryRun, yes := quotaFlagValues(t, cmd)
+		require.NoError(t, runQuotaSet(cmd, "alpha", refquotaGB, dryRun, yes))
+		require.Len(t, fake.Calls, 1)
+		return fake.Calls[0].Args
+	}
+
+	args := run(t, "ops@override.example:2201")
+	assert.Contains(t, args, "ops@override.example:2201")
+	assert.NotContains(t, args, "ops@stored.example:2200")
+
+	assert.NotContains(t, run(t, "none"), "-J", "an override of none beats a stored jump")
 }
 
 func TestQuotaSet_HappyPathWithYes_UsesConfigRefquota(t *testing.T) {

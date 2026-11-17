@@ -4,6 +4,7 @@ package nodeaddr
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -88,6 +89,55 @@ func Resolve(ctx context.Context, svc StatusLister, node string, log *slog.Logge
 
 	// Node not found in cluster status list; fall back to node name as host.
 	return node, nil
+}
+
+// ErrNodeNotMatched is wrapped by every error ResolveStrict returns for a node
+// that cluster status did not yield an address for, so a caller can tell the
+// refusal from a bad argument.
+var ErrNodeNotMatched = errors.New("node not matched in cluster status")
+
+// ResolveStrict returns the address cluster status lists for the named node,
+// and an error wrapping ErrNodeNotMatched when it cannot: when the lookup
+// fails, when the list is empty, when no node entry carries that name, and
+// when the entry has no address. Unlike Resolve it never falls back to the
+// node name, so a caller that is about to run something destructive on the
+// node knows the address came from the cluster the API reached, and not from
+// whatever the bare name happens to resolve to elsewhere.
+func ResolveStrict(ctx context.Context, svc StatusLister, node string) (string, error) {
+	if ctx == nil {
+		return "", fmt.Errorf("nodeaddr.ResolveStrict: ctx must not be nil")
+	}
+	if node == "" {
+		return "", fmt.Errorf("nodeaddr.ResolveStrict: node name must not be empty")
+	}
+
+	resp, err := svc.ListStatus(ctx)
+	if err != nil {
+		return "", fmt.Errorf("%w: look up node %q in cluster status: %s",
+			ErrNodeNotMatched, node, redact.QueryParams(err.Error()))
+	}
+
+	if resp == nil || len(*resp) == 0 {
+		return "", fmt.Errorf("%w: cluster status lists no nodes, so it cannot place node %q",
+			ErrNodeNotMatched, node)
+	}
+
+	for _, raw := range *resp {
+		var entry clusterStatusEntry
+		if err := json.Unmarshal(raw, &entry); err != nil {
+			continue
+		}
+		if entry.Type != "node" || entry.Name != node {
+			continue
+		}
+		if entry.IP == "" {
+			return "", fmt.Errorf("%w: cluster status lists node %q without an address", ErrNodeNotMatched, node)
+		}
+
+		return entry.IP, nil
+	}
+
+	return "", fmt.Errorf("%w: cluster status does not list node %q", ErrNodeNotMatched, node)
 }
 
 // warnLookupFailed reports a failed cluster-status lookup to log (when one was

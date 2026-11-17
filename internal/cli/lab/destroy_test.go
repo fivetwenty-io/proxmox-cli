@@ -751,6 +751,7 @@ func TestDestroy_PurgeDatasetImpliesPurge(t *testing.T) {
 	})
 
 	cmd := destroyTestCmd(t, path, ac, "pve1")
+	cli.GetDeps(cmd).NodeExplicit = true // no VM is left to show the node
 	_, fake := destroyWireSSH(t, cmd)
 
 	stdout, _, err := destroyRun(t, cmd, "alpha", "--yes", "--purge-dataset")
@@ -828,6 +829,7 @@ func TestDestroy_PurgeDataset_SSHFailurePropagates(t *testing.T) {
 
 	cmd := destroyTestCmd(t, path, ac, "pve1")
 	deps := cli.GetDeps(cmd)
+	deps.NodeExplicit = true // no VM is left to show the node
 	deps.Ctx = &config.Context{Host: "sm-0.lab.internal", SSH: config.SSHBlock{User: "root", Port: 22}}
 	deps.Runner = exec.Fake(exec.FakeResponse{
 		Err:    errors.New("connection refused"),
@@ -947,6 +949,132 @@ func TestDestroy_PurgeDataset_TargetsNodeAddress(t *testing.T) {
 		assert.ErrorContains(t, err, "pass --node")
 		assert.Zero(t, mutating.Load(), "the target is resolved before the pool and storage are deleted")
 		assert.Empty(t, fake.Calls)
+	})
+
+	t.Run("an ambient node never overrides the node the VMs live on", func(t *testing.T) {
+		f, ac := destroyFakeClient(t)
+		destroyPurgeDatasetFixture(t, f)
+		// The VMs are on pve1. The ambient node is pve2, with its own address.
+		f.HandleJSON("GET /api2/json/cluster/status", []any{
+			map[string]any{"type": "node", "name": "pve1", "ip": "192.168.1.10", "online": 1},
+			map[string]any{"type": "node", "name": "pve2", "ip": "192.168.1.20", "online": 1},
+		})
+
+		cmd := destroyTestCmd(t, path, ac, "pve2")
+		_, fake := destroyWireSSH(t, cmd)
+
+		_, _, err := destroyRun(t, cmd, "alpha", "--yes", "--purge-dataset")
+		require.NoError(t, err)
+		require.Len(t, fake.Calls, 1)
+		assert.Contains(t, fake.Calls[0].Args, "root@192.168.1.10", "zfs runs where the VMs were, not on pve2")
+		assert.NotContains(t, fake.Calls[0].Args, "root@192.168.1.20")
+	})
+
+	// refused runs the verb against a fixture that must be refused before it
+	// deletes or runs anything.
+	refused := func(t *testing.T, setup func(f *testhelper.FakePVE), explicitNode string, want string) {
+		t.Helper()
+
+		f, ac := destroyFakeClient(t)
+		var mutating atomic.Int64
+		f.HandleFunc("DELETE /api2/json/", func(w http.ResponseWriter, _ *http.Request) {
+			mutating.Add(1)
+			testhelper.WriteData(w, nil)
+		})
+		setup(f)
+
+		cmd := destroyTestCmd(t, path, ac, explicitNode)
+		if explicitNode != "" {
+			cli.GetDeps(cmd).NodeExplicit = true
+		}
+		_, fake := destroyWireSSH(t, cmd)
+
+		_, _, err := destroyRun(t, cmd, "alpha", "--yes", "--purge-dataset")
+		require.Error(t, err)
+		assert.ErrorContains(t, err, want)
+		assert.Zero(t, mutating.Load(), "nothing is deleted when the dataset's node is in doubt")
+		assert.Empty(t, fake.Calls)
+	}
+
+	t.Run("VMs on more than one node are refused", func(t *testing.T) {
+		refused(t, func(f *testhelper.FakePVE) {
+			for vmid, node := range map[string]string{"100": "pve1", "101": "pve2"} {
+				f.HandleFunc("GET /api2/json/nodes/"+node+"/qemu/"+vmid+"/status/current",
+					func(w http.ResponseWriter, _ *http.Request) {
+						testhelper.WriteData(w, map[string]any{"status": "stopped", "vmid": vmid})
+					})
+			}
+			destroyHandleClusterResources(f,
+				map[string]any{"vmid": 100, "node": "pve1", "pool": "lab-alpha", "name": "lab-alpha-0", "status": "stopped", "type": "qemu"},
+				map[string]any{"vmid": 101, "node": "pve2", "pool": "lab-alpha", "name": "lab-alpha-1", "status": "stopped", "type": "qemu"},
+			)
+		}, "", "more than one node (pve1, pve2)")
+	})
+
+	t.Run("an explicit --node that disagrees with the VMs is refused", func(t *testing.T) {
+		refused(t, func(f *testhelper.FakePVE) {
+			destroyPurgeDatasetFixture(t, f)
+		}, "pve2", `--node "pve2" disagrees with node "pve1"`)
+	})
+
+	t.Run("an ambient node does not stand in for --node when no VM is left", func(t *testing.T) {
+		f, ac := destroyFakeClient(t)
+		destroyHandleClusterResources(f)
+
+		cmd := destroyTestCmd(t, path, ac, "pve1") // ambient only, NodeExplicit false
+		_, fake := destroyWireSSH(t, cmd)
+
+		_, _, err := destroyRun(t, cmd, "alpha", "--yes", "--purge-dataset")
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "found no VM of the lab")
+		assert.ErrorContains(t, err, "pass --node")
+		assert.Empty(t, fake.Calls)
+	})
+
+	t.Run("a node missing from cluster status is refused, not guessed", func(t *testing.T) {
+		for name, status := range map[string][]any{
+			"an unlisted node": {map[string]any{"type": "node", "name": "pve7", "ip": "192.168.1.70", "online": 1}},
+			"an empty list":    {},
+		} {
+			t.Run(name, func(t *testing.T) {
+				refused(t, func(f *testhelper.FakePVE) {
+					destroyPurgeDatasetFixture(t, f)
+					f.HandleJSON("GET /api2/json/cluster/status", status)
+				}, "", `will not guess the address of node "pve1"`)
+			})
+		}
+	})
+
+	t.Run("a jump override replaces the stored ssh.jump", func(t *testing.T) {
+		for name, tc := range map[string]struct {
+			jump string
+			want []string
+		}{
+			"another bastion":   {"ops@other:2201", []string{"-p", "22", "-J", "ops@other:2201"}},
+			"none dials direct": {"none", []string{"-p", "22"}},
+		} {
+			t.Run(name, func(t *testing.T) {
+				f, ac := destroyFakeClient(t)
+				destroyPurgeDatasetFixture(t, f)
+
+				cmd := destroyTestCmd(t, path, ac, "pve1")
+				deps, fake := destroyWireSSH(t, cmd)
+				deps.CtxName = "sm"
+				deps.Ctx.SSH.Jump = "ops@bastion.example:2200"
+				conn, err := cli.ResolveConnection("sm", deps.Ctx, cli.ConnectionOverrides{
+					Jump: tc.jump, JumpSource: "--api-jump",
+				})
+				require.NoError(t, err)
+				deps.Route = conn
+
+				_, _, err = destroyRun(t, cmd, "alpha", "--yes", "--purge-dataset")
+				require.NoError(t, err)
+				require.Len(t, fake.Calls, 1)
+				assert.Equal(t, append(tc.want, "root@192.168.1.10",
+					`if zfs list "tank/labs/alpha" >/dev/null 2>&1; then zfs destroy -r "tank/labs/alpha"; fi`),
+					fake.Calls[0].Args)
+			})
+		}
 	})
 
 	t.Run("the context's ssh.jump is passed as -J", func(t *testing.T) {

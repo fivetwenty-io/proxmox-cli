@@ -67,10 +67,13 @@ func newDestroyCmd() *cobra.Command {
 			"preview what would be destroyed without mutating anything or prompting.\n\n" +
 			"Pass --purge-dataset to also destroy the lab's ZFS dataset (implies --purge; " +
 			"irreversible). The dataset is destroyed over ssh on the node that hosts it, reached " +
-			"the way \"pmx lab create\" reaches it. The node is the one from --node, $PMX_NODE, or " +
-			"the context's default node, or the single node every lab VM lives on, and its own " +
-			"address is looked up from the cluster. The ssh user, port, identity, and jump come " +
-			"from the active context. " +
+			"the way \"pmx lab create\" reaches it. That node is the one the lab's VMs live on, " +
+			"whatever $PMX_NODE or the context's default node says. The command refuses when the " +
+			"VMs span more than one node, when an explicit --node names a different node than the " +
+			"VMs, and, when the lab has no VMs left, unless --node names the node. The node's " +
+			"address must be listed by the cluster the API reaches, and the command refuses " +
+			"rather than fall back to the bare node name. The ssh user, port, and identity come " +
+			"from the active context, and the ssh jump is the one the API connection uses. " +
 			"Labs running Ceph should tear down the storage " +
 			"layer first (see the lab repo's Ceph teardown script); the OSD data is destroyed " +
 			"with the VMs either way.",
@@ -135,15 +138,16 @@ func newDestroyCmd() *cobra.Command {
 				datasetNode  string
 			)
 			if purgeDataset {
-				vmNodes := make([]string, 0, len(toDestroy))
-				for _, d := range toDestroy {
-					vmNodes = append(vmNodes, d.vm.Node)
-				}
-				datasetNode, err = labDatasetNode(deps, "lab destroy --purge-dataset", vmNodes...)
+				// Every live VM in the lab's pool counts, not only the ones
+				// this run destroys: the dataset is shared by all of them, so
+				// a pool member on another node leaves its node in doubt.
+				datasetNode, err = labDatasetNode(
+					deps, "lab destroy --purge-dataset", labPoolVMNodes(vms, poolID), labDatasetNodeExplicit)
 				if err != nil {
 					return err
 				}
-				datasetFlags, datasetHost, err = resolveLabDatasetSSH(ctx, deps, "lab destroy --purge-dataset", datasetNode)
+				datasetFlags, datasetHost, err = resolveLabDatasetSSH(
+					ctx, deps, "lab destroy --purge-dataset", datasetNode, true)
 				if err != nil {
 					return err
 				}

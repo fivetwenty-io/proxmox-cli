@@ -49,23 +49,93 @@ func TestSSHFlags_ShareTheContextJump(t *testing.T) {
 	assert.Equal(t, 2200, dataset.Port)
 }
 
-// TestLabDatasetNode covers where a dataset verb finds its node: the
-// resolved --node/default node wins, a single distinct fallback node is
-// taken, and anything ambiguous is an error that says how to fix it.
+// TestLabDatasetNode covers where a dataset verb finds its node. The node the
+// lab's VMs live on decides and an ambient node never overrides it; VMs on
+// several nodes, and an explicit --node that disagrees with them, are refused;
+// and a lab with no VMs falls back according to the verb's policy.
 func TestLabDatasetNode(t *testing.T) {
-	got, err := labDatasetNode(&cli.Deps{Node: "pve2"}, "verb", "pve1")
-	require.NoError(t, err)
-	assert.Equal(t, "pve2", got)
+	ambient := &cli.Deps{Node: "pve-0"}
+	explicit := &cli.Deps{Node: "pve-0", NodeExplicit: true}
 
-	got, err = labDatasetNode(&cli.Deps{}, "verb", "pve1", "pve1", "")
-	require.NoError(t, err)
-	assert.Equal(t, "pve1", got)
+	t.Run("the VMs' node beats an ambient node", func(t *testing.T) {
+		for _, policy := range []labDatasetNodePolicy{labDatasetNodeAmbient, labDatasetNodeExplicit} {
+			got, err := labDatasetNode(ambient, "verb", []string{"pve-2", "pve-2"}, policy)
+			require.NoError(t, err)
+			assert.Equal(t, "pve-2", got, "ambient pve-0 must not win over the node the VMs are on")
+		}
+	})
 
-	_, err = labDatasetNode(&cli.Deps{}, "verb", "pve1", "pve2")
-	require.ErrorContains(t, err, "pass --node")
+	t.Run("an explicit node that agrees with the VMs is accepted", func(t *testing.T) {
+		got, err := labDatasetNode(&cli.Deps{Node: "pve-2", NodeExplicit: true}, "verb", []string{"pve-2"},
+			labDatasetNodeExplicit)
+		require.NoError(t, err)
+		assert.Equal(t, "pve-2", got)
+	})
 
-	_, err = labDatasetNode(&cli.Deps{}, "the verb")
-	require.ErrorContains(t, err, "the verb needs the outer PVE node")
+	t.Run("an explicit node that disagrees with the VMs is refused", func(t *testing.T) {
+		_, err := labDatasetNode(explicit, "verb", []string{"pve-2"}, labDatasetNodeAmbient)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, `--node "pve-0" disagrees with node "pve-2"`)
+	})
+
+	t.Run("VMs on more than one node are refused", func(t *testing.T) {
+		_, err := labDatasetNode(explicit, "verb", []string{"pve-2", "pve-1", "pve-2"}, labDatasetNodeAmbient)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "more than one node (pve-1, pve-2)")
+	})
+
+	t.Run("no VMs and the ambient policy uses the invocation's node", func(t *testing.T) {
+		got, err := labDatasetNode(ambient, "verb", nil, labDatasetNodeAmbient)
+		require.NoError(t, err)
+		assert.Equal(t, "pve-0", got)
+
+		_, err = labDatasetNode(&cli.Deps{}, "the verb", nil, labDatasetNodeAmbient)
+		require.ErrorContains(t, err, "the verb needs the outer PVE node")
+	})
+
+	t.Run("no VMs and the explicit policy needs --node", func(t *testing.T) {
+		_, err := labDatasetNode(ambient, "the verb", []string{""}, labDatasetNodeExplicit)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "found no VM of the lab")
+		assert.ErrorContains(t, err, "pass --node")
+
+		got, err := labDatasetNode(explicit, "the verb", nil, labDatasetNodeExplicit)
+		require.NoError(t, err)
+		assert.Equal(t, "pve-0", got)
+	})
+}
+
+// TestContextSSHJump_FollowsTheAPIRoute covers a lab ssh call under a jump
+// override. The jump of the route the API dials wins over the stored ssh.jump,
+// so --api-jump and $PMX_API_JUMP move the ssh calls with the API calls, and
+// an override of "none" dials direct even when a jump is stored.
+func TestContextSSHJump_FollowsTheAPIRoute(t *testing.T) {
+	stored := &config.Context{Host: "pve-0", SSH: config.SSHBlock{Jump: "ops@stored-bastion"}}
+
+	route := func(t *testing.T, jump string) cli.Connection {
+		t.Helper()
+
+		conn, err := cli.ResolveConnection("sm", stored, cli.ConnectionOverrides{
+			Jump: jump, JumpSource: "--api-jump",
+		})
+		require.NoError(t, err)
+		return conn
+	}
+
+	t.Run("no override keeps the stored jump", func(t *testing.T) {
+		deps := &cli.Deps{Ctx: stored, Route: route(t, "")}
+		assert.Equal(t, "ops@stored-bastion", contextSSHJump(deps))
+	})
+
+	t.Run("an override replaces the stored jump", func(t *testing.T) {
+		deps := &cli.Deps{Ctx: stored, Route: route(t, "ops@other-bastion:2200")}
+		assert.Equal(t, "ops@other-bastion:2200", contextSSHJump(deps))
+	})
+
+	t.Run("none dials direct", func(t *testing.T) {
+		deps := &cli.Deps{Ctx: stored, Route: route(t, "none")}
+		assert.Empty(t, contextSSHJump(deps))
+	})
 }
 
 // TestCreate_ZfsDatasetEnsure_UsesContextSSHJump covers create's own dataset

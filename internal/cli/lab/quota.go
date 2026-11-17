@@ -62,12 +62,15 @@ func newQuotaSetCmd() *cobra.Command {
 Proxmox VE has no API for ZFS dataset properties, so this verb runs "zfs
 set refquota" with the requested size (refquota=480G, for example) on the
 node that hosts the lab's dataset, directly over ssh. It reaches that node
-the way "pmx lab create" does. The node comes from --node, $PMX_NODE, or
-the context's default node, and its own address is looked up from the
+the way "pmx lab create" does. The node is the one the lab's VMs live on,
+whatever $PMX_NODE or the context's default node says, and the command
+refuses when the VMs span more than one node or when an explicit --node
+names a different node than the VMs. A lab with no VMs uses --node, $PMX_NODE,
+or the context's default node. The node's own address is looked up from the
 cluster, because the context's host is only the API entrypoint and on a
-multi-node cluster may not be reachable by ssh at all. The ssh connection
-settings come from the active context: ssh.user, ssh.port, ssh.identity,
-and ssh.jump, so a node behind a bastion is reached through it.
+multi-node cluster may not be reachable by ssh at all. The ssh user, port,
+and identity come from the active context, and the ssh jump is the one the
+API connection uses, so a node behind a bastion is reached through it.
 
 The effective refquota is --refquota-gb when given, else the lab's
 storage.refquota_gb. At least one of the two must yield a positive value.
@@ -116,12 +119,19 @@ func runQuotaSet(cmd *cobra.Command, name string, refquotaFlagGB int, dryRun, ye
 			"lab %q has no positive refquota: pass --refquota-gb or set storage.refquota_gb in its config", name)
 	}
 
-	node, err := labDatasetNode(deps, "quota set")
+	if deps.API == nil {
+		return fmt.Errorf("quota set requires an API client to find the node that hosts the lab's dataset")
+	}
+	vms, err := listLiveVMs(cmd.Context(), deps)
+	if err != nil {
+		return err
+	}
+	node, err := labDatasetNode(deps, "quota set", labPoolVMNodes(vms, labPoolID(lab)), labDatasetNodeAmbient)
 	if err != nil {
 		return err
 	}
 
-	f, host, err := resolveLabDatasetSSH(cmd.Context(), deps, "quota set", node)
+	f, host, err := resolveLabDatasetSSH(cmd.Context(), deps, "quota set", node, false)
 	if err != nil {
 		return err
 	}
