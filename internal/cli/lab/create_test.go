@@ -2135,6 +2135,8 @@ func TestCreateCapacityGate_NoMatchingStorage_RefusesLoudly(t *testing.T) {
 	assert.ErrorContains(t, err, "capacity gate")
 	assert.ErrorContains(t, err, `no live capacity signal found for base pool "tank"`)
 	assert.ErrorContains(t, err, "capacity_storage_id")
+	assert.ErrorContains(t, err, "top level of config.yml")
+	assert.ErrorContains(t, err, "not in a lab file")
 }
 
 // TestCreateCapacityGate_CapacityStorageIDOverride covers the documented

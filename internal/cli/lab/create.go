@@ -707,7 +707,8 @@ func createCapacityGate(ctx context.Context, deps *cli.Deps, eff *config.Lab, no
 			"capacity gate: no live capacity signal found for base pool %q on node %q (no /cluster/storage "+
 				"entry whose \"pool\" attribute is %q, and no %q entry in `zpool list`); register a storage "+
 				"rooted at the pool (e.g. `pvesm add zfspool %s --pool %s`), or set storage.capacity_storage_id "+
-				"in config to the storage ID the gate should read pool size from",
+				"at the top level of config.yml (not in a lab file, whose strict parser rejects it) to the storage "+
+				"ID the gate should read pool size from",
 			basePool, node, basePool, basePool, basePool, basePool)
 	}
 
