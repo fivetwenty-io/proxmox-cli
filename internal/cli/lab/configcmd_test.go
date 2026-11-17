@@ -652,6 +652,60 @@ func TestConfigAdd_ExplicitVnetIDCollides_NamesFlag(t *testing.T) {
 	assert.ErrorContains(t, err, `lab "first"`)
 }
 
+// TestConfigAdd_VnetIDCollidesWithAnotherLabsExtraVnet covers a new lab whose
+// primary vnet ID equals an extra network.vnets[] ID of an existing lab.
+// PVE's vnet namespace is cluster-wide, so config add refuses it, naming the
+// lab and the key that holds the ID, and writes no lab file. The lab name
+// "pvecpist" derives the ID with no --vnet-id, and an explicit --vnet-id is
+// refused the same way.
+func TestConfigAdd_VnetIDCollidesWithAnotherLabsExtraVnet(t *testing.T) {
+	existing := &config.Lab{Mode: "nested", Network: config.LabNetwork{
+		Vnets: []config.LabVnet{{ID: "pvecpist"}},
+	}}
+
+	for name, args := range map[string][]string{
+		"derived from the lab name": {"add", "pvecpist"},
+		"explicit --vnet-id":        {"add", "other", "--vnet-id", "pvecpist"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfgPath := writeConfigCmdYAML(t, &config.Config{
+				LabsDir: "labs.d",
+				Labs:    map[string]*config.Lab{"pve-cpi": existing},
+			})
+
+			full := append(args, "--vxlan-tag", "5111", "--cidr", "10.211.0.0/16")
+			_, err := runConfigCmd(t, cfgPath, full...)
+			require.Error(t, err)
+			assert.ErrorContains(t, err, `vnet ID "pvecpist"`)
+			assert.ErrorContains(t, err, `lab "pve-cpi"`)
+			assert.ErrorContains(t, err, "network.vnets[0].id")
+			assert.ErrorContains(t, err, "--vnet-id")
+
+			entries, readErr := os.ReadDir(filepath.Join(filepath.Dir(cfgPath), "labs.d"))
+			if readErr == nil {
+				assert.Empty(t, entries, "no lab file is written")
+			}
+		})
+	}
+}
+
+// TestConfigVnetIDCollision_WithinTheNewLab covers a lab definition whose own
+// extra vnet repeats its primary ID, which no other lab is involved in.
+func TestConfigVnetIDCollision_WithinTheNewLab(t *testing.T) {
+	lab := &config.Lab{Network: config.LabNetwork{
+		VnetID: "wayne",
+		Vnets:  []config.LabVnet{{ID: "storage"}, {ID: "wayne"}},
+	}}
+
+	err := configVnetIDCollision(nil, "wayne", lab, false)
+	require.Error(t, err)
+	assert.ErrorContains(t, err, `vnet ID "wayne" is named twice by this lab`)
+	assert.ErrorContains(t, err, "network.vnets[1].id")
+
+	lab.Network.Vnets[1].ID = "work"
+	require.NoError(t, configVnetIDCollision(nil, "wayne", lab, false))
+}
+
 // TestConfigAdd_ForceRewriteOfSameLabIsNotACollision covers re-adding a lab
 // with --force: the lab's own existing vnet ID is not another lab's.
 func TestConfigAdd_ForceRewriteOfSameLabIsNotACollision(t *testing.T) {

@@ -647,9 +647,7 @@ func ResolveLabs(cfg *Config, configPath string) (map[string]*Lab, error) {
 		}
 	}
 
-	if err := applyVnetIDDefaults(result); err != nil {
-		return nil, err
-	}
+	applyVnetIDDefaults(result)
 
 	if err := validateVnetIDUniqueness(result); err != nil {
 		return nil, err
@@ -666,61 +664,67 @@ func ResolveLabs(cfg *Config, configPath string) (map[string]*Lab, error) {
 // config left it empty, using DeriveVnetID(name). A lab that sets
 // network.vnet_id explicitly keeps that value verbatim, even if it diverges
 // from what DeriveVnetID(name) would produce — explicit config always wins
-// over the derived default. A lab whose name yields no valid vnet ID is an
-// error naming the lab and network.vnet_id, so the operator knows which key
-// fixes it; labs are visited in name order so the error is deterministic.
-func applyVnetIDDefaults(labs map[string]*Lab) error {
+// over the derived default.
+//
+// A lab whose name yields no valid vnet ID keeps the derived value, which is
+// empty. It does not fail the load, because one such lab must not make every
+// other lab in the config unusable, destroy included. The verbs that would
+// create the lab's vnet refuse the empty ID and name --vnet-id (`lab config
+// add` and the network plan check in `lab create`), and the uniqueness check
+// below ignores empty IDs.
+func applyVnetIDDefaults(labs map[string]*Lab) {
+	for name, lab := range labs {
+		if lab.Network.VnetID != "" {
+			continue
+		}
+		lab.Network.VnetID = DeriveVnetID(name)
+	}
+}
+
+// validateVnetIDUniqueness reports an error naming every vnet ID that more
+// than one place in labs uses, after applyVnetIDDefaults has filled in any
+// derived defaults. A place is a lab's primary network.vnet_id or one entry of
+// its network.vnets[], and two places collide whether they belong to different
+// labs or to the same lab. PVE's vnet namespace is cluster-wide, so a
+// collision here would make two labs, or two NICs of one lab, share a vnet the
+// moment either is created. Empty IDs are skipped.
+func validateVnetIDUniqueness(labs map[string]*Lab) error {
 	names := make([]string, 0, len(labs))
 	for name := range labs {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 
+	byID := make(map[string][]VnetIDUse)
 	for _, name := range names {
-		lab := labs[name]
-		if lab.Network.VnetID != "" {
-			continue
+		for _, use := range LabVnetIDUses(name, labs[name]) {
+			byID[use.ID] = append(byID[use.ID], use)
 		}
-		derived := DeriveVnetID(name)
-		if derived == "" {
-			return fmt.Errorf(
-				"lab %q: no valid vnet ID can be derived from the name (a vnet ID is %s); "+
-					"set network.vnet_id explicitly", name, VnetIDRule)
+	}
+
+	ids := make([]string, 0, len(byID))
+	for id, uses := range byID {
+		if len(uses) > 1 {
+			ids = append(ids, id)
 		}
-		lab.Network.VnetID = derived
 	}
-	return nil
-}
-
-// validateVnetIDUniqueness reports an error naming every colliding pair when
-// two or more labs in labs resolve to the same effective Network.VnetID
-// (after applyVnetIDDefaults has already filled in any derived defaults).
-// PVE vnet IDs must be unique cluster-wide; a collision here would silently
-// make two labs share one vnet the moment either is created.
-func validateVnetIDUniqueness(labs map[string]*Lab) error {
-	byVnetID := make(map[string][]string, len(labs))
-	for name, lab := range labs {
-		byVnetID[lab.Network.VnetID] = append(byVnetID[lab.Network.VnetID], name)
+	if len(ids) == 0 {
+		return nil
 	}
+	sort.Strings(ids)
 
-	names := make([]string, 0, len(byVnetID))
-	for vnetID := range byVnetID {
-		names = append(names, vnetID)
-	}
-	sort.Strings(names)
-
-	for _, vnetID := range names {
-		labNames := byVnetID[vnetID]
-		if len(labNames) < 2 {
-			continue
+	problems := make([]string, 0, len(ids))
+	for _, id := range ids {
+		places := make([]string, 0, len(byID[id]))
+		for _, use := range byID[id] {
+			places = append(places, fmt.Sprintf("lab %q %s", use.Lab, use.Position))
 		}
-		sort.Strings(labNames)
-		return fmt.Errorf(
-			"vnet ID %q collides across labs %s: set network.vnet_id explicitly on one of them to disambiguate",
-			vnetID, strings.Join(labNames, ", "))
+		problems = append(problems, fmt.Sprintf("vnet ID %q is used by %s", id, strings.Join(places, " and ")))
 	}
 
-	return nil
+	return fmt.Errorf(
+		"%s; PVE vnet IDs are unique cluster-wide, so change network.vnet_id or network.vnets[].id "+
+			"on all but one of them", strings.Join(problems, "; "))
 }
 
 // validateAllLabs runs ValidateTopology, ValidateStorage,

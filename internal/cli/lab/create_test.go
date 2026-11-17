@@ -94,6 +94,31 @@ func runCreateCmd(t *testing.T, cmd *cobra.Command, args ...string) (string, err
 	return buf.String(), err
 }
 
+// TestCreate_LabWithNoDerivableVnetID_RefusesBeforeAnyChange covers a lab
+// whose name derives no vnet ID and that sets none. The config loads, so the
+// other labs stay usable, but create refuses it before any API call that would
+// change PVE and names network.vnet_id as the fix.
+func TestCreate_LabWithNoDerivableVnetID_RefusesBeforeAnyChange(t *testing.T) {
+	bad := createTestLab("a")
+	bad.Network.VnetID = ""
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{
+		"a":     bad,
+		"wayne": createTestLab("wayne"),
+	}})
+
+	f := testhelper.NewFakePVE(t)
+	for _, pattern := range []string{"POST /api2/json", "PUT /api2/json", "DELETE /api2/json"} {
+		createForbid(f, t, pattern)
+	}
+	cmd := buildCreateCmd(t, path, f, "node1")
+
+	_, err := runCreateCmd(t, cmd, "a", "--node", "node1")
+	require.Error(t, err)
+	assert.ErrorContains(t, err, `lab "a" has no vnet ID`)
+	assert.ErrorContains(t, err, "network.vnet_id")
+	assert.ErrorContains(t, err, "pmx lab config add a --vnet-id")
+}
+
 // createRecordedRequest captures one HTTP request create.go issued to the
 // fake PVE server, decoding a form-urlencoded (or, failing that, JSON) body
 // into a plain string map so assertions can read field values directly. This

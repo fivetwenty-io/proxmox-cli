@@ -1229,3 +1229,37 @@ func DeriveVnetID(name string) string {
 	}
 	return b.String()
 }
+
+// VnetIDUse is one place a lab names an outer SDN vnet ID, either its primary
+// network.vnet_id or one entry of network.vnets[]. Position says which, in the
+// words the config file uses, so a collision report can point at the key to fix.
+type VnetIDUse struct {
+	// Lab is the name of the lab that names the ID.
+	Lab string
+	// ID is the vnet ID.
+	ID string
+	// Position is "network.vnet_id" or "network.vnets[N].id".
+	Position string
+}
+
+// LabVnetIDUses lists every vnet ID the lab names, the primary one first and
+// then each network.vnets[] entry in order. An empty ID is left out, since it
+// names nothing PVE would create. PVE's vnet namespace is cluster-wide, so
+// callers compare these uses across every lab and within a single lab.
+func LabVnetIDUses(name string, lab *Lab) []VnetIDUse {
+	if lab == nil {
+		return nil
+	}
+
+	uses := make([]VnetIDUse, 0, len(lab.Network.Vnets)+1)
+	if lab.Network.VnetID != "" {
+		uses = append(uses, VnetIDUse{Lab: name, ID: lab.Network.VnetID, Position: "network.vnet_id"})
+	}
+	for i, v := range lab.Network.Vnets {
+		if v.ID == "" {
+			continue
+		}
+		uses = append(uses, VnetIDUse{Lab: name, ID: v.ID, Position: fmt.Sprintf("network.vnets[%d].id", i)})
+	}
+	return uses
+}

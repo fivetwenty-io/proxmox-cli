@@ -241,6 +241,13 @@ func newCreateCmd() *cobra.Command {
 			fl := cmd.Flags()
 			eff := applyCreateOverrides(fl, lab, ov)
 
+			// The config loader keeps an empty vnet ID for a lab whose name
+			// derives none, so one bad lab does not take the whole config down.
+			// The vnet is created here, so refuse before creating anything.
+			if err := labVnetIDRefusal(name, eff.Network.VnetID); err != nil {
+				return err
+			}
+
 			// A lab created from an incoherent address plan comes up broken —
 			// guests and node unable to reach each other on their shared vnet —
 			// so refuse before creating anything.
@@ -1200,6 +1207,21 @@ func createZfsDatasetEnsure(deps *cli.Deps, host, dataset string, refquotaGB int
 		return exec.NewCapturedError(wrapped)
 	}
 	return nil
+}
+
+// labVnetIDRefusal refuses a lab whose primary vnet ID is empty, which is what
+// the config loader leaves for a lab whose name derives none, so that one such
+// lab does not stop every other lab from loading. It names the lab and the
+// network.vnet_id key that fixes it. The verbs that create the lab's vnet call
+// it before changing anything.
+func labVnetIDRefusal(name, vnetID string) error {
+	if vnetID != "" {
+		return nil
+	}
+	return fmt.Errorf(
+		"lab %q has no vnet ID, because none can be derived from its name; "+
+			"set network.vnet_id in its definition (%s), or write the definition again with "+
+			"`pmx lab config add %s --vnet-id <id>`", name, config.VnetIDRule, name)
 }
 
 // createDatasetCheck tells buildCreatePlan how to treat the ssh target of the

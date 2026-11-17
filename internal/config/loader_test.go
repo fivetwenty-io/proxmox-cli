@@ -361,24 +361,105 @@ func TestResolveLabs_ExplicitVnetIDWinsOverDerived(t *testing.T) {
 	require.Equal(t, "custom1", labs["wayneeseguin"].Network.VnetID)
 }
 
-// TestResolveLabs_NameWithNoDerivableVnetID_Errors covers a lab whose name
-// leaves no valid vnet ID once the characters PVE rejects are dropped and that
-// sets no network.vnet_id: ResolveLabs must refuse and name the lab and
-// network.vnet_id rather than hand PVE an empty or one-character vnet ID.
-func TestResolveLabs_NameWithNoDerivableVnetID_Errors(t *testing.T) {
+// TestResolveLabs_NameWithNoDerivableVnetID_OtherLabsStillLoad covers labs
+// whose names leave no valid vnet ID once the characters PVE rejects are
+// dropped ("a", "42", "9a", "1-2") and that set no network.vnet_id. They must
+// not fail the whole config, because that would stop every other lab from
+// loading and from being destroyed. Each keeps an empty vnet ID, which the
+// create and config add verbs refuse, and two of them do not collide.
+func TestResolveLabs_NameWithNoDerivableVnetID_OtherLabsStillLoad(t *testing.T) {
 	dir := t.TempDir()
 	configPath := writeConfigFile(t, dir, "config.yml", 0o600)
 
 	cfg := &config.Config{
 		Labs: map[string]*config.Lab{
-			"1-2": {Mode: "nested"},
+			"a":       {Mode: "nested"},
+			"42":      {Mode: "nested"},
+			"9a":      {Mode: "nested"},
+			"1-2":     {Mode: "nested"},
+			"wayne":   {Mode: "nested"},
+			"pve-cpi": {Mode: "nested"},
+		},
+	}
+
+	labs, err := config.ResolveLabs(cfg, configPath)
+	require.NoError(t, err)
+	require.Len(t, labs, 6)
+
+	for _, name := range []string{"a", "42", "9a", "1-2"} {
+		require.Empty(t, labs[name].Network.VnetID, "lab %q has no derivable vnet ID", name)
+	}
+	require.Equal(t, "wayne", labs["wayne"].Network.VnetID)
+	require.Equal(t, "pvecpi", labs["pve-cpi"].Network.VnetID)
+}
+
+// TestResolveLabs_ExtraVnetCollidesWithAnotherLabsPrimary_Errors covers the
+// case a primary-only check missed: lab pve-cpi (primary "pvecpi") with an
+// extra vnet "pvecpist", and a second lab whose name derives the same
+// "pvecpist". PVE's vnet namespace is cluster-wide, so the load must refuse and
+// name both places.
+func TestResolveLabs_ExtraVnetCollidesWithAnotherLabsPrimary_Errors(t *testing.T) {
+	dir := t.TempDir()
+	configPath := writeConfigFile(t, dir, "config.yml", 0o600)
+
+	cfg := &config.Config{
+		Labs: map[string]*config.Lab{
+			"pve-cpi": {Mode: "nested", Network: config.LabNetwork{
+				Vnets: []config.LabVnet{{ID: "pvecpist"}},
+			}},
+			"pvecpist": {Mode: "nested"},
 		},
 	}
 
 	_, err := config.ResolveLabs(cfg, configPath)
 	require.Error(t, err)
-	require.ErrorContains(t, err, `"1-2"`)
-	require.ErrorContains(t, err, "network.vnet_id")
+	require.ErrorContains(t, err, `vnet ID "pvecpist"`)
+	require.ErrorContains(t, err, `lab "pve-cpi" network.vnets[0].id`)
+	require.ErrorContains(t, err, `lab "pvecpist" network.vnet_id`)
+}
+
+// TestResolveLabs_ExtraVnetsCollideAcrossLabs_Errors covers two labs whose
+// network.vnets[] entries share an ID, with every primary ID distinct.
+func TestResolveLabs_ExtraVnetsCollideAcrossLabs_Errors(t *testing.T) {
+	dir := t.TempDir()
+	configPath := writeConfigFile(t, dir, "config.yml", 0o600)
+
+	cfg := &config.Config{
+		Labs: map[string]*config.Lab{
+			"alpha": {Mode: "nested", Network: config.LabNetwork{Vnets: []config.LabVnet{{ID: "storage"}}}},
+			"beta":  {Mode: "nested", Network: config.LabNetwork{Vnets: []config.LabVnet{{ID: "work"}, {ID: "storage"}}}},
+		},
+	}
+
+	_, err := config.ResolveLabs(cfg, configPath)
+	require.Error(t, err)
+	require.ErrorContains(t, err, `vnet ID "storage"`)
+	require.ErrorContains(t, err, `lab "alpha" network.vnets[0].id`)
+	require.ErrorContains(t, err, `lab "beta" network.vnets[1].id`)
+}
+
+// TestResolveLabs_VnetIDRepeatedWithinOneLab_Errors covers an extra vnet that
+// repeats its own lab's primary ID, and two extras that repeat each other.
+func TestResolveLabs_VnetIDRepeatedWithinOneLab_Errors(t *testing.T) {
+	for name, vnets := range map[string][]config.LabVnet{
+		"extra repeats the primary": {{ID: "wayne"}},
+		"extras repeat each other":  {{ID: "extra1"}, {ID: "extra1"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			configPath := writeConfigFile(t, dir, "config.yml", 0o600)
+
+			cfg := &config.Config{
+				Labs: map[string]*config.Lab{
+					"wayne": {Mode: "nested", Network: config.LabNetwork{Vnets: vnets}},
+				},
+			}
+
+			_, err := config.ResolveLabs(cfg, configPath)
+			require.Error(t, err)
+			require.ErrorContains(t, err, "is used by lab \"wayne\"")
+		})
+	}
 }
 
 // TestResolveLabs_HyphenatedNameDerivesValidVnetID covers the lab name the

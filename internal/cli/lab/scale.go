@@ -236,6 +236,12 @@ func runScale(
 	// nothing has been changed, and buildCreatePlan then skips its own copy of
 	// the proof (scaleDatasetCheck).
 	if len(plan.growIndices) > 0 || plan.qdeviceAddNeeded {
+		// The VM shells attach to the lab's vnet, so an empty vnet ID (what the
+		// loader keeps for a name that derives none) refuses the run before
+		// anything changes.
+		if verr := labVnetIDRefusal(name, lab.Network.VnetID); verr != nil {
+			return verr
+		}
 		if targetNode == "" {
 			return fmt.Errorf("no node specified: use --node, set PMX_NODE, or configure a default node")
 		}

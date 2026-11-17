@@ -797,6 +797,19 @@ func TestScale_DatasetIdentityRefusesBeforeAnyChange_QdeviceAdd(t *testing.T) {
 	require.Len(t, fake.Calls, 1, "only the membership probe")
 }
 
+// TestLabVnetIDRefusal covers the refusal create and a growing scale share: an
+// empty vnet ID, which the loader keeps for a name that derives none, is
+// refused naming the lab and network.vnet_id, and any set ID passes.
+func TestLabVnetIDRefusal(t *testing.T) {
+	require.NoError(t, labVnetIDRefusal("wayne", "wayne"))
+
+	err := labVnetIDRefusal("a", "")
+	require.Error(t, err)
+	assert.ErrorContains(t, err, `lab "a" has no vnet ID`)
+	assert.ErrorContains(t, err, "network.vnet_id")
+	assert.ErrorContains(t, err, "pmx lab config add a --vnet-id")
+}
+
 // TestScale_DatasetIdentityNotCheckedWhenNoVMShellIsCreated covers a shrink,
 // which never builds a create plan and so never reaches the dataset: the
 // identity check does not run, so a wrong target cannot refuse it.

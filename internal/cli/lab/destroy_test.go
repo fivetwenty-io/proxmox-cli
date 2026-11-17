@@ -415,6 +415,30 @@ func TestDestroy_IdempotentWhenVMAlreadyAbsent(t *testing.T) {
 	assert.Contains(t, stdout.String(), "nothing to destroy")
 }
 
+// TestDestroy_LabWithNoDerivableVnetIDDoesNotBlockOtherLabs covers a config
+// that also holds labs whose names derive no vnet ID ("a", "42", "9a"). The
+// config still loads, so destroying a healthy lab beside them works.
+func TestDestroy_LabWithNoDerivableVnetIDDoesNotBlockOtherLabs(t *testing.T) {
+	cfg := &config.Config{
+		Labs: map[string]*config.Lab{
+			"alpha": cleanLab("alpha"),
+			"a":     {Mode: "nested"},
+			"42":    {Mode: "nested"},
+			"9a":    {Mode: "nested"},
+		},
+	}
+	path := writeConfig(t, cfg)
+	f, ac := destroyFakeClient(t)
+
+	destroyHandleClusterResources(f) // no live VMs at all
+
+	cmd := destroyTestCmd(t, path, ac, "pve1")
+	stdout, _, err := destroyRun(t, cmd, "alpha", "--yes")
+	require.NoError(t, err)
+
+	assert.Contains(t, stdout.String(), "nothing to destroy")
+}
+
 // TestDestroy_PurgeIdempotentWhenPoolAndStorageAlreadyGone covers F8's fix
 // against a real PVE 9 response: DELETE /pools and DELETE
 // /storage/{storage} both signal "already gone" with a bare HTTP 500 whose

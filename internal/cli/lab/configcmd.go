@@ -446,7 +446,7 @@ func newConfigAddCmd() *cobra.Command {
 				return fmt.Errorf("lab config add %q: resolve labs: %w", name, resolveErr)
 			}
 			if resolveErr == nil {
-				if err := configVnetIDCollision(labs, name, lab.Network.VnetID, flags.Changed("vnet-id")); err != nil {
+				if err := configVnetIDCollision(labs, name, lab, flags.Changed("vnet-id")); err != nil {
 					return fmt.Errorf("lab config add %q: %w", name, err)
 				}
 			}
@@ -506,15 +506,17 @@ func newConfigAddCmd() *cobra.Command {
 	return cmd
 }
 
-// configVnetIDCollision reports an error when another lab in labs already
-// resolves to vnetID. Two labs sharing a vnet ID would silently share one PVE
-// vnet, and the config loader refuses such a pair on the next load, so config
-// add refuses it at write time and names the --vnet-id flag that resolves it.
-// The lab being written (name) is skipped, since --force may overwrite it.
-// explicit says whether the ID came from --vnet-id or from the lab name, so
-// the message points at the right source. Labs are scanned in name order so
-// the lab named in the error is deterministic.
-func configVnetIDCollision(labs map[string]*config.Lab, name, vnetID string, explicit bool) error {
+// configVnetIDCollision reports an error when a vnet ID the lab being written
+// names is already named elsewhere. PVE's vnet namespace is cluster-wide, so
+// the lab's primary vnet ID may not equal the primary ID or any
+// network.vnets[] ID of another lab, and none of its own IDs may repeat within
+// the lab. The config loader refuses such a config on the next load, so config
+// add refuses it at write time. The lab being written (name) is skipped among
+// the existing labs, since --force may overwrite it. explicit says whether
+// the primary ID came from --vnet-id or from the lab name, so the message
+// points at the right source. Labs are scanned in name order so the lab named
+// in the error is deterministic.
+func configVnetIDCollision(labs map[string]*config.Lab, name string, lab *config.Lab, explicit bool) error {
 	others := make([]string, 0, len(labs))
 	for other := range labs {
 		if other != name {
@@ -523,15 +525,38 @@ func configVnetIDCollision(labs map[string]*config.Lab, name, vnetID string, exp
 	}
 	sort.Strings(others)
 
+	taken := make(map[string]config.VnetIDUse)
+	for _, other := range others {
+		for _, use := range config.LabVnetIDUses(other, labs[other]) {
+			if _, seen := taken[use.ID]; !seen {
+				taken[use.ID] = use
+			}
+		}
+	}
+
 	source := "derived from the lab name"
 	if explicit {
 		source = "from --vnet-id"
 	}
-	for _, other := range others {
-		if labs[other].Network.VnetID == vnetID {
+	own := make(map[string]config.VnetIDUse)
+	for _, use := range config.LabVnetIDUses(name, lab) {
+		if prior, ok := own[use.ID]; ok {
 			return fmt.Errorf(
-				"vnet ID %q (%s) is already used by lab %q; pass --vnet-id with an ID no other lab uses (%s)",
-				vnetID, source, other, config.VnetIDRule)
+				"vnet ID %q is named twice by this lab (%s and %s); a lab's vnet IDs must all differ (%s)",
+				use.ID, prior.Position, use.Position, config.VnetIDRule)
+		}
+		own[use.ID] = use
+
+		if used, ok := taken[use.ID]; ok {
+			if use.Position == "network.vnet_id" {
+				return fmt.Errorf(
+					"vnet ID %q (%s) is already used by lab %q at %s; "+
+						"pass --vnet-id with an ID no other lab uses (%s)",
+					use.ID, source, used.Lab, used.Position, config.VnetIDRule)
+			}
+			return fmt.Errorf(
+				"vnet ID %q (%s) is already used by lab %q at %s; give it an ID no other lab uses (%s)",
+				use.ID, use.Position, used.Lab, used.Position, config.VnetIDRule)
 		}
 	}
 	return nil
