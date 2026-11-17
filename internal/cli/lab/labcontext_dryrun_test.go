@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	pveerrors "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -152,6 +153,76 @@ func TestSyncLabContext_DryRunReusesWorkingSecretAndChangesNothing(t *testing.T)
 	assert.Empty(t, *stored)
 	assert.Equal(t, existing, *deps.Cfg.Contexts["lab-demo"], "the stored context must not change")
 	assert.Equal(t, before, readConfigFile(t, deps.ConfigPath))
+}
+
+// TestSyncLabContext_DryRunNeverPrintsALiteralSecret covers a context whose
+// stored secret is the literal token string, as on a platform without a
+// keychain. The plan keeps it, and neither the table nor the JSON may carry it.
+func TestSyncLabContext_DryRunNeverPrintsALiteralSecret(t *testing.T) {
+	const literal = "literal-uuid-secret-0f3c"
+	fake := dryRunFake(pmxUserList, pmxACLList)
+	cmd, deps := syncTestDeps(t, fake)
+	deps.Cfg.Contexts["lab-demo"] = labTokenContext(literal)
+
+	res, err := syncLabContext(cmd, deps, demoLab(), labSyncOptions{DryRun: true})
+	require.NoError(t, err)
+	require.NotNil(t, res.Plan)
+	require.True(t, res.Plan.Reuse)
+
+	plan := labSyncPlanResult(res.ContextName, res.Plan)
+	for _, format := range []output.Format{output.FormatPlain, output.FormatJSON, output.FormatYAML} {
+		var buf bytes.Buffer
+		require.NoError(t, deps.Out.Render(&buf, plan, format))
+		assert.NotContains(t, buf.String(), literal, "format %s must not carry the secret", format)
+		assert.Contains(t, buf.String(), "literal secret, redacted", "format %s names the redaction", format)
+	}
+}
+
+// TestLabDisplaySecretRef keeps references readable and redacts everything
+// else, including a bare $NAME that may be a literal secret.
+func TestLabDisplaySecretRef(t *testing.T) {
+	for _, ref := range []string{"keychain:pmx-lab-demo/pmx@pve!pmx", "${PMX_LAB_TOKEN}"} {
+		assert.Equal(t, ref, labDisplaySecretRef(ref))
+	}
+	for _, lit := range []string{"", "0123-abcd", "$Hunter2", "plain"} {
+		assert.Equal(t, labRedactedSecret, labDisplaySecretRef(lit), "%q", lit)
+	}
+}
+
+// TestSyncLabContext_DryRunWordsAnUnreachableAPIProbe covers a probe that
+// failed on transport: the secret is kept, but the plan must not claim it
+// authenticates, since nothing checked.
+func TestSyncLabContext_DryRunWordsAnUnreachableAPIProbe(t *testing.T) {
+	fake := dryRunFake(pmxUserList, pmxACLList)
+	cmd, deps := syncTestDeps(t, fake)
+	labProbeContextVersion = func(*cobra.Command, *cli.Deps, string) error {
+		return &pveerrors.ConnectionError{Host: "10.10.1.10", Port: 8006, Message: "refused"}
+	}
+	deps.Cfg.Contexts["lab-demo"] = labTokenContext("keychain:pmx-lab-demo/pmx@pve!pmx")
+
+	res, err := syncLabContext(cmd, deps, demoLab(), labSyncOptions{DryRun: true})
+	require.NoError(t, err)
+	require.True(t, res.Plan.Reuse)
+	assert.True(t, res.Plan.ProbeUnverified)
+
+	out := renderPlan(t, deps, res)
+	assert.NotContains(t, out, "still authenticates")
+	assert.Contains(t, out, "could not be checked because the API was unreachable")
+}
+
+// TestSyncLabContext_DryRunRotateStatesTheRevocation covers --rotate: the
+// preview says the lab's shared token is replaced and other holders break.
+func TestSyncLabContext_DryRunRotateStatesTheRevocation(t *testing.T) {
+	fake := dryRunFake(pmxUserList, pmxACLList)
+	cmd, deps := syncTestDeps(t, fake)
+	deps.Cfg.Contexts["lab-demo"] = labTokenContext("keychain:pmx-lab-demo/pmx@pve!pmx")
+
+	res, err := syncLabContext(cmd, deps, demoLab(), labSyncOptions{DryRun: true, Rotate: true})
+	require.NoError(t, err)
+
+	out := renderPlan(t, deps, res)
+	assert.Contains(t, out, "replaces the lab's shared token")
+	assert.Contains(t, out, "stop working until it runs lab context sync")
 }
 
 // TestSyncLabContext_DryRunRotatesWhenStoredSecretIsRejected covers a context

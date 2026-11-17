@@ -47,8 +47,10 @@ func TestSyncLabContext_RotateMovesLegacyReferenceAndKeepsLegacyItem(t *testing.
 	assert.Empty(t, *deleted, "the legacy item must never be deleted")
 
 	assert.Contains(t, stderr.String(), "NOTE:")
-	assert.Contains(t, stderr.String(), "pmx-lab-demo/pmx@pve!pmx is no longer referenced")
-	assert.Contains(t, stderr.String(), "security delete-generic-password -s pmx-lab-demo")
+	assert.Contains(t, stderr.String(), "The previous item pmx-lab-demo/pmx@pve!pmx was left in place")
+	assert.Contains(t, stderr.String(), "the token it holds has been revoked")
+	assert.Contains(t, stderr.String(), "needs lab context sync")
+	assert.NotContains(t, stderr.String(), "delete-generic-password", "the NOTE must not advise deleting the item")
 
 	reloaded, err := config.Load(deps.ConfigPath)
 	require.NoError(t, err)
@@ -194,6 +196,10 @@ func TestContextSync_HasRotateFlag(t *testing.T) {
 	help := buf.String()
 	assert.Contains(t, help, "--rotate")
 	assert.Contains(t, help, "moves onto the")
-	assert.Contains(t, help, "NOTE naming the command that removes it")
+	assert.Contains(t, help, "NOTE saying it was left in place")
+	assert.Contains(t, help, "replaces the lab's one shared `pmx@pve!pmx` token")
+	assert.Contains(t, help, "stops working until it runs `lab context sync` again")
+	assert.Contains(t, help, "running `lab context sync --rotate` again recovers")
+	assert.Contains(t, flag.Usage, "replaces the lab's shared pmx@pve!pmx token")
 	assert.NotContains(t, help, "delete the old", "the help must not advise deleting the older item")
 }

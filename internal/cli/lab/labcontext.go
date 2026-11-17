@@ -360,6 +360,10 @@ type labSyncPlan struct {
 	// ReusedRef is the reference the context keeps.
 	Reuse     bool
 	ReusedRef string
+	// ProbeUnverified reports that the reuse was chosen without proof, because
+	// the API probe failed on transport and so could not say whether the stored
+	// secret authenticates.
+	ProbeUnverified bool
 	// StoreService and StoreAccount name the keychain item a rotation would
 	// write, and StoreLiteral reports that this platform has no keychain, so
 	// the secret would go into the config file instead.
@@ -477,6 +481,9 @@ func labSecretStoreTarget(deps *cli.Deps, ctxName, name string) (service, accoun
 // (typically the legacy name-only item) and nothing in this config references
 // that item any more. pmx never deletes it here: a same-named lab reached from
 // another config may still use the legacy item, and only that config can tell.
+// The rotation that moved the context also replaced the lab's one shared
+// pmx@pve!pmx token, so the item left behind holds a revoked secret and the
+// note says so, and names the command that restores any other config using it.
 // The note goes to stderr and is advisory only.
 func warnUnreferencedLabSecret(cmd *cobra.Command, deps *cli.Deps, ctxName, name, previousRef, newRef string) {
 	move, ok := labSecretMovedAway(deps.Cfg, name, previousRef, newRef)
@@ -484,11 +491,10 @@ func warnUnreferencedLabSecret(cmd *cobra.Command, deps *cli.Deps, ctxName, name
 		return
 	}
 	_, _ = fmt.Fprintf(cmd.ErrOrStderr(),
-		"NOTE: context %q now uses keychain item %s/%s. The previous item %s/%s is no longer referenced "+
-			"by this config and was left in place, since a same-named lab in another config may use it. "+
-			"If nothing uses it, remove it with: %s\n",
-		ctxName, move.newService, move.newAccount, move.service, move.account,
-		labKeychainDeleteCommand(move.service, move.account))
+		"NOTE: context %q now uses keychain item %s/%s. The previous item %s/%s was left in place, "+
+			"but the token it holds has been revoked, so any other context or config that still uses it "+
+			"needs lab context sync\n",
+		ctxName, move.newService, move.newAccount, move.service, move.account)
 }
 
 // labSecretMove describes a context moving off one lab-owned keychain item and
@@ -640,6 +646,7 @@ func syncLabContext(cmd *cobra.Command, deps *cli.Deps, lab *config.Lab, opts la
 
 	secretRef := ""
 	previousRef := ""
+	probeUnverified := false
 	// storedService and storedAccount name the keychain item this run wrote,
 	// if any; a failure before the context referencing it is saved removes it
 	// again (see failBeforeSave).
@@ -652,8 +659,11 @@ func syncLabContext(cmd *cobra.Command, deps *cli.Deps, lab *config.Lab, opts la
 		if !opts.Rotate && existing.Auth.Secret != "" && existing.Auth.Username == labCtxUser &&
 			existing.Auth.TokenID == labCtxTokenName {
 			switch perr := labProbeContextVersion(cmd, deps, res.ContextName); {
-			case perr == nil, labProbeTransportFailed(perr):
+			case perr == nil:
 				secretRef = existing.Auth.Secret
+			case labProbeTransportFailed(perr):
+				secretRef = existing.Auth.Secret
+				probeUnverified = true
 			}
 		}
 	}
@@ -696,7 +706,7 @@ func syncLabContext(cmd *cobra.Command, deps *cli.Deps, lab *config.Lab, opts la
 			}
 		}
 	} else if plan != nil {
-		plan.Reuse, plan.ReusedRef = true, secretRef
+		plan.Reuse, plan.ReusedRef, plan.ProbeUnverified = true, secretRef, probeUnverified
 	}
 
 	// Until the config is saved, a failure must leave both the in-memory
@@ -787,7 +797,9 @@ func newContextCmd() *cobra.Command {
 			"records the full `keychain:<service>/<account>` reference, and everything that reads " +
 			"the secret follows that reference. Contexts written before namespacing reference the " +
 			"older `pmx-lab-<name>` service and keep working unchanged until their token is " +
-			"next rotated.\n\n" +
+			"next rotated. `pmx lab context sync <name> --rotate` forces that rotation and moves " +
+			"the context onto the namespaced item, which also revokes the old token for any other " +
+			"config that uses it.\n\n" +
 			"`pmx lab create --start` runs this automatically. Use `sync` to register or " +
 			"re-register a lab, rotate a lost secret, or refresh the pinned TLS fingerprint.",
 	}
@@ -863,6 +875,23 @@ func newContextRmCmd() *cobra.Command {
 	return cmd
 }
 
+// labRedactedSecret stands in for a literal secret in dry-run output.
+const labRedactedSecret = "<literal secret, redacted>"
+
+// labDisplaySecretRef returns ref when it is a reference the operator can read
+// safely, meaning a keychain: or ${NAME} reference, and a redaction marker for
+// anything else. A context reaching a lab without a keychain stores the token
+// secret literally in Auth.Secret, and a dry run must never print it.
+func labDisplaySecretRef(ref string) string {
+	if _, _, ok := config.ParseKeychainRef(ref); ok {
+		return ref
+	}
+	if strings.HasPrefix(ref, "${") && strings.HasSuffix(ref, "}") {
+		return ref
+	}
+	return labRedactedSecret
+}
+
 // labSyncPlanResult renders a dry-run sync's plan as STEP/STATUS rows, the
 // shape `lab access grant --dry-run` uses, so -o json and -o yaml carry the
 // same structured data as the table.
@@ -881,9 +910,13 @@ func labSyncPlanResult(ctxName string, plan *labSyncPlan) output.Result {
 
 	tokenID := labCtxAccount()
 	if plan.Reuse {
+		status := "would be reused, since the stored secret still authenticates"
+		if plan.ProbeUnverified {
+			status = "would be reused; the secret would be kept but could not be checked because the API was unreachable"
+		}
 		rows = append(rows,
-			[]string{fmt.Sprintf("token %q", tokenID), "would be reused, since the stored secret still authenticates"},
-			[]string{"keychain", fmt.Sprintf("no write, the context keeps %s", plan.ReusedRef)},
+			[]string{fmt.Sprintf("token %q", tokenID), status},
+			[]string{"keychain", fmt.Sprintf("no write, the context keeps %s", labDisplaySecretRef(plan.ReusedRef))},
 		)
 	} else {
 		reason := "the stored secret is missing, unusable, or rejected"
@@ -892,6 +925,8 @@ func labSyncPlanResult(ctxName string, plan *labSyncPlan) output.Result {
 		}
 		rows = append(rows, []string{fmt.Sprintf("token %q", tokenID),
 			fmt.Sprintf("would be rotated (%s): the existing token is removed and a new one minted", reason)})
+		rows = append(rows, []string{"revocation", "rotating replaces the lab's shared token, so every other " +
+			"context or config that holds the old secret would stop working until it runs lab context sync"})
 		if plan.StoreLiteral {
 			rows = append(rows, []string{"keychain",
 				"no keychain on this platform, so the new secret would be stored literally in the config file"})
@@ -956,10 +991,15 @@ func newContextSyncCmd() *cobra.Command {
 			"namespaced item, since a reused secret keeps its old reference. The new secret " +
 			"is stored under the namespaced service, the context is pointed at it, and the " +
 			"older item is left in place. Once nothing in this config references the older " +
-			"item, sync prints a NOTE naming the command that removes it; sync never removes " +
-			"it itself. Every check of a normal rotation still applies, including the refusal " +
+			"item, sync prints a NOTE saying it was left in place; sync never removes it " +
+			"itself. Every check of a normal rotation still applies, including the refusal " +
 			"when another context references the target item and the rollback when a step " +
 			"fails before the config is saved.\n\n" +
+			"Rotating replaces the lab's one shared `pmx@pve!pmx` token. Every other context " +
+			"or config that reaches this lab with the old secret, including through the older " +
+			"item, stops working until it runs `lab context sync` again. If a rotation fails " +
+			"after the token is minted, the context is unusable until sync runs again, and " +
+			"running `lab context sync --rotate` again recovers.\n\n" +
 			"With --dry-run the command makes the same checks and decisions, reading the " +
 			"node's users, ACLs, certificate, and hostname over ssh and probing the stored " +
 			"secret against the API, and prints what it would create or reuse and what it " +
@@ -998,6 +1038,7 @@ func newContextSyncCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false,
 		"preview what would be created, reused, and written to the config and keychain, without changing anything")
 	cmd.Flags().BoolVar(&rotate, "rotate", false,
-		"always mint a new token and store it in the namespaced keychain item, even when the stored secret still works")
+		"always mint a new token and store it in the namespaced keychain item, even when the stored secret still works; "+
+			"this replaces the lab's shared pmx@pve!pmx token, so other contexts and configs holding the old secret stop working")
 	return cmd
 }
