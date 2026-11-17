@@ -311,11 +311,40 @@ func (d cephDaemon) healthy(kind string) bool {
 }
 
 // cephDaemonDeleteCommand is the pmx command that removes a mon or mgr named
-// name from the node it runs on. By lab convention a daemon is named after
-// its node. The ensure verbs print it for a daemon in a bad state and never
-// run it: deleting a daemon is the operator's call.
-func cephDaemonDeleteCommand(kind, name string) string {
-	return fmt.Sprintf("pmx pve --node %s node ceph %s delete %s --yes", name, kind, name)
+// name from the node it runs on, aimed at the lab's own context so it works
+// from any shell. By lab convention a daemon is named after its node. The
+// ensure verbs print it for a daemon in a bad state and never run it: deleting
+// a daemon is the operator's call.
+func cephDaemonDeleteCommand(labName, kind, name string) string {
+	return fmt.Sprintf("pmx pve -c %s --node %s node ceph %s delete %s --yes", labContextName(labName), name, kind, name)
+}
+
+// cephUnknownState is the state PVE reports for a daemon it cannot see because
+// it has no rados access to the cluster, which happens cluster-wide when
+// quorum is lost.
+const cephUnknownState = "unknown"
+
+// cephUnreachable reports whether a listing shows Ceph itself as unreachable
+// from PVE instead of one daemon as broken. A mon in "unknown" means PVE has no
+// rados access, and so does a listing whose every daemon is "unknown", for
+// either kind. Deleting a daemon on that evidence could wipe the monmap, so no
+// delete command is offered for it.
+func cephUnreachable(kind string, existing map[string]cephDaemon) bool {
+	if len(existing) == 0 {
+		return false
+	}
+
+	all := true
+	for _, d := range existing {
+		if d.State == cephUnknownState {
+			if kind == "mon" {
+				return true
+			}
+		} else {
+			all = false
+		}
+	}
+	return all
 }
 
 // cephListDaemons returns the daemons already listed on node0 for kind ("mon"
@@ -373,6 +402,12 @@ func cephListDaemons(ctx context.Context, api *apiclient.APIClient, node0, kind 
 // recreated over its own name and never deleted: the verb finishes the other
 // nodes, then fails naming each such daemon, its state, and the command that
 // removes it.
+//
+// "unknown" is the exception. It means PVE has no rados access to Ceph, so a
+// mon in that state, or a listing whose every daemon is in it, shows Ceph as
+// unreachable and not a daemon as broken (cephUnreachable). The verb then
+// creates nothing and offers no delete command, and fails telling the operator
+// to check quorum with `ceph -s` on a node and retry.
 func ensureCephDaemons(ctx context.Context, api *apiclient.APIClient, lab *config.Lab, kind string) ([]cephStepResult, error) {
 	n := config.EffectiveTopologyNodes(lab.Topology)
 	node0 := labNodeVMName(lab.Name, 0)
@@ -381,6 +416,9 @@ func ensureCephDaemons(ctx context.Context, api *apiclient.APIClient, lab *confi
 		return nil, err
 	}
 	rows := make([]cephStepResult, 0, n)
+	if cephUnreachable(kind, existing) {
+		return cephUnreachableRows(lab.Name, kind, n, existing)
+	}
 	var broken []string
 	for i := range n {
 		name := labNodeVMName(lab.Name, i)
@@ -399,7 +437,7 @@ func ensureCephDaemons(ctx context.Context, api *apiclient.APIClient, lab *confi
 				"ceph %s %q exists in state %q, not %s, and was left alone; "+
 					"remove it with `%s`, then rerun this command",
 				kind, name, state, strings.Join(cephDaemonHealthyStates[kind], " or "),
-				cephDaemonDeleteCommand(kind, name)))
+				cephDaemonDeleteCommand(lab.Name, kind, name)))
 			continue
 		}
 		raw, err := cephCreateDaemon(ctx, api, name, kind)
@@ -415,6 +453,44 @@ func ensureCephDaemons(ctx context.Context, api *apiclient.APIClient, lab *confi
 		return rows, errors.New(strings.Join(broken, "; "))
 	}
 	return rows, nil
+}
+
+// cephUnreachableRows builds the result of an ensure run that stopped because
+// the listing shows Ceph as unreachable from PVE. Each listed daemon shows its
+// state, each absent one shows that it was not created, and the error names
+// the daemons PVE could not see and says what to check. It carries no delete
+// command, because a delete issued while quorum is lost can wipe the monmap.
+func cephUnreachableRows(labName, kind string, nodes int, existing map[string]cephDaemon) ([]cephStepResult, error) {
+	rows := make([]cephStepResult, 0, nodes)
+	var unseen []string
+	for i := range nodes {
+		name := labNodeVMName(labName, i)
+		d, listed := existing[name]
+		switch {
+		case !listed:
+			rows = append(rows, cephStepResult{Step: kind + " " + name, Status: "not created (ceph unreachable from PVE)"})
+		case d.healthy(kind):
+			rows = append(rows, cephStepResult{Step: kind + " " + name, Status: "already present"})
+		default:
+			state := d.State
+			if state == "" {
+				state = "none reported"
+			}
+			rows = append(rows, cephStepResult{
+				Step: kind + " " + name, Status: fmt.Sprintf("present but not running (state: %s)", state)})
+			if d.State == cephUnknownState {
+				unseen = append(unseen, name)
+			}
+		}
+	}
+
+	return rows, fmt.Errorf(
+		"cannot ensure ceph %s daemons: Ceph is unreachable from PVE, because %s is in state %q, which PVE "+
+			"reports when it has no rados access to the cluster (lost quorum, for example), so nothing was "+
+			"created and no delete command is offered, "+
+			"because deleting a daemon now could wipe the monmap; check quorum with `ceph -s` on a node, "+
+			"then rerun this command",
+		kind, strings.Join(unseen, ", "), cephUnknownState)
 }
 
 // newCephInitCmd builds `pmx lab ceph init <name>`.
@@ -485,10 +561,14 @@ func newCephDaemonCmd(kind, short string) *cobra.Command {
 			"already have one, named after the node it runs on.\n\n"+
 			"Idempotent: a node whose %s is listed as running (%s) is skipped. A %s that is listed in "+
 			"any other state, such as the \"unknown\" a timed-out create leaves behind, is reported by "+
-			"name and state with the `pmx pve --node <node> node ceph %s delete <name> --yes` command that "+
-			"removes it, and the verb exits non-zero; it is never deleted or recreated for you.\n\n"+
+			"name and state with the `pmx pve -c lab-<name> --node <node> node ceph %s delete <name> --yes` "+
+			"command that removes it, and the verb exits non-zero; it is never deleted or recreated for you. "+
+			"The exception is a %s in the \"unknown\" state that shows Ceph is unreachable from PVE (any "+
+			"mon, or a listing where every daemon is unknown): that means PVE has no rados access, as when "+
+			"quorum is lost, so the verb creates nothing, offers no delete command because deleting could "+
+			"wipe the monmap, and exits non-zero; check quorum with `ceph -s` on a node and retry.\n\n"+
 			"Requires topology.nodes >= 3: Ceph needs at least a 3-node lab.",
-			kind, kind, strings.Join(cephDaemonHealthyStates[kind], " or "), kind, kind),
+			kind, kind, strings.Join(cephDaemonHealthyStates[kind], " or "), kind, kind, kind),
 		Example: fmt.Sprintf("  pmx lab ceph %s wayne\n  pmx lab ceph %s wayne --dry-run", kind, kind),
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

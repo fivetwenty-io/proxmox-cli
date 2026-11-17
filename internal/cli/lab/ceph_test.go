@@ -381,6 +381,29 @@ type cephDaemonStateCase struct {
 	// brokenState, when set, is the state of lab-ceph-1's daemon, which the
 	// verb must report and leave alone (no create, no delete) and fail on.
 	brokenState string
+	// unreachable marks a listing that shows Ceph as unreachable from PVE:
+	// nothing is created, deleted, or advised for deletion, and the verb fails.
+	unreachable bool
+}
+
+// unknownCreated returns the nodes a listing with one daemon in "unknown" still
+// gets created on. A lone unknown mgr among healthy ones is a broken daemon, so
+// the absent node is created. An unknown mon means Ceph is unreachable, so
+// nothing is created.
+func unknownCreated(kind string) []string {
+	if kind == "mon" {
+		return nil
+	}
+	return []string{"lab-ceph-2"}
+}
+
+// unknownBroken is the state the verb reports as a broken daemon for a listing
+// with one daemon in "unknown": a mgr is broken, a mon is an unreachable Ceph.
+func unknownBroken(kind string) string {
+	if kind == "mon" {
+		return ""
+	}
+	return "unknown"
 }
 
 // cephDaemonStateCases covers a running, an unknown, a stopped, and an absent
@@ -404,8 +427,9 @@ func cephDaemonStateCases() []cephDaemonStateCase {
 			cephDaemonStateCase{
 				name: k.kind + " unknown", kind: k.kind,
 				listing:     []any{node0, map[string]any{"name": "lab-ceph-1", "state": "unknown"}},
-				created:     []string{"lab-ceph-2"},
-				brokenState: "unknown",
+				created:     unknownCreated(k.kind),
+				brokenState: unknownBroken(k.kind),
+				unreachable: k.kind == "mon",
 			},
 			cephDaemonStateCase{
 				name: k.kind + " stopped", kind: k.kind,
@@ -482,6 +506,13 @@ func TestLabCephDaemons_CountsOnlyRunningDaemonsAsPresent(t *testing.T) {
 				assert.Equal(t, "/api2/json/nodes/"+node+"/ceph/"+tc.kind+"/"+node, createRec[i].path)
 			}
 
+			if tc.unreachable {
+				require.Error(t, err)
+				assertCephUnreachable(t, err)
+				assert.Contains(t, out, "present but not running (state: unknown)")
+				return
+			}
+
 			if tc.brokenState == "" {
 				require.NoError(t, err)
 				assert.NotContains(t, out, "not running")
@@ -491,7 +522,7 @@ func TestLabCephDaemons_CountsOnlyRunningDaemonsAsPresent(t *testing.T) {
 			require.Error(t, err)
 			assert.ErrorContains(t, err, tc.kind+` "lab-ceph-1"`)
 			assert.ErrorContains(t, err, `state "`+tc.brokenState+`"`)
-			assert.ErrorContains(t, err, "pmx pve --node lab-ceph-1 node ceph "+tc.kind+" delete lab-ceph-1 --yes")
+			assert.ErrorContains(t, err, "pmx pve -c lab-ceph --node lab-ceph-1 node ceph "+tc.kind+" delete lab-ceph-1 --yes")
 			assert.NotContains(t, err.Error(), "lab-ceph-0")
 			assert.NotContains(t, err.Error(), "lab-ceph-2")
 			assert.Contains(t, out, "present but not running (state: "+tc.brokenState+")")
@@ -521,10 +552,119 @@ func TestLabCephDaemons_NamesEveryBrokenDaemon(t *testing.T) {
 	_, err := runGuestCmd(t, cmd, "mgr", "ceph")
 	require.Error(t, err)
 	assert.ErrorContains(t, err, `state "unknown"`)
-	assert.ErrorContains(t, err, "pmx pve --node lab-ceph-0 node ceph mgr delete lab-ceph-0 --yes")
+	assert.ErrorContains(t, err, "pmx pve -c lab-ceph --node lab-ceph-0 node ceph mgr delete lab-ceph-0 --yes")
 	assert.ErrorContains(t, err, `state "stopped"`)
-	assert.ErrorContains(t, err, "pmx pve --node lab-ceph-2 node ceph mgr delete lab-ceph-2 --yes")
+	assert.ErrorContains(t, err, "pmx pve -c lab-ceph --node lab-ceph-2 node ceph mgr delete lab-ceph-2 --yes")
 	assert.NotContains(t, err.Error(), "lab-ceph-1")
+}
+
+// assertCephUnreachable checks the error of a run that stopped because PVE
+// cannot reach Ceph: it says so, points at quorum, and carries no delete advice.
+func assertCephUnreachable(t *testing.T, err error) {
+	t.Helper()
+
+	assert.ErrorContains(t, err, "Ceph is unreachable from PVE")
+	assert.ErrorContains(t, err, "ceph -s")
+	assert.NotContains(t, err.Error(), "pmx pve")
+	assert.NotContains(t, err.Error(), "--yes")
+}
+
+// TestLabCephDaemons_UnknownMeansCephIsUnreachable covers the listings that
+// show Ceph as unreachable from PVE. Each fails the verb with no create, no
+// delete, and no delete command, because deleting a mon whose state PVE cannot
+// read could wipe the monmap.
+func TestLabCephDaemons_UnknownMeansCephIsUnreachable(t *testing.T) {
+	healthy := map[string]string{"mgr": "active", "mon": "running"}
+	entry := func(i int, state string) map[string]any {
+		return map[string]any{"name": fmt.Sprintf("lab-ceph-%d", i), "state": state}
+	}
+
+	for _, tc := range []struct {
+		name    string
+		kind    string
+		listing []any
+	}{
+		{"a mon in unknown among running mons", "mon", []any{entry(0, "running"), entry(1, "unknown"), entry(2, "running")}},
+		{"the only mon in unknown", "mon", []any{entry(0, "unknown")}},
+		{"every mon in unknown", "mon", []any{entry(0, "unknown"), entry(1, "unknown"), entry(2, "unknown")}},
+		{"every mgr in unknown", "mgr", []any{entry(0, "unknown"), entry(1, "unknown"), entry(2, "unknown")}},
+		{"the only listed mgr in unknown", "mgr", []any{entry(0, "unknown")}},
+		{"an unknown mon beside a stopped one", "mon", []any{entry(0, "stopped"), entry(1, "unknown")}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			lab := cephTestLab("ceph", 3)
+			path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"ceph": lab}})
+			f := testhelper.NewFakePVE(t)
+			f.HandleJSON("GET /api2/json/nodes/lab-ceph-0/ceph/"+tc.kind, tc.listing)
+			createForbid(f, t, "POST /api2/json/nodes")
+			createForbid(f, t, "DELETE /api2/json/nodes")
+
+			cmd, _ := buildGuestSSHCmd(t, path, newCephCmd())
+			stubInnerAPIClient(t, f)
+
+			_, err := runGuestCmd(t, cmd, tc.kind, "ceph")
+			require.Error(t, err, "the verb still exits non-zero")
+			assertCephUnreachable(t, err)
+		})
+	}
+
+	t.Run("a stopped daemon with no unknown one keeps its delete command", func(t *testing.T) {
+		for kind, state := range healthy {
+			lab := cephTestLab("ceph", 3)
+			path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"ceph": lab}})
+			f := testhelper.NewFakePVE(t)
+			f.HandleJSON("GET /api2/json/nodes/lab-ceph-0/ceph/"+kind, []any{
+				entry(0, state), entry(1, "stopped"), entry(2, state)})
+			createForbid(f, t, "POST /api2/json/nodes")
+			createForbid(f, t, "DELETE /api2/json/nodes")
+
+			cmd, _ := buildGuestSSHCmd(t, path, newCephCmd())
+			stubInnerAPIClient(t, f)
+
+			_, err := runGuestCmd(t, cmd, kind, "ceph")
+			require.Error(t, err)
+			assert.ErrorContains(t, err, "pmx pve -c lab-ceph --node lab-ceph-1 node ceph "+kind+" delete lab-ceph-1 --yes")
+			assert.NotContains(t, err.Error(), "unreachable")
+		}
+	})
+
+	t.Run("a lone unknown mgr beside healthy ones keeps its delete command", func(t *testing.T) {
+		lab := cephTestLab("ceph", 3)
+		path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"ceph": lab}})
+		f := testhelper.NewFakePVE(t)
+		f.HandleJSON("GET /api2/json/nodes/lab-ceph-0/ceph/mgr", []any{
+			entry(0, "active"), entry(1, "unknown"), entry(2, "standby")})
+		createForbid(f, t, "POST /api2/json/nodes")
+		createForbid(f, t, "DELETE /api2/json/nodes")
+
+		cmd, _ := buildGuestSSHCmd(t, path, newCephCmd())
+		stubInnerAPIClient(t, f)
+
+		_, err := runGuestCmd(t, cmd, "mgr", "ceph")
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "pmx pve -c lab-ceph --node lab-ceph-1 node ceph mgr delete lab-ceph-1 --yes")
+		assert.NotContains(t, err.Error(), "unreachable")
+	})
+}
+
+// TestCephDaemonDeleteCommand pins the printed command's form: it names the
+// lab's own context so it runs from any shell.
+func TestCephDaemonDeleteCommand(t *testing.T) {
+	assert.Equal(t, "pmx pve -c lab-wayne --node lab-wayne-1 node ceph mon delete lab-wayne-1 --yes",
+		cephDaemonDeleteCommand("wayne", "mon", "lab-wayne-1"))
+	assert.Equal(t, "pmx pve -c lab-wayne --node lab-wayne-0 node ceph mgr delete lab-wayne-0 --yes",
+		cephDaemonDeleteCommand("wayne", "mgr", "lab-wayne-0"))
+}
+
+// TestCephDaemonHelp_NamesTheLabContextAndTheUnreachableCase keeps the long help
+// in step with what the verb prints.
+func TestCephDaemonHelp_NamesTheLabContextAndTheUnreachableCase(t *testing.T) {
+	for _, kind := range []string{"mon", "mgr"} {
+		long := newCephDaemonCmd(kind, "x").Long
+		assert.Contains(t, long, "pmx pve -c lab-<name> --node <node> node ceph "+kind+" delete <name> --yes")
+		assert.Contains(t, long, "unreachable from PVE")
+		assert.Contains(t, long, "ceph -s")
+	}
 }
 
 // --- osd / pool / status ----------------------------------------------------
