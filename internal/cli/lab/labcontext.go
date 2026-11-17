@@ -332,6 +332,10 @@ func labWaitForSSH(ctx context.Context, deps *cli.Deps, ip string) error {
 type labSyncOptions struct {
 	WaitSSH bool
 	DryRun  bool
+	// Rotate skips the reuse of a stored secret, so the run always mints a new
+	// token and stores it in the namespaced keychain item. It is how a context
+	// that references a legacy name-only item moves onto the namespaced one.
+	Rotate bool
 }
 
 // labSyncResult reports what a sync did, for row/message rendering. A dry run
@@ -345,6 +349,9 @@ type labSyncResult struct {
 
 // labSyncPlan is what a dry-run sync found it would do.
 type labSyncPlan struct {
+	// Forced reports that --rotate, not a failed probe, is why the token would
+	// be rotated.
+	Forced bool
 	// UserExists and ACLExists report what the node already has.
 	UserExists, ACLExists bool
 	// ContextExists reports whether lab-<name> is already in the config.
@@ -590,7 +597,7 @@ func syncLabContext(cmd *cobra.Command, deps *cli.Deps, lab *config.Lab, opts la
 
 	var plan *labSyncPlan
 	if opts.DryRun {
-		plan = &labSyncPlan{}
+		plan = &labSyncPlan{Forced: opts.Rotate}
 		res.Plan = plan
 		if plan.UserExists, plan.ACLExists, err = labReadUserAndACL(deps, node0IP); err != nil {
 			return res, err
@@ -605,7 +612,8 @@ func syncLabContext(cmd *cobra.Command, deps *cli.Deps, lab *config.Lab, opts la
 	}
 
 	// Reuse a still-valid stored secret rather than rotating (a re-run must
-	// never invalidate a working credential). Only reuse a context that
+	// never invalidate a working credential). --rotate skips this branch, so
+	// the run always takes the rotation path below. Only reuse a context that
 	// already carries this lab's own pmx@pve!pmx identity and a secret: a
 	// same-named context with a different identity (e.g. an operator's own
 	// root@pam token that the ownership rule happened to claim) would, once
@@ -641,7 +649,7 @@ func syncLabContext(cmd *cobra.Command, deps *cli.Deps, lab *config.Lab, opts la
 			plan.ContextExists = true
 		}
 		previousRef = existing.Auth.Secret
-		if existing.Auth.Secret != "" && existing.Auth.Username == labCtxUser &&
+		if !opts.Rotate && existing.Auth.Secret != "" && existing.Auth.Username == labCtxUser &&
 			existing.Auth.TokenID == labCtxTokenName {
 			switch perr := labProbeContextVersion(cmd, deps, res.ContextName); {
 			case perr == nil, labProbeTransportFailed(perr):
@@ -878,8 +886,12 @@ func labSyncPlanResult(ctxName string, plan *labSyncPlan) output.Result {
 			[]string{"keychain", fmt.Sprintf("no write, the context keeps %s", plan.ReusedRef)},
 		)
 	} else {
+		reason := "the stored secret is missing, unusable, or rejected"
+		if plan.Forced {
+			reason = "--rotate was given"
+		}
 		rows = append(rows, []string{fmt.Sprintf("token %q", tokenID),
-			"would be rotated: the existing token is removed and a new one minted"})
+			fmt.Sprintf("would be rotated (%s): the existing token is removed and a new one minted", reason)})
 		if plan.StoreLiteral {
 			rows = append(rows, []string{"keychain",
 				"no keychain on this platform, so the new secret would be stored literally in the config file"})
@@ -910,7 +922,10 @@ func labSyncPlanResult(ctxName string, plan *labSyncPlan) output.Result {
 
 // newContextSyncCmd builds `pmx lab context sync <name>`.
 func newContextSyncCmd() *cobra.Command {
-	var dryRun bool
+	var (
+		dryRun bool
+		rotate bool
+	)
 
 	cmd := &cobra.Command{
 		Use:   "sync <name>",
@@ -919,7 +934,7 @@ func newContextSyncCmd() *cobra.Command {
 			"  1. ensure the pmx@pve admin token user and ACL on the nested\n" +
 			"     cluster\n" +
 			"  2. reuse the stored token secret if it still authenticates,\n" +
-			"     otherwise rotate to a fresh one\n" +
+			"     otherwise (or with --rotate) rotate to a fresh one\n" +
 			"  3. refresh the pinned TLS fingerprint\n" +
 			"  4. verify the context end to end with GET /version\n\n" +
 			"Requires an active pmx context (--context/-c) as the source of ssh connection " +
@@ -936,13 +951,23 @@ func newContextSyncCmd() *cobra.Command {
 			"anything runs on the node, so no token is minted and nothing is stored. When a step " +
 			"after the keychain store fails before the config is saved, sync removes the item it " +
 			"just wrote unless a context still references it.\n\n" +
+			"Pass --rotate to skip the reuse step and always mint a new token. It is how a " +
+			"context that still references an older `pmx-lab-<name>` item moves onto the " +
+			"namespaced item, since a reused secret keeps its old reference. The new secret " +
+			"is stored under the namespaced service, the context is pointed at it, and the " +
+			"older item is left in place. Once nothing in this config references the older " +
+			"item, sync prints a NOTE naming the command that removes it; sync never removes " +
+			"it itself. Every check of a normal rotation still applies, including the refusal " +
+			"when another context references the target item and the rollback when a step " +
+			"fails before the config is saved.\n\n" +
 			"With --dry-run the command makes the same checks and decisions, reading the " +
 			"node's users, ACLs, certificate, and hostname over ssh and probing the stored " +
 			"secret against the API, and prints what it would create or reuse and what it " +
 			"would write to the config and the keychain. It creates and rotates nothing on " +
 			"the node, stores no secret, and writes no config.",
 		Example: `  pmx -c fleet lab context sync demo
-  pmx -c fleet lab context sync demo --dry-run`,
+  pmx -c fleet lab context sync demo --dry-run
+  pmx -c fleet lab context sync demo --rotate`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -953,7 +978,7 @@ func newContextSyncCmd() *cobra.Command {
 				return err
 			}
 
-			res, err := syncLabContext(cmd, deps, lab, labSyncOptions{WaitSSH: false, DryRun: dryRun})
+			res, err := syncLabContext(cmd, deps, lab, labSyncOptions{WaitSSH: false, DryRun: dryRun, Rotate: rotate})
 			if err != nil {
 				return fmt.Errorf("sync context for lab %q: %w", name, err)
 			}
@@ -972,5 +997,7 @@ func newContextSyncCmd() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false,
 		"preview what would be created, reused, and written to the config and keychain, without changing anything")
+	cmd.Flags().BoolVar(&rotate, "rotate", false,
+		"always mint a new token and store it in the namespaced keychain item, even when the stored secret still works")
 	return cmd
 }
