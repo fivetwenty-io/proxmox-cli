@@ -704,10 +704,11 @@ func validateVnetIDUniqueness(labs map[string]*Lab) error {
 	return nil
 }
 
-// validateAllLabs runs ValidateTopology, ValidateStorage, and
-// ValidateNodeOverrideStorage against every lab in labs and returns a single
-// combined error naming every issue found across every lab, or nil when
-// every lab's topology and storage config is valid.
+// validateAllLabs runs ValidateTopology, ValidateStorage,
+// ValidateNodeOverrideStorage, and ValidateNetworkZone against every lab in
+// labs and returns a single combined error naming every issue found across
+// every lab, or nil when every lab's topology, storage, and SDN zone config
+// is valid.
 func validateAllLabs(labs map[string]*Lab) error {
 	names := make([]string, 0, len(labs))
 	for name := range labs {
@@ -719,6 +720,7 @@ func validateAllLabs(labs map[string]*Lab) error {
 	for _, name := range names {
 		issues = append(issues, ValidateTopology(name, labs[name].Topology)...)
 		issues = append(issues, ValidateStorage(name, labs[name].Storage)...)
+		issues = append(issues, ValidateNetworkZone(name, labs[name].Network)...)
 		issues = append(issues, ValidateNodeOverrideStorage(name, labs[name])...)
 	}
 

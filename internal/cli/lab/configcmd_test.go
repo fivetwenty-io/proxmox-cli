@@ -604,6 +604,22 @@ func TestConfigShow_InlineLab_ProvenanceIsInline(t *testing.T) {
 	assert.Contains(t, out, "labalpha")
 }
 
+// TestConfigShow_ZoneNameTooLong_Refused covers `config show` against a lab
+// whose zone_name is one character past PVE's eight-character SDN zone ID
+// limit: it is refused with the field and the rule, not printed as if valid.
+func TestConfigShow_ZoneNameTooLong_Refused(t *testing.T) {
+	lab := cleanLab("alpha")
+	lab.Network.ZoneName = "labsvxlan"
+	lab.Network.ZoneType = "vxlan"
+	cfgPath := writeConfigCmdYAML(t, &config.Config{Labs: map[string]*config.Lab{"alpha": lab}})
+
+	_, err := runConfigCmd(t, cfgPath, "show", "alpha")
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "network.zone_name")
+	assert.ErrorContains(t, err, `"labsvxlan"`)
+	assert.ErrorContains(t, err, "2-8 characters")
+}
+
 func TestConfigShow_FileLab_ProvenanceNamesFile(t *testing.T) {
 	cfgPath := writeConfigCmdYAML(t, &config.Config{LabsDir: "labs.d"})
 

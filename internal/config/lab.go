@@ -123,7 +123,9 @@ type LabNetwork struct {
 	// ZoneName is the SDN zone this lab's vnet lives in. Empty defaults to
 	// "labs" (EffectiveZoneName) — the deployed outer Simple zone (decision
 	// D4 of the multi-node lab plan) — rather than the platform's historical
-	// hardcoded "labsvxlan" VXLAN zone.
+	// hardcoded "labsvxlan" VXLAN zone. A name set here must be a valid PVE
+	// SDN zone ID: 2-8 characters, starting with a letter, then letters and
+	// digits (ValidateNetworkZone, checked when labs are resolved).
 	ZoneName string `yaml:"zone_name,omitempty" json:"zone_name,omitempty"`
 
 	// ZoneType is the SDN zone plugin type for ZoneName ("simple" or
@@ -394,11 +396,59 @@ func ValidateNestedNetwork(name string, nn LabNestedNetwork) []string {
 	return issues
 }
 
-// sdnIdentifierRE is the charset a nested SDN zone or vnet identifier must
-// match: PVE's own SDN ID rule, at most MaxVnetIDLen alphanumeric characters
-// with no hyphen. Identical to internal/cli/lab's configVnetIDPattern, which
+// sdnIdentifierRE is the charset a nested SDN vnet identifier must match:
+// PVE's own SDN ID rule, at most MaxVnetIDLen alphanumeric characters with no
+// hyphen. A zone ID has its own, stricter rule (ZoneIDIssue). Identical to internal/cli/lab's configVnetIDPattern, which
 // enforces the same rule on the OUTER vnet IDs.
 var sdnIdentifierRE = regexp.MustCompile(`^[A-Za-z0-9]{1,8}$`)
+
+// MaxZoneIDLen and MinZoneIDLen bound a PVE SDN zone ID. The limits come from
+// the zone parameter of POST /cluster/sdn/zones in the PVE API schema the SDK
+// ships (_data/apidoc.json): minLength 2, maxLength 8, pattern
+// "[a-zA-Z][a-zA-Z0-9]*[a-zA-Z0-9]", which PVE anchors at both ends. A zone ID
+// outside them passes every local check and is rejected by PVE only when the
+// zone is created, partway through `pmx lab create`.
+const (
+	MinZoneIDLen = 2
+	MaxZoneIDLen = 8
+)
+
+// zoneIDRE is the zone ID pattern from the PVE schema, anchored: a letter,
+// then letters and digits. The length bounds are checked separately so the
+// message can say which rule a name broke.
+var zoneIDRE = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9]*[A-Za-z0-9]$`)
+
+// ZoneIDIssue reports why id is not a valid PVE SDN zone ID, or "" when it is
+// valid. field names the config key in the message, for example
+// "network.zone_name".
+func ZoneIDIssue(field, id string) string {
+	switch {
+	case len(id) < MinZoneIDLen || len(id) > MaxZoneIDLen:
+		return fmt.Sprintf(
+			"%s %q has length %d, but a PVE SDN zone ID must be %d-%d characters",
+			field, id, len(id), MinZoneIDLen, MaxZoneIDLen)
+	case !zoneIDRE.MatchString(id):
+		return fmt.Sprintf(
+			"%s %q is not a valid PVE SDN zone ID: it must start with a letter and contain only "+
+				"letters and digits (no hyphen or underscore)", field, id)
+	default:
+		return ""
+	}
+}
+
+// ValidateNetworkZone checks the lab's network.zone_name against the PVE SDN
+// zone ID rule (see ZoneIDIssue). An empty zone_name is valid: it resolves to
+// DefaultZoneName, which satisfies the rule. Returns one message per problem,
+// each prefixed with the lab name, like ValidateTopology.
+func ValidateNetworkZone(name string, n LabNetwork) []string {
+	if n.ZoneName == "" {
+		return nil
+	}
+	if issue := ZoneIDIssue("network.zone_name", n.ZoneName); issue != "" {
+		return []string{fmt.Sprintf("lab %q: %s", name, issue)}
+	}
+	return nil
+}
 
 // ifaceNameRE is the charset a Linux interface (bridge) name must match:
 // letters, digits, and the three punctuation characters ip-link accepts, up
@@ -415,10 +465,8 @@ func nestedVlanZoneCharsetIssues(name string, vz *LabNestedVlanZone) []string {
 
 	var issues []string
 
-	if !sdnIdentifierRE.MatchString(vz.ZoneName) {
-		issues = append(issues, fmt.Sprintf(
-			"lab %q: nested_network.vlan_zone.zone_name %q must be 1-%d alphanumeric characters "+
-				"with no hyphen", name, vz.ZoneName, MaxVnetIDLen))
+	if issue := ZoneIDIssue("nested_network.vlan_zone.zone_name", vz.ZoneName); issue != "" {
+		issues = append(issues, fmt.Sprintf("lab %q: %s", name, issue))
 	}
 
 	if !ifaceNameRE.MatchString(vz.Bridge) {

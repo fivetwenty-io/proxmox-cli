@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 
@@ -1099,6 +1100,35 @@ func TestCreateDryRun_NoMutationsShowsPlaceholderVMID(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, out, "<vmid>")
 	assert.Contains(t, out, "would create")
+}
+
+// TestCreate_ZoneNameTooLong_RefusedBeforeAnyCall covers a nine-character
+// zone_name, which PVE only rejects when the zone is created. Both the dry run
+// and the real create must refuse it at config load with a clear message,
+// before a single PVE request is made.
+func TestCreate_ZoneNameTooLong_RefusedBeforeAnyCall(t *testing.T) {
+	for _, args := range [][]string{
+		{"wayne", "--node", "node1", "--dry-run"},
+		{"wayne", "--node", "node1"},
+	} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			f := testhelper.NewFakePVE(t)
+			createForbid(f, t, "GET /api2/json")
+			createForbid(f, t, "POST /api2/json")
+
+			lab := createTestLab("wayne")
+			lab.Network.ZoneName = "labsvxlan"
+			lab.Network.ZoneType = "vxlan"
+			path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+			cmd := buildCreateCmd(t, path, f, "node1")
+
+			_, err := runCreateCmd(t, cmd, args...)
+			require.Error(t, err)
+			assert.ErrorContains(t, err, "network.zone_name")
+			assert.ErrorContains(t, err, `"labsvxlan"`)
+			assert.ErrorContains(t, err, "2-8 characters")
+		})
+	}
 }
 
 // TestCreateDryRun_AbsentVnetIsNeverListedForSubnets pins the bug the fixture
