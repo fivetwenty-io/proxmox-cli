@@ -262,6 +262,9 @@ func TestSSHTransportFailure(t *testing.T) {
 		{"jump host open failed", "", "channel 0: open failed: connect failed: Connection refused", true},
 		{"permission denied retries", "", "Permission denied, please try again.", true},
 		{"host key", "", "Host key verification failed.", true},
+		{"banner exchange timeout", "", "Connection timed out during banner exchange", true},
+		{"port timed out", "", "Connection to 10.0.0.1 port 22 timed out", true},
+		{"ipv6 port timed out", "", "Connection to fd00::1 port 2222 timed out", true},
 		// The remote command's own text, however alike its words are, is not
 		// ssh failing. pmxcfs says all of these when pve-cluster is down.
 		{"pmxcfs ipcc", "", "ipcc_send_rec[1] failed: Connection refused\nUnable to load access control list: Connection refused", false},
@@ -269,6 +272,7 @@ func TestSSHTransportFailure(t *testing.T) {
 		{"remote connection timed out", "", "pvecm: Connection timed out", false},
 		{"remote permission denied", "", "pvecm: Permission denied", false},
 		{"remote no route", "", "unable to connect: No route to host", false},
+		{"remote port timed out", "", "pvecm: connect to 10.0.0.9 port 5405 timed out", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			assert.Equal(t, tc.want, sshTransportFailure(tc.stdout, tc.stderr))

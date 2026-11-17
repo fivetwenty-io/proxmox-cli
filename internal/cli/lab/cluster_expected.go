@@ -249,6 +249,7 @@ var sshClientLinePrefixes = []string{
 	"ssh_exchange_identification:",
 	"ssh_dispatch_run_fatal:",
 	"kex_exchange_identification",
+	"connection timed out during banner exchange",
 	"connection closed by ",
 	"connection reset by ",
 	"received disconnect from ",
@@ -262,11 +263,12 @@ var sshClientLinePrefixes = []string{
 // sshClientLineREs match the forms of ssh client diagnostics that do not open
 // with a fixed word: "root@10.0.0.1: Permission denied (publickey).", the
 // jump host's "channel 0: open failed: connect failed: ...", and "Connection
-// to X closed by remote host.".
+// to X closed by remote host." and "Connection to X port 22 timed out".
 var sshClientLineREs = []*regexp.Regexp{
 	regexp.MustCompile(`^\S+@\S+: permission denied \(`),
 	regexp.MustCompile(`^channel \d+: open failed:`),
 	regexp.MustCompile(`^connection to \S+ closed by remote host`),
+	regexp.MustCompile(`^connection to \S+ port \d+ timed out`),
 }
 
 // sshClientLine reports whether one stderr line is a diagnostic of the ssh
