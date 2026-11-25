@@ -7,6 +7,7 @@ threads without sharing mutable state.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import subprocess
 import time
@@ -54,6 +55,22 @@ class Ctx:
         self.node = env.node
         self.results: list[Result] = []
         self.deferred: list[Deferred] = []
+        # A temporary per-command time limit; see timeout().
+        self._timeout_override: int | None = None
+
+    @contextlib.contextmanager
+    def timeout(self, seconds: int):
+        """Raise the per-command time limit inside the block, never lower it.
+
+        For a leaf whose cost scales with local state rather than the server,
+        such as a walk of the log directory.
+        """
+        previous = self._timeout_override
+        self._timeout_override = max(seconds, self.env.timeout_s)
+        try:
+            yield
+        finally:
+            self._timeout_override = previous
 
     # -- raw invocation ------------------------------------------------------
 
@@ -78,17 +95,18 @@ class Ctx:
         # inherited PMX_API_* so a developer's exported override can never
         # steer this invocation.
         env = child_env()
+        limit = self._timeout_override or self.env.timeout_s
         try:
             proc = subprocess.run(
                 argv,
                 capture_output=True,
                 text=True,
-                timeout=self.env.timeout_s,
+                timeout=limit,
                 env=env,
             )
             return CmdResult(argv, proc.returncode, proc.stdout, proc.stderr)
         except subprocess.TimeoutExpired:
-            return CmdResult(argv, 124, "", f"timed out after {self.env.timeout_s}s")
+            return CmdResult(argv, 124, "", f"timed out after {limit}s")
 
     @staticmethod
     def pretty(argv: list[str]) -> str:

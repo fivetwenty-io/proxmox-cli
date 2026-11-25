@@ -29,15 +29,21 @@ def run(ctx: Ctx) -> None:
     # An age no log can exceed, so the dry run reports a plan over every file
     # present without ever selecting one for deletion had --dry-run been
     # dropped. `--no-log` is already injected, so this run adds no file itself.
-    ctx.check(
-        "prune (dry run)",
-        "logs", "prune", "--older-than", "36500", "--dry-run",
-        with_context=False, validate=is_dry_run_report,
-    )
-    ctx.check_formats(
-        "prune (dry run, formats)",
-        "logs", "prune", "--older-than", "36500", "--dry-run",
-    )
+    #
+    # The walk lstats every file under the log directory, and a developer
+    # machine that has never set log.retention accumulates hundreds of
+    # thousands of them (313k files, 16s alone and over 60s beside the other
+    # trees), so these runs get a longer limit than a server round trip.
+    with ctx.timeout(300):
+        ctx.check(
+            "prune (dry run)",
+            "logs", "prune", "--older-than", "36500", "--dry-run",
+            with_context=False, validate=is_dry_run_report,
+        )
+        ctx.check_formats(
+            "prune (dry run, formats)",
+            "logs", "prune", "--older-than", "36500", "--dry-run",
+        )
 
     ctx.expect_fail(
         "prune (negative age)", "logs", "prune", "--older-than", "-1",
