@@ -185,9 +185,9 @@ func TestMultipathOverride_Set(t *testing.T) {
 		wantText string
 		hasText  bool
 	}{
-		{"inline", []string{"--overrides", "defaults {}"}, "defaults {}", true},
-		{"file", []string{"--file", file}, "devices {\n}\n", true},
-		{"clear", []string{"--clear", "--digest", "abc"}, "", false},
+		{"inline", []string{"--overrides", "defaults {}", "--yes"}, "defaults {}", true},
+		{"file", []string{"--file", file, "--digest", "abc"}, "devices {\n}\n", true},
+		{"clear", []string{"--clear", "--digest", "abc", "--yes"}, "", false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -211,4 +211,56 @@ func TestMultipathOverride_Set(t *testing.T) {
 	err := run(deps, &buf, "multipath", "override", "set")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "exactly one")
+}
+
+// TestMultipathOverride_SetClearFalseSendsNothing verifies --clear=false on its
+// own is not a clear request and sends no request.
+func TestMultipathOverride_SetClearFalseSendsNothing(t *testing.T) {
+	f, ac := newFakeClient(t)
+	called := false
+	f.HandleFunc("PUT /api2/json/cluster/multipath/overrides", func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		testhelper.WriteData(w, nil)
+	})
+	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
+
+	var buf bytes.Buffer
+	err := run(deps, &buf, "multipath", "override", "set", "--clear=false", "--yes")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "exactly one")
+	require.False(t, called)
+}
+
+// TestMultipathOverride_SetRequiresConfirmation verifies a clear, or a full
+// replacement without a digest, is refused without --yes and sends nothing,
+// while a digest-guarded replacement needs no confirmation.
+func TestMultipathOverride_SetRequiresConfirmation(t *testing.T) {
+	for _, args := range [][]string{
+		{"--clear"},
+		{"--clear", "--digest", "abc"},
+		{"--overrides", "defaults {}"},
+	} {
+		f, ac := newFakeClient(t)
+		called := false
+		f.HandleFunc("PUT /api2/json/cluster/multipath/overrides", func(w http.ResponseWriter, _ *http.Request) {
+			called = true
+			testhelper.WriteData(w, nil)
+		})
+		deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
+
+		var buf bytes.Buffer
+		err := run(deps, &buf, append([]string{"multipath", "override", "set"}, args...)...)
+		require.Error(t, err, "%v", args)
+		require.Contains(t, err.Error(), "--yes")
+		require.False(t, called, "%v", args)
+	}
+
+	f, ac := newFakeClient(t)
+	var method, path string
+	var form url.Values
+	recordMultipath(f, "PUT /api2/json/cluster/multipath/overrides", &method, &path, &form, nil)
+	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
+	var buf bytes.Buffer
+	require.NoError(t, run(deps, &buf, "multipath", "override", "set", "--overrides", "defaults {}", "--digest", "abc"))
+	require.Equal(t, http.MethodPut, method)
 }

@@ -510,7 +510,7 @@ def run(ctx: Ctx) -> None:
     ctx.defer(
         "multipath override set",
         "replaces the verbatim multipath override text on every node; covered by unit tests",
-        "pmx pve cluster multipath override set --file overrides.conf",
+        "pmx pve cluster multipath override set --file overrides.conf --digest <digest>",
         isolation=False, live_covered=False,
     )
 

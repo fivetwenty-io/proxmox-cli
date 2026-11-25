@@ -115,28 +115,51 @@ func newMultipathOverrideSetCmd() *cobra.Command {
 		file      string
 		clearAll  bool
 		digest    string
+		yes       bool
 	)
 	cmd := &cobra.Command{
 		Use:   "set",
 		Short: "Replace the multipath override sections",
 		Long: "Replace the verbatim multipath override sections with the given text. Give the text " +
 			"with --overrides or read it from a file with --file, or pass --clear to remove the " +
-			"sections. The new text replaces the old text completely. --digest makes the server refuse " +
-			"the change when the configuration differs from the digest 'override show' printed.",
-		Example: `  pmx pve cluster multipath override set --file overrides.conf
-  pmx pve cluster multipath override set --clear --digest 6e1f0c`,
+			"sections. The new text replaces the old text completely, on every node of the cluster, so " +
+			"the command asks for confirmation when it clears the sections or when --digest does not " +
+			"guard the change. On a terminal it prompts, and anywhere else it refuses unless --yes/-y " +
+			"is passed. --digest makes the server refuse the change when the configuration differs " +
+			"from the digest 'override show' printed.",
+		Example: `  pmx pve cluster multipath override set --file overrides.conf --digest 6e1f0c
+  pmx pve cluster multipath override set --clear --yes`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
 			given := 0
-			for _, name := range []string{"overrides", "file", "clear"} {
+			for _, name := range []string{"overrides", "file"} {
 				if fl.Changed(name) {
 					given++
 				}
 			}
+			// --clear=false is the same as leaving the flag out, so only a true value counts.
+			if clearAll {
+				given++
+			}
 			if given != 1 {
 				return fmt.Errorf("give exactly one of --overrides, --file, or --clear")
+			}
+			if clearAll || !fl.Changed("digest") {
+				action := "replace the cluster multipath overrides without a digest"
+				prompt := "Replace the cluster multipath overrides? The old sections are discarded."
+				if clearAll {
+					action = "clear the cluster multipath overrides"
+					prompt = "Clear the cluster multipath overrides? Every node loses its override sections."
+				}
+				ok, err := cli.ConfirmDestructive(cmd, yes, action, prompt)
+				if err != nil {
+					return err
+				}
+				if !ok {
+					return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: "Aborted."}, deps.Format)
+				}
 			}
 			params := &pvecluster.UpdateMultipathOverridesParams{}
 			switch {
@@ -167,6 +190,7 @@ func newMultipathOverrideSetCmd() *cobra.Command {
 	fl.StringVar(&overrides, "overrides", "", "the override sections, as verbatim text")
 	fl.StringVar(&file, "file", "", "read the override sections from this file")
 	fl.BoolVar(&clearAll, "clear", false, "remove the override sections")
+	fl.BoolVarP(&yes, "yes", "y", false, "confirm the change without prompting")
 	fl.StringVar(&digest, "digest", "", "refuse the change when the configuration digest differs")
 	return cmd
 }
