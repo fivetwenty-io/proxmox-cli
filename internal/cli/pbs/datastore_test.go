@@ -187,8 +187,10 @@ func TestDatastoreCreate_SendsAllForwardedFields(t *testing.T) {
 		"--notify", "always",
 		"--verify-new",
 		"--backend", "type=filesystem",
+		"--max-snapshot-time-skew", "5m",
 	)
 	require.NoError(t, err)
+	require.Equal(t, "5m", rec.form.Get("max-snapshot-time-skew"))
 
 	require.Equal(t, http.MethodPost, rec.method)
 	require.Equal(t, pathConfigDatastore, rec.path)
@@ -218,6 +220,7 @@ func TestDatastoreCreate_OmitsUnsetOptionalFlags(t *testing.T) {
 	require.Empty(t, rec.form.Get("comment"))
 	require.Empty(t, rec.form.Get("gc-schedule"))
 	require.Empty(t, rec.form.Get("keep-last"))
+	require.False(t, rec.form.Has("max-snapshot-time-skew"))
 }
 
 func TestDatastoreCreate_ServerError(t *testing.T) {
@@ -244,6 +247,7 @@ func TestDatastoreUpdate_SendsChangedFieldsAndDelete(t *testing.T) {
 	err := run(deps, &buf, newDatastoreUpdateCmd(), "update", "store1",
 		"--comment", "updated",
 		"--keep-weekly", "3",
+		"--max-snapshot-time-skew", "30s",
 		"--delete", "gc-schedule",
 		"--delete", "notify",
 		"--digest", "abc123",
@@ -254,6 +258,7 @@ func TestDatastoreUpdate_SendsChangedFieldsAndDelete(t *testing.T) {
 	require.Equal(t, fmt.Sprintf(pathConfigDatastoreFmt, "store1"), rec.path)
 	require.Equal(t, "updated", rec.form.Get("comment"))
 	require.Equal(t, "3", rec.form.Get("keep-weekly"))
+	require.Equal(t, "30s", rec.form.Get("max-snapshot-time-skew"))
 	require.Equal(t, []string{"gc-schedule", "notify"}, rec.form["delete"])
 	require.Equal(t, "abc123", rec.form.Get("digest"))
 	require.Contains(t, buf.String(), `Datastore "store1" updated.`)

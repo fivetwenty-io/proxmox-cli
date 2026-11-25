@@ -196,6 +196,7 @@ type datastoreFlags struct {
 	notifyUser             string
 	pruneSchedule          string
 	tuning                 string
+	maxSnapshotTimeSkew    string
 	verifyNew              bool
 
 	// create-only
@@ -232,6 +233,8 @@ func (df *datastoreFlags) registerCommon(cmd *cobra.Command) {
 	f.StringVar(&df.notifyUser, "notify-user", "", "user ID to notify")
 	f.StringVar(&df.pruneSchedule, "prune-schedule", "", "run the prune job at this schedule")
 	f.StringVar(&df.tuning, "tuning", "", "datastore tuning options")
+	f.StringVar(&df.maxSnapshotTimeSkew, "max-snapshot-time-skew", "",
+		"maximum allowed time skew between a new snapshot's timestamp and the server clock (at most 1 day, default 1 minute)")
 	f.BoolVar(&df.verifyNew, "verify-new", false, "verify all new backups right after completion")
 	for _, name := range legacyPruneFlags {
 		if flag := f.Lookup(name); flag != nil {
@@ -315,6 +318,9 @@ func (df *datastoreFlags) applyCreate(cmd *cobra.Command, p *pbsconfig.CreateDat
 	if fl.Changed("tuning") {
 		p.Tuning = &df.tuning
 	}
+	if fl.Changed("max-snapshot-time-skew") {
+		p.MaxSnapshotTimeSkew = &df.maxSnapshotTimeSkew
+	}
 	if fl.Changed("verify-new") {
 		p.VerifyNew = &df.verifyNew
 	}
@@ -385,6 +391,9 @@ func (df *datastoreFlags) applyUpdate(cmd *cobra.Command, p *pbsconfig.UpdateDat
 	}
 	if fl.Changed("tuning") {
 		p.Tuning = &df.tuning
+	}
+	if fl.Changed("max-snapshot-time-skew") {
+		p.MaxSnapshotTimeSkew = &df.maxSnapshotTimeSkew
 	}
 	if fl.Changed("verify-new") {
 		p.VerifyNew = &df.verifyNew
