@@ -146,7 +146,24 @@ func newMultipathOverrideSetCmd() *cobra.Command {
 			if given != 1 {
 				return fmt.Errorf("give exactly one of --overrides, --file, or --clear")
 			}
-			if clearAll || !fl.Changed("digest") {
+			// Read the file before any prompt, so a mistyped path fails at once.
+			params := &pvecluster.UpdateMultipathOverridesParams{}
+			switch {
+			case fl.Changed("overrides"):
+				params.Overrides = &overrides
+			case fl.Changed("file"):
+				data, err := os.ReadFile(file)
+				if err != nil {
+					return fmt.Errorf("read --file: %w", err)
+				}
+				text := string(data)
+				params.Overrides = &text
+			}
+			// An empty --digest guards nothing, so it is treated as absent.
+			if digest != "" {
+				params.Digest = &digest
+			}
+			if clearAll || digest == "" {
 				action := "replace the cluster multipath overrides without a digest"
 				prompt := "Replace the cluster multipath overrides? The old sections are discarded."
 				if clearAll {
@@ -160,21 +177,6 @@ func newMultipathOverrideSetCmd() *cobra.Command {
 				if !ok {
 					return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: "Aborted."}, deps.Format)
 				}
-			}
-			params := &pvecluster.UpdateMultipathOverridesParams{}
-			switch {
-			case fl.Changed("overrides"):
-				params.Overrides = &overrides
-			case fl.Changed("file"):
-				data, err := os.ReadFile(file)
-				if err != nil {
-					return fmt.Errorf("read --file: %w", err)
-				}
-				text := string(data)
-				params.Overrides = &text
-			}
-			if fl.Changed("digest") {
-				params.Digest = &digest
 			}
 			if err := deps.API.Cluster.UpdateMultipathOverrides(cmd.Context(), params); err != nil {
 				return fmt.Errorf("set multipath overrides: %w", err)

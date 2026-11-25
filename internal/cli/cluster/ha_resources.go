@@ -364,7 +364,7 @@ func newHaResourceMigrateCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&node, "target-node", "", "destination node name (required)")
 	cmd.Flags().StringVar(&resourceType, "resource-type", "",
-		"resource type, ct or vm, which selects the parameter set the server validates; --with-conntrack-state applies to vm only")
+		"resource type, ct or vm; the server normally derives it from the resource ID, so pass it only to pick the parameter set the server validates. --with-conntrack-state applies to vm only")
 	cmd.Flags().BoolVar(&skipConfigCheck, "skip-config-check", false,
 		"skip checking that the target can parse the guest configuration; "+
 			"options the target is too old to parse can be dropped")

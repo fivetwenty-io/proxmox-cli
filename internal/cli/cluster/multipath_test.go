@@ -239,6 +239,7 @@ func TestMultipathOverride_SetRequiresConfirmation(t *testing.T) {
 		{"--clear"},
 		{"--clear", "--digest", "abc"},
 		{"--overrides", "defaults {}"},
+		{"--overrides", "defaults {}", "--digest", ""},
 	} {
 		f, ac := newFakeClient(t)
 		called := false
@@ -263,4 +264,23 @@ func TestMultipathOverride_SetRequiresConfirmation(t *testing.T) {
 	var buf bytes.Buffer
 	require.NoError(t, run(deps, &buf, "multipath", "override", "set", "--overrides", "defaults {}", "--digest", "abc"))
 	require.Equal(t, http.MethodPut, method)
+}
+
+// TestMultipathOverride_SetReadsFileBeforePrompt verifies a missing --file fails
+// with the read error rather than a confirmation refusal, and sends nothing.
+func TestMultipathOverride_SetReadsFileBeforePrompt(t *testing.T) {
+	f, ac := newFakeClient(t)
+	called := false
+	f.HandleFunc("PUT /api2/json/cluster/multipath/overrides", func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		testhelper.WriteData(w, nil)
+	})
+	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
+
+	var buf bytes.Buffer
+	missing := filepath.Join(t.TempDir(), "missing.conf")
+	err := run(deps, &buf, "multipath", "override", "set", "--file", missing)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "read --file")
+	require.False(t, called)
 }

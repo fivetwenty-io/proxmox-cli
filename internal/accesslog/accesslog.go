@@ -278,7 +278,7 @@ func WriteNotes(w io.Writer, format output.Format, p Page) {
 	}
 	lastPage := p.NextCursor == nil || *p.NextCursor == ""
 	if !p.Complete && lastPage {
-		_, _ = fmt.Fprintln(w, "Warning: the pages read so far do not cover the whole log; use -o json for the details.")
+		_, _ = fmt.Fprintln(w, "Warning: the requests read do not cover the whole log; use -o json for the details.")
 	}
 }
 
