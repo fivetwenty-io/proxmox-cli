@@ -26,6 +26,16 @@ var validAutoInstallRebootModes = []string{"reboot", "power-off"}
 // POST /auto-install/prepared parameters.disk-filter-match).
 var validAutoInstallDiskFilterMatch = []string{"any", "all"}
 
+// validAutoInstallBondModes are the Linux bond modes the --bond-mode flag
+// accepts.
+var validAutoInstallBondModes = []string{
+	"balance-rr", "active-backup", "balance-xor", "broadcast", "802.3ad", "balance-tlb", "balance-alb",
+}
+
+// validAutoInstallBondHashPolicies are the LACP transmit hash policies the
+// --bond-hash-policy flag accepts.
+var validAutoInstallBondHashPolicies = []string{"layer2", "layer2+3", "layer3+4"}
+
 // autoinstallTokenSecretKeys are the auto-install token fields that must
 // never be echoed back on `token ls`. GET /auto-install/tokens's item schema
 // (comment, created-by, enabled, expire-at, id) does not currently declare a
@@ -306,7 +316,7 @@ func newAutoInstallPreparedShowCmd() *cobra.Command {
 // jsonObjectFlags are the prepared-answer fields the PDM schema types as nested
 // objects. They are the ones a form-encoded request cannot carry.
 var jsonObjectFlags = []string{
-	"filesystem", "disk-filter", "netdev-filter", "target-filter", "template-counters",
+	"filesystem", "disk-filter", "netdev-filter", "bond-members-filter", "target-filter", "template-counters",
 }
 
 // preparedAnswerErr explains the server's refusal to parse a nested object.
@@ -344,9 +354,14 @@ func quoteFlags(names []string) []string {
 // filesystem, disk-filter, netdev-filter, target-filter, and
 // template-counters are json.RawMessage-typed nested objects in both
 // generated params structs — filesystem is even a required field of
-// CreatePreparedParams — so these five flags carry literal JSON text for
+// CreatePreparedParams — so these six flags carry literal JSON text for
 // their respective nested object rather than exposing individual sub-fields.
 type autoInstallPreparedFlags struct {
+	bondEnabled             bool
+	bondHashPolicy          string
+	bondMembersFilter       string
+	bondMembersFilterMatch  string
+	bondMode                string
 	authorizedTokens        []string
 	cidr                    string
 	country                 string
@@ -376,6 +391,7 @@ type autoInstallPreparedFlags struct {
 	timezone                string
 	useDhcpFqdn             bool
 	useDhcpNetwork          bool
+	vlanID                  int64
 
 	// update-only
 	del    []string
@@ -391,6 +407,15 @@ func (pf *autoInstallPreparedFlags) registerCommon(cmd *cobra.Command) {
 	f := cmd.Flags()
 	f.StringArrayVar(&pf.authorizedTokens, "authorized-token", nil,
 		"token ID authorized to retrieve this answer (repeatable)")
+	f.BoolVar(&pf.bondEnabled, "bond-enabled", false, "bond network interfaces for the management network")
+	f.StringVar(&pf.bondHashPolicy, "bond-hash-policy", "",
+		"bond transmit hash policy for LACP (802.3ad): layer2|layer2+3|layer3+4")
+	f.StringVar(&pf.bondMembersFilter, "bond-members-filter", "",
+		"JSON object filtering network devices to select the management bond members")
+	f.StringVar(&pf.bondMembersFilterMatch, "bond-members-filter-match", "",
+		"whether --bond-members-filter filters must all match or any one is enough: any|all")
+	f.StringVar(&pf.bondMode, "bond-mode", "",
+		"Linux bond mode: balance-rr|active-backup|balance-xor|broadcast|802.3ad|balance-tlb|balance-alb")
 	f.StringVar(&pf.cidr, "cidr", "", "IP address and netmask if not using DHCP (literal or MiniJinja template)")
 	f.StringVar(&pf.country, "country", "", "two-letter country code to use for apt mirrors")
 	f.StringVar(&pf.diskFilter, "disk-filter", "",
@@ -427,6 +452,8 @@ func (pf *autoInstallPreparedFlags) registerCommon(cmd *cobra.Command) {
 	f.StringVar(&pf.timezone, "timezone", "", "timezone to set on the new system")
 	f.BoolVar(&pf.useDhcpFqdn, "use-dhcp-fqdn", false, "use the FQDN from the DHCP lease instead of --fqdn")
 	f.BoolVar(&pf.useDhcpNetwork, "use-dhcp-network", false, "use the network configuration from the DHCP lease")
+	f.Int64Var(&pf.vlanID, "vlan-id", 0,
+		"VLAN tag for the management interface, only with a static network configuration")
 }
 
 // registerUpdateOnly binds the update-only --delete/--digest flags.
@@ -440,11 +467,12 @@ func (pf *autoInstallPreparedFlags) registerUpdateOnly(cmd *cobra.Command) {
 // for shared not-empty-and-valid-JSON validation between add and update.
 func (pf *autoInstallPreparedFlags) jsonFlags() map[string]string {
 	return map[string]string{
-		"filesystem":        pf.filesystem,
-		"disk-filter":       pf.diskFilter,
-		"netdev-filter":     pf.netdevFilter,
-		"target-filter":     pf.targetFilter,
-		"template-counters": pf.templateCounters,
+		"filesystem":          pf.filesystem,
+		"disk-filter":         pf.diskFilter,
+		"netdev-filter":       pf.netdevFilter,
+		"bond-members-filter": pf.bondMembersFilter,
+		"target-filter":       pf.targetFilter,
+		"template-counters":   pf.templateCounters,
 	}
 }
 
@@ -460,6 +488,18 @@ func (pf *autoInstallPreparedFlags) validate(id, verb string) error {
 	if pf.diskFilterMatch != "" && !stringInSlice(pf.diskFilterMatch, validAutoInstallDiskFilterMatch) {
 		return fmt.Errorf("%s prepared answer %q: --disk-filter-match must be one of %s (got %q)",
 			verb, id, strings.Join(validAutoInstallDiskFilterMatch, ", "), pf.diskFilterMatch)
+	}
+	if pf.bondMode != "" && !stringInSlice(pf.bondMode, validAutoInstallBondModes) {
+		return fmt.Errorf("%s prepared answer %q: --bond-mode must be one of %s (got %q)",
+			verb, id, strings.Join(validAutoInstallBondModes, ", "), pf.bondMode)
+	}
+	if pf.bondHashPolicy != "" && !stringInSlice(pf.bondHashPolicy, validAutoInstallBondHashPolicies) {
+		return fmt.Errorf("%s prepared answer %q: --bond-hash-policy must be one of %s (got %q)",
+			verb, id, strings.Join(validAutoInstallBondHashPolicies, ", "), pf.bondHashPolicy)
+	}
+	if pf.bondMembersFilterMatch != "" && !stringInSlice(pf.bondMembersFilterMatch, validAutoInstallDiskFilterMatch) {
+		return fmt.Errorf("%s prepared answer %q: --bond-members-filter-match must be one of %s (got %q)",
+			verb, id, strings.Join(validAutoInstallDiskFilterMatch, ", "), pf.bondMembersFilterMatch)
 	}
 	for name, text := range pf.jsonFlags() {
 		if text != "" && !json.Valid([]byte(text)) {
@@ -556,6 +596,24 @@ func (pf *autoInstallPreparedFlags) applyOptionalCreate(cmd *cobra.Command, para
 	if fl.Changed("authorized-token") {
 		params.AuthorizedTokens = pf.authorizedTokens
 	}
+	if fl.Changed("bond-enabled") {
+		params.BondEnabled = new(pf.bondEnabled)
+	}
+	if fl.Changed("bond-hash-policy") {
+		params.BondHashPolicy = new(pf.bondHashPolicy)
+	}
+	if fl.Changed("bond-members-filter") {
+		params.BondMembersFilter = json.RawMessage(pf.bondMembersFilter)
+	}
+	if fl.Changed("bond-members-filter-match") {
+		params.BondMembersFilterMatch = new(pf.bondMembersFilterMatch)
+	}
+	if fl.Changed("bond-mode") {
+		params.BondMode = new(pf.bondMode)
+	}
+	if fl.Changed("vlan-id") {
+		params.VlanId = new(pf.vlanID)
+	}
 	if fl.Changed("cidr") {
 		params.Cidr = new(pf.cidr)
 	}
@@ -612,6 +670,24 @@ func (pf *autoInstallPreparedFlags) applyOptionalUpdate(cmd *cobra.Command, para
 	fl := cmd.Flags()
 	if fl.Changed("authorized-token") {
 		params.AuthorizedTokens = pf.authorizedTokens
+	}
+	if fl.Changed("bond-enabled") {
+		params.BondEnabled = new(pf.bondEnabled)
+	}
+	if fl.Changed("bond-hash-policy") {
+		params.BondHashPolicy = new(pf.bondHashPolicy)
+	}
+	if fl.Changed("bond-members-filter") {
+		params.BondMembersFilter = json.RawMessage(pf.bondMembersFilter)
+	}
+	if fl.Changed("bond-members-filter-match") {
+		params.BondMembersFilterMatch = new(pf.bondMembersFilterMatch)
+	}
+	if fl.Changed("bond-mode") {
+		params.BondMode = new(pf.bondMode)
+	}
+	if fl.Changed("vlan-id") {
+		params.VlanId = new(pf.vlanID)
 	}
 	if fl.Changed("cidr") {
 		params.Cidr = new(pf.cidr)
@@ -729,8 +805,8 @@ func newAutoInstallPreparedUpdateCmd() *cobra.Command {
 			"/auto-install/prepared/{id}).\n\n" +
 			"Only the flags you set explicitly are sent. Use --delete to reset properties to " +
 			"their defaults instead.\n\n" +
-			"Five flags carry nested objects and take literal JSON text: --filesystem, " +
-			"--disk-filter, --netdev-filter, --target-filter, and --template-counters.",
+			"Six flags carry nested objects and take literal JSON text: --filesystem, " +
+			"--disk-filter, --netdev-filter, --bond-members-filter, --target-filter, and --template-counters.",
 		Example: `  pmx pdm auto-install prepared update default --timezone America/New_York
   pmx pdm auto-install prepared update default --delete mailto`,
 		Args: cobra.ExactArgs(1),
