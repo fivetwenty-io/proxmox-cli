@@ -38,6 +38,7 @@ type fabricFlags struct {
 	routeFilter         string
 	lockToken           string
 	redistVals          []string
+	zone                string
 }
 
 func (ff *fabricFlags) register(cmd *cobra.Command) {
@@ -51,6 +52,7 @@ func (ff *fabricFlags) register(cmd *cobra.Command) {
 		"WireGuard persistent keepalive interval (1-65535 seconds, 0 disables)")
 	f.StringVar(&ff.routeFilter, "route-filter", "", "prefix list used to filter routes installed into the kernel")
 	f.StringVar(&ff.lockToken, "lock-token", "", "token for unlocking the global SDN configuration")
+	f.StringVar(&ff.zone, "zone", "", "simple zone whose VRF contains this fabric")
 	f.StringArrayVar(&ff.redistVals, "redistribute", nil,
 		"routing protocol to redistribute into this fabric (repeatable, e.g. --redistribute connected --redistribute static)")
 }
@@ -84,6 +86,9 @@ func (ff *fabricFlags) applyCreate(fl *cobra.Command, p *cluster.CreateSdnFabric
 	if f.Changed("redistribute") {
 		p.Redistribute = rawStringList(ff.redistVals)
 	}
+	if f.Changed("zone") {
+		p.Zone = new(ff.zone)
+	}
 }
 
 func (ff *fabricFlags) applyUpdate(fl *cobra.Command, p *cluster.UpdateSdnFabricsFabricParams) {
@@ -114,6 +119,9 @@ func (ff *fabricFlags) applyUpdate(fl *cobra.Command, p *cluster.UpdateSdnFabric
 	}
 	if f.Changed("redistribute") {
 		p.Redistribute = rawStringList(ff.redistVals)
+	}
+	if f.Changed("zone") {
+		p.Zone = new(ff.zone)
 	}
 }
 

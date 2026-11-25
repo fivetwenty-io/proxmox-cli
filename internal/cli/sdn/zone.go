@@ -26,7 +26,7 @@ var zoneSetFlagNames = []string{
 	"dhcp", "disable-arp-nd-suppression", "dns", "dnszone", "dp-id",
 	"exitnodes", "exitnodes-local-routing", "exitnodes-primary", "fabric",
 	"ipam", "lock-token", "mac", "mtu", "nodes", "peers", "reversedns",
-	"rt-import", "secondary-controller", "tag", "vlan-protocol", "vrf-vxlan",
+	"rt-import", "secondary-controller", "dedicated-vrf", "route", "tag", "vlan-protocol", "vrf-vxlan",
 	"vxlan-port",
 }
 
@@ -111,6 +111,8 @@ func newZoneSetCmd() *cobra.Command {
 		reversedns               string
 		rtImport                 string
 		secondaryControllers     []string
+		dedicatedVrf             bool
+		route                    []string
 		tag                      int64
 		vlanProtocol             string
 		vrfVxlan                 int64
@@ -203,6 +205,12 @@ func newZoneSetCmd() *cobra.Command {
 			if fl.Changed("secondary-controller") {
 				params.SecondaryControllers = secondaryControllers
 			}
+			if fl.Changed("dedicated-vrf") {
+				params.DedicatedVrf = new(dedicatedVrf)
+			}
+			if fl.Changed("route") {
+				params.Route = route
+			}
 			if fl.Changed("tag") {
 				params.Tag = new(tag)
 			}
@@ -247,6 +255,9 @@ func newZoneSetCmd() *cobra.Command {
 	f.StringVar(&reversedns, "reversedns", "", "reverse DNS API server")
 	f.StringVar(&rtImport, "rt-import", "", "list of route targets to import into the VRF of the zone")
 	f.StringArrayVar(&secondaryControllers, "secondary-controller", nil, "additional controller (repeatable)")
+	f.BoolVar(&dedicatedVrf, "dedicated-vrf", false, "create a dedicated VRF for the zone (simple zones)")
+	f.StringArrayVar(&route, "route", nil,
+		"static route of a simple zone, installed in its dedicated VRF, which it requires (repeatable)")
 	f.Int64Var(&tag, "tag", 0, "service-VLAN tag (outer VLAN)")
 	f.StringVar(&vlanProtocol, "vlan-protocol", "", "VLAN protocol for QinQ zones")
 	f.Int64Var(&vrfVxlan, "vrf-vxlan", 0, "VNI for the zone VRF")
@@ -338,6 +349,8 @@ func newZoneCreateCmd() *cobra.Command {
 		reversedns               string
 		rtImport                 string
 		secondaryControllers     []string
+		dedicatedVrf             bool
+		route                    []string
 		tag                      int64
 		vlanProtocol             string
 		vrfVxlan                 int64
@@ -425,6 +438,12 @@ func newZoneCreateCmd() *cobra.Command {
 			if fl.Changed("secondary-controller") {
 				params.SecondaryControllers = secondaryControllers
 			}
+			if fl.Changed("dedicated-vrf") {
+				params.DedicatedVrf = new(dedicatedVrf)
+			}
+			if fl.Changed("route") {
+				params.Route = route
+			}
 			if fl.Changed("tag") {
 				params.Tag = new(tag)
 			}
@@ -469,6 +488,9 @@ func newZoneCreateCmd() *cobra.Command {
 	f.StringVar(&reversedns, "reversedns", "", "reverse DNS API server")
 	f.StringVar(&rtImport, "rt-import", "", "list of route targets to import into the VRF of the zone")
 	f.StringArrayVar(&secondaryControllers, "secondary-controller", nil, "additional controller (repeatable)")
+	f.BoolVar(&dedicatedVrf, "dedicated-vrf", false, "create a dedicated VRF for the zone (simple zones)")
+	f.StringArrayVar(&route, "route", nil,
+		"static route of a simple zone, installed in its dedicated VRF, which it requires (repeatable)")
 	f.Int64Var(&tag, "tag", 0, "service-VLAN tag (outer VLAN)")
 	f.StringVar(&vlanProtocol, "vlan-protocol", "", "VLAN protocol for QinQ zones")
 	f.Int64Var(&vrfVxlan, "vrf-vxlan", 0, "VNI for the zone VRF")
