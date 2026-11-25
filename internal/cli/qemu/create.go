@@ -81,15 +81,16 @@ func newCreateCmd() *cobra.Command {
 		vmstatestorage string
 
 		// Storage / import / restore.
-		storage              string
-		description          string
-		archive              string
-		liveRestore          bool
-		importWorkingStorage string
-		bwlimit              int64
-		migrateDowntime      float64
-		migrateSpeed         int64
-		haManaged            bool
+		storage               string
+		description           string
+		archive               string
+		liveRestore           bool
+		allowIdentityMismatch bool
+		importWorkingStorage  string
+		bwlimit               int64
+		migrateDowntime       float64
+		migrateSpeed          int64
+		haManaged             bool
 
 		// Cloud-init scalars.
 		ciuser       string
@@ -223,6 +224,7 @@ func newCreateCmd() *cobra.Command {
 			set("description", func() { params.Description = new(description) })
 			set("archive", func() { params.Archive = new(archive) })
 			set("live-restore", func() { params.LiveRestore = new(liveRestore) })
+			set("allow-identity-mismatch", func() { params.AllowIdentityMismatch = new(allowIdentityMismatch) })
 			set("import-working-storage", func() { params.ImportWorkingStorage = new(importWorkingStorage) })
 			set("bwlimit", func() { params.Bwlimit = new(bwlimit) })
 			set("migrate-downtime", func() { params.MigrateDowntime = &migrateDowntime })
@@ -394,6 +396,8 @@ func newCreateCmd() *cobra.Command {
 	f.StringVar(&description, "description", "", "VM description shown in the web UI")
 	f.StringVar(&archive, "archive", "", "backup archive to restore from (path or storage volume)")
 	f.BoolVar(&liveRestore, "live-restore", false, "start the VM while restoring in the background")
+	f.BoolVar(&allowIdentityMismatch, "allow-identity-mismatch", false,
+		"allow overwriting an existing guest with a restore of a backup of another guest, as detected by a different uid; the guest keeps its own uid")
 	f.StringVar(&importWorkingStorage, "import-working-storage", "", "storage used as intermediate extraction area during import")
 	f.Int64Var(&bwlimit, "bwlimit", 0, "override I/O bandwidth limit in KiB/s (restore)")
 	f.Float64Var(&migrateDowntime, "migrate-downtime", 0, "maximum tolerated migration downtime in seconds")

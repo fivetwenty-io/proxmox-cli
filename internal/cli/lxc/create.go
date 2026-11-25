@@ -37,33 +37,34 @@ func newCreateCmd() *cobra.Command {
 		unprivileged  bool
 		start         bool
 
-		description        string
-		nameserver         string
-		searchdomain       string
-		onboot             bool
-		startup            string
-		cpulimit           float64
-		cpuunits           int64
-		arch               string
-		ostype             string
-		features           string
-		hookscript         string
-		protection         bool
-		bwlimit            float64
-		haManaged          bool
-		timezone           string
-		tty                int64
-		console            bool
-		cmode              string
-		template           bool
-		unique             bool
-		force              bool
-		ignoreUnpackErrors bool
-		restore            bool
-		env                string
-		entrypoint         string
-		lock               string
-		debug              bool
+		description           string
+		nameserver            string
+		searchdomain          string
+		onboot                bool
+		startup               string
+		cpulimit              float64
+		cpuunits              int64
+		arch                  string
+		ostype                string
+		features              string
+		hookscript            string
+		protection            bool
+		bwlimit               float64
+		haManaged             bool
+		timezone              string
+		tty                   int64
+		console               bool
+		cmode                 string
+		template              bool
+		unique                bool
+		force                 bool
+		ignoreUnpackErrors    bool
+		allowIdentityMismatch bool
+		restore               bool
+		env                   string
+		entrypoint            string
+		lock                  string
+		debug                 bool
 
 		unusedSlots []string
 
@@ -228,6 +229,9 @@ func newCreateCmd() *cobra.Command {
 			if fl.Changed("ignore-unpack-errors") {
 				params.IgnoreUnpackErrors = &ignoreUnpackErrors
 			}
+			if fl.Changed("allow-identity-mismatch") {
+				params.AllowIdentityMismatch = &allowIdentityMismatch
+			}
 			if fl.Changed("restore") {
 				params.Restore = &restore
 			}
@@ -317,6 +321,8 @@ func newCreateCmd() *cobra.Command {
 	f.BoolVar(&unique, "unique", false, "assign a unique random ethernet address")
 	f.BoolVar(&force, "force", false, "allow overwriting an existing container")
 	f.BoolVar(&ignoreUnpackErrors, "ignore-unpack-errors", false, "ignore errors when extracting the template")
+	f.BoolVar(&allowIdentityMismatch, "allow-identity-mismatch", false,
+		"allow overwriting an existing guest with a restore of a backup of another guest, as detected by a different uid; the guest keeps its own uid")
 	f.BoolVar(&restore, "restore", false, "mark this as a restore task")
 	f.StringVar(&env, "env", "", "runtime environment as NUL-separated list")
 	f.StringVar(&entrypoint, "entrypoint", "", "command to run as init")
