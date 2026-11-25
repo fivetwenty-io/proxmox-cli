@@ -1046,6 +1046,24 @@ def run(ctx: Ctx) -> None:
         "shuts down the real host — would take the shared lab node offline; not automatable",
         "pmx pve node shutdown --node <node> --yes",
     )
+    # maintenance enable/disable request HA node maintenance, which migrates
+    # HA-managed guests off the shared lab node; parse-checked only.
+    ctx.check("maintenance enable --help", "pve", "node", "maintenance", "enable", "--help", fmt="")
+    ctx.check("maintenance disable --help", "pve", "node", "maintenance", "disable", "--help", fmt="")
+    ctx.defer(
+        "maintenance enable",
+        "requests HA maintenance mode, which migrates HA-managed guests off the shared lab node; "
+        "covered by unit tests",
+        "pmx pve node maintenance enable --node <node> --yes",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "maintenance disable",
+        "leaves HA maintenance mode on the shared lab node; only meaningful after enable; "
+        "covered by unit tests",
+        "pmx pve node maintenance disable --node <node>",
+        isolation=False, live_covered=False,
+    )
     # spiceshell/termproxy/vncshell are websocket/interactive console-proxy
     # endpoints — the same class as the already-deferred SSH shell/console and
     # the qemu/lxc console tickets; not automatable head-less.

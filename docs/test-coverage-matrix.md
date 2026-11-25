@@ -94,13 +94,13 @@ swept clean before the next provisions.
 | `logs` | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `pbs` | 279 | 0 | 126 | 104 | 42 | 7 | 0 | 0 |
 | `pdm` | 260 | 0 | 145 | 59 | 54 | 2 | 0 | 0 |
-| `pve` | 686 | 82 | 184 | 442 | 1 | 62 | 7 | 0 |
+| `pve` | 688 | 82 | 184 | 442 | 1 | 62 | 9 | 0 |
 | `rsync` | 1 | 0 | 0 | 1 | 0 | 0 | 0 | 0 |
 | `ssh` | 1 | 0 | 0 | 1 | 0 | 0 | 0 | 0 |
 | `version` | 3 | 2 | 1 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **1289** | **104** | **459** | **613** | **97** | **99** | **9** | **0** |
+| **Total** | **1291** | **104** | **459** | **613** | **97** | **99** | **11** | **0** |
 
-Leaf commands are counted from a walk of the built command tree (`pmx <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **1289** leaves, **1181** are exercised by at least one live suite, **99** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **9** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pmx <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **1291** leaves, **1181** are exercised by at least one live suite, **99** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **11** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `api`
 
@@ -1134,6 +1134,8 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `pve node hosts set` | — | ✓ |  |
 | `pve node journal` | ◑ | — |  |
 | `pve node list` | ✓ | — |  |
+| `pve node maintenance disable` | — | — | n/a — leaves HA maintenance mode on the shared lab node; only meaningful after enable; covered by unit tests |
+| `pve node maintenance enable` | — | — | n/a — requests HA maintenance mode, which migrates HA-managed guests off the shared lab node; covered by unit tests |
 | `pve node migrateall` | — | ✓ |  |
 | `pve node netstat` | ◑ | — |  |
 | `pve node network apply` | — | ✓ |  |

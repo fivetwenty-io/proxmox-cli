@@ -91,6 +91,7 @@ func Group(_ *cli.Deps) *cobra.Command {
 		newVncshellCmd(),
 		newSpiceshellCmd(),
 		newPermissionsCmd(),
+		newMaintenanceCmd(),
 	)
 
 	return cmd

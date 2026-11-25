@@ -100,6 +100,7 @@ Bulk and advanced features for larger or newer deployments.
 | PVE 9.2 endpoints | `pmx node oci`, `pmx node capabilities`, `pmx cluster cpu-model` | OCI image import, capability queries, and custom CPU models | Shipped |
 | PVE 9.3 endpoints | `pmx qemu agent` statistics | Guest CPU, disk, and load statistics through the guest agent | Shipped |
 | Storage plugin index | `pmx storage plugin list\|show` | The storage plugins the server knows, with their content types and property schemas | Shipped |
+| Node maintenance mode | `pmx pve node maintenance enable\|disable` | HA maintenance mode for a node, with confirmation on enable | Shipped |
 
 ## P5 — Test Coverage Closure
 
