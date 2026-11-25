@@ -64,6 +64,7 @@ func newStartCmd() *cobra.Command {
 		targetstorage      string
 		netsHostMtu        string
 		withConntrackState bool
+		syncTimeOnResume   bool
 	)
 	cmd := newLifecycleCmd("start", "Start a VM",
 		"Start a stopped VM. Resolves the target by numeric vmid or name. Submits a PVE "+
@@ -107,6 +108,9 @@ func newStartCmd() *cobra.Command {
 			if cmd.Flags().Changed("with-conntrack-state") {
 				params.WithConntrackState = new(withConntrackState)
 			}
+			if cmd.Flags().Changed("sync-time-on-resume") {
+				params.SyncTimeOnResume = new(syncTimeOnResume)
+			}
 			resp, err := deps.API.Nodes.CreateQemuStatusStart(cmd.Context(), node, vmid, params)
 			if err != nil {
 				return nil, fmt.Errorf("start VM %s on node %q: %w", vmid, node, err)
@@ -130,6 +134,8 @@ func newStartCmd() *cobra.Command {
 				"[advanced] list of VirtIO network devices and their effective host MTU for migration")
 			c.Flags().BoolVar(&withConntrackState, "with-conntrack-state", false,
 				"[advanced] migrate conntrack entries for running VMs")
+			c.Flags().BoolVar(&syncTimeOnResume, "sync-time-on-resume", false,
+				"synchronize the guest clock through the guest agent after the operation, which can leave the clock behind")
 		})
 	return cmd
 }
@@ -332,8 +338,9 @@ func newSuspendCmd() *cobra.Command {
 // newResumeCmd builds `pmx pve qemu resume <vmid>`.
 func newResumeCmd() *cobra.Command {
 	var (
-		skiplock bool
-		nocheck  bool
+		skiplock         bool
+		nocheck          bool
+		syncTimeOnResume bool
 	)
 	cmd := newLifecycleCmd("resume", "Resume a suspended VM",
 		"Resume a VM previously suspended with 'qemu suspend'. Pass --nocheck to skip the "+
@@ -350,6 +357,9 @@ func newResumeCmd() *cobra.Command {
 			if cmd.Flags().Changed("nocheck") {
 				params.Nocheck = new(nocheck)
 			}
+			if cmd.Flags().Changed("sync-time-on-resume") {
+				params.SyncTimeOnResume = new(syncTimeOnResume)
+			}
 			resp, err := deps.API.Nodes.CreateQemuStatusResume(cmd.Context(), node, vmid, params)
 			if err != nil {
 				return nil, fmt.Errorf("resume VM %s on node %q: %w", vmid, node, err)
@@ -359,6 +369,8 @@ func newResumeCmd() *cobra.Command {
 		func(c *cobra.Command) {
 			c.Flags().BoolVar(&skiplock, "skiplock", false, "ignore locks (root only)")
 			c.Flags().BoolVar(&nocheck, "nocheck", false, "skip the state file existence check")
+			c.Flags().BoolVar(&syncTimeOnResume, "sync-time-on-resume", false,
+				"synchronize the guest clock through the guest agent after the operation, which can leave the clock behind")
 		})
 	return cmd
 }

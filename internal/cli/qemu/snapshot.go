@@ -291,9 +291,10 @@ func newSnapshotUpdateCmd() *cobra.Command {
 // newSnapshotRollbackCmd builds `pmx pve qemu snapshot rollback <vmid> <snapname>`.
 func newSnapshotRollbackCmd() *cobra.Command {
 	var (
-		async bool
-		start bool
-		yes   bool
+		async            bool
+		start            bool
+		yes              bool
+		syncTimeOnResume bool
 	)
 	cmd := &cobra.Command{
 		Use:   "rollback <vmid|name> <snapname>",
@@ -326,6 +327,9 @@ func newSnapshotRollbackCmd() *cobra.Command {
 			if cmd.Flags().Changed("start") {
 				params.Start = new(start)
 			}
+			if cmd.Flags().Changed("sync-time-on-resume") {
+				params.SyncTimeOnResume = new(syncTimeOnResume)
+			}
 
 			resp, err := deps.API.Nodes.CreateQemuSnapshotRollback(cmd.Context(), node, vmid, snapname, params)
 			if err != nil {
@@ -339,5 +343,7 @@ func newSnapshotRollbackCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&async, "async", false, "return the task UPID immediately without waiting")
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm the rollback without prompting")
 	cmd.Flags().BoolVar(&start, "start", false, "start the VM after a successful rollback")
+	cmd.Flags().BoolVar(&syncTimeOnResume, "sync-time-on-resume", false,
+		"synchronize the guest clock through the guest agent after the operation, which can leave the clock behind")
 	return cmd
 }
