@@ -983,8 +983,10 @@ func newMatcherGetCmd() *cobra.Command {
 			"Pass --migrate-to-expression to change the output: the server translates the " +
 			"matcher's match-field, match-calendar, match-severity, invert-match, and mode " +
 			"settings into an equivalent expression and returns that in place of the " +
-			"legacy fields. Nothing is saved, so use the result with `set --expression` " +
-			"to adopt it.",
+			"legacy fields. Nothing is saved. The server documents --expression as mutually " +
+			"exclusive with match-field, match-calendar, match-severity, invert-match, and mode, so " +
+			"to adopt the result, pass it to `set --expression` and reset every legacy setting " +
+			"the matcher still has with --delete, as in `set my-matcher --expression '<expression>' --delete match-field --delete match-severity`.",
 		Example: `  pmx pve cluster notifications matcher get my-matcher
   pmx pve cluster notifications matcher get my-matcher --migrate-to-expression`,
 		Args: cobra.ExactArgs(1),

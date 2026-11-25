@@ -112,8 +112,10 @@ func newNotifMatcherShowCmd() *cobra.Command {
 			"Pass --migrate-to-expression to change the output: the server translates the " +
 			"matcher's match-field, match-calendar, match-severity, invert-match, and mode " +
 			"settings into an equivalent expression and returns that in place of the " +
-			"legacy fields. Nothing is saved, so use the result with `update --expression` " +
-			"to adopt it.",
+			"legacy fields. Nothing is saved. The server documents --expression as mutually " +
+			"exclusive with match-field, match-calendar, match-severity, invert-match, and mode, so " +
+			"to adopt the result, pass it to `update --expression` and reset every legacy setting " +
+			"the matcher still has with --delete, as in `update storage-alerts --expression '<expression>' --delete match-field --delete match-severity`.",
 		Example: `  pmx pbs notification matcher show storage-alerts
   pmx pbs notification matcher show storage-alerts --migrate-to-expression`,
 		Args: cobra.ExactArgs(1),

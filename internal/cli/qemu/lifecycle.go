@@ -135,7 +135,7 @@ func newStartCmd() *cobra.Command {
 			c.Flags().BoolVar(&withConntrackState, "with-conntrack-state", false,
 				"[advanced] migrate conntrack entries for running VMs")
 			c.Flags().BoolVar(&syncTimeOnResume, "sync-time-on-resume", false,
-				"synchronize the guest clock through the guest agent after the operation, which can leave the clock behind")
+				"set the guest clock through the guest agent when the VM starts from hibernation, because the clock otherwise stays behind; a regular start ignores it")
 		})
 	return cmd
 }
@@ -370,7 +370,7 @@ func newResumeCmd() *cobra.Command {
 			c.Flags().BoolVar(&skiplock, "skiplock", false, "ignore locks (root only)")
 			c.Flags().BoolVar(&nocheck, "nocheck", false, "skip the state file existence check")
 			c.Flags().BoolVar(&syncTimeOnResume, "sync-time-on-resume", false,
-				"synchronize the guest clock through the guest agent after the operation, which can leave the clock behind")
+				"set the guest clock through the guest agent after the VM resumes, because the clock otherwise stays behind")
 		})
 	return cmd
 }

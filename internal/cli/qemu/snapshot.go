@@ -344,6 +344,6 @@ func newSnapshotRollbackCmd() *cobra.Command {
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm the rollback without prompting")
 	cmd.Flags().BoolVar(&start, "start", false, "start the VM after a successful rollback")
 	cmd.Flags().BoolVar(&syncTimeOnResume, "sync-time-on-resume", false,
-		"synchronize the guest clock through the guest agent after the operation, which can leave the clock behind")
+		"set the guest clock through the guest agent after the rollback restores the RAM state, because the clock otherwise stays behind")
 	return cmd
 }
