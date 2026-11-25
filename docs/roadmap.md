@@ -99,6 +99,7 @@ Bulk and advanced features for larger or newer deployments.
 | SDN fabrics and routing policy | `pmx sdn fabric`, `pmx sdn prefix-list`, `pmx sdn route-map` | BGP fabric topology and routing policy | Shipped |
 | PVE 9.2 endpoints | `pmx node oci`, `pmx node capabilities`, `pmx cluster cpu-model` | OCI image import, capability queries, and custom CPU models | Shipped |
 | PVE 9.3 endpoints | `pmx qemu agent` statistics | Guest CPU, disk, and load statistics through the guest agent | Shipped |
+| Storage plugin index | `pmx storage plugin list\|show` | The storage plugins the server knows, with their content types and property schemas | Shipped |
 
 ## P5 — Test Coverage Closure
 

@@ -155,6 +155,8 @@ These commands cover Proxmox VE and Proxmox Backup Server API endpoints that arr
 | Area | Command added | What it exposes |
 |---|---|---|
 | Qemu guest agent | `pmx pve qemu agent <vmid> get-cpustats`, `get-disks`, `get-diskstats`, `get-load` | The four guest-agent statistics queries, which return CPU counters, the disk list, per-disk I/O counters, and the load average from inside the guest |
+| Storage plugins | `pmx pve storage plugin list`, `pmx pve storage plugin show <type>` | The server's storage plugin index, with each plugin's display name, origin, supported and default content types, and (in json and yaml) its property schema. `list` takes `--origin builtin|custom` |
+| Storage plugins | `/plugins` and `/plugins/storage` (`ListPlugins`, `ListStorage`) | Index-only. Both endpoints only list the names of their child paths, so no command wraps them, and `plugin list` reads the real index below them |
 
 ## High-severity gaps (historical, resolved)
 

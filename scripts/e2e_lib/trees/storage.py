@@ -194,6 +194,12 @@ def run(ctx: Ctx) -> None:
     else:
         ctx.skip("aplinfo list", "no node discovered")
 
+    # plugin list/show: the server's storage plugin index (pve-manager 9.3 and
+    # newer). An older server answers "not implemented", which skips the check.
+    not_served = {"not implemented": "server predates the storage plugin index (needs PVE 9.3)"}
+    ctx.check("plugin list", "pve", "storage", "plugin", "list", validate=is_list, skip_on=not_served)
+    ctx.check("plugin show", "pve", "storage", "plugin", "show", "nfs", skip_on=not_served)
+
     # The remaining browsing verbs need backends or sources the lab does not
     # provide, so they are checked read-only via --help here and gated below.
     ctx.check("volume set --help", "pve", "storage", "volume", "set", "--help", fmt="")

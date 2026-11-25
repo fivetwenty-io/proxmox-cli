@@ -27,9 +27,9 @@ func Group(_ *cli.Deps) *cobra.Command {
 		Long: "Manage Proxmox VE cluster-wide storage definitions. Requires a configured " +
 			"Proxmox VE API connection.\n\n" +
 			"The definition itself\n" +
-			"  list, get, describe     what exists and what it accepts\n" +
-			"  create, set, delete     add, change, and remove definitions\n" +
-			"  permissions             ACL entries on the storage's path\n\n" +
+			"  list, get, describe, plugin   what exists and what it accepts\n" +
+			"  create, set, delete           add, change, and remove definitions\n" +
+			"  permissions                   ACL entries on the storage's path\n\n" +
 			"What lives on it\n" +
 			"  content, volume        the volumes stored there\n" +
 			"  upload, download-url   put files onto it\n" +
@@ -75,6 +75,7 @@ func Group(_ *cli.Deps) *cobra.Command {
 		newStorageRrdCmd(),
 		newAplinfoCmd(),
 		newOciPullCmd(),
+		newPluginCmd(),
 		newPermissionsCmd(),
 	)
 	return cmd

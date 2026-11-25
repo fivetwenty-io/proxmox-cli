@@ -94,13 +94,13 @@ swept clean before the next provisions.
 | `logs` | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `pbs` | 279 | 0 | 126 | 104 | 42 | 7 | 0 | 0 |
 | `pdm` | 260 | 0 | 145 | 59 | 54 | 2 | 0 | 0 |
-| `pve` | 684 | 80 | 184 | 442 | 1 | 62 | 7 | 0 |
+| `pve` | 686 | 82 | 184 | 442 | 1 | 62 | 7 | 0 |
 | `rsync` | 1 | 0 | 0 | 1 | 0 | 0 | 0 | 0 |
 | `ssh` | 1 | 0 | 0 | 1 | 0 | 0 | 0 | 0 |
 | `version` | 3 | 2 | 1 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **1287** | **102** | **459** | **613** | **97** | **99** | **9** | **0** |
+| **Total** | **1289** | **104** | **459** | **613** | **97** | **99** | **9** | **0** |
 
-Leaf commands are counted from a walk of the built command tree (`pmx <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **1287** leaves, **1179** are exercised by at least one live suite, **99** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **9** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pmx <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **1289** leaves, **1181** are exercised by at least one live suite, **99** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **9** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `api`
 
@@ -1416,6 +1416,8 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `pve storage permissions grant` | — | ✓ |  |
 | `pve storage permissions list` | ◑ | ✓ |  |
 | `pve storage permissions revoke` | — | ✓ |  |
+| `pve storage plugin list` | ✓ | — |  |
+| `pve storage plugin show` | ✓ | — |  |
 | `pve storage prune` | ◑ | ✓ |  |
 | `pve storage rrd` | ◑ | — |  |
 | `pve storage rrddata` | ◑ | — |  |

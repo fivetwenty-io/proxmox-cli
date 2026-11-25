@@ -5,6 +5,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/clusterstorage"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
+	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/plugins"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/pools"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/storage"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/tasks"
@@ -12,7 +13,7 @@ import (
 	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 )
 
-// APIClient holds all 8 service handles plus the raw pve client.
+// APIClient holds all 9 service handles plus the raw pve client.
 // It is constructed once in the cobra root PersistentPreRunE and passed via
 // cobra.Command context to every sub-command.
 type APIClient struct {
@@ -31,6 +32,10 @@ type APIClient struct {
 	// Nodes is the /nodes namespace service.
 	Nodes nodes.Service
 
+	// Plugins is the /plugins namespace service, which indexes the storage
+	// plugins the server knows.
+	Plugins plugins.Service
+
 	// Pools is the /pools namespace service.
 	Pools pools.Service
 
@@ -46,7 +51,7 @@ type APIClient struct {
 }
 
 // NewAPIClient constructs an APIClient from a pre-built pve.Options.
-// It creates the raw pve.Client and wires all 8 service handles; no network
+// It creates the raw pve.Client and wires all 9 service handles; no network
 // calls are made during construction.
 //
 // pve.NewClient applies opts.CSRFToken to the authenticator at construction
@@ -65,6 +70,7 @@ func NewAPIClient(opts pve.Options) (*APIClient, error) {
 		Cluster:        cluster.New(raw),
 		ClusterStorage: clusterstorage.New(raw),
 		Nodes:          nodes.New(raw),
+		Plugins:        plugins.New(raw),
 		Pools:          pools.New(raw),
 		Storage:        storage.New(raw),
 		Tasks:          tasks.New(raw),

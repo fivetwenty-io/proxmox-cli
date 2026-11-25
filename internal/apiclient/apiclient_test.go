@@ -300,6 +300,7 @@ func TestNewAPIClient_TokenAuth_ServicesNonNil(t *testing.T) {
 	require.NotNil(t, ac.Cluster)
 	require.NotNil(t, ac.ClusterStorage)
 	require.NotNil(t, ac.Nodes)
+	require.NotNil(t, ac.Plugins)
 	require.NotNil(t, ac.Pools)
 	require.NotNil(t, ac.Storage)
 	require.NotNil(t, ac.Tasks)
