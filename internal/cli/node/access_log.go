@@ -21,8 +21,9 @@ func newAccessLogCmd() *cobra.Command {
 			"narrow the requests by client, user, method, path, status range, or time. The server " +
 			"returns one page at a time, sized by --limit, and when older requests remain the table " +
 			"output prints a --cursor value on the error stream that continues with the next page, " +
-			"while json and yaml carry it as next-cursor. --after follows the log forward from the " +
-			"head-cursor of an earlier page. The 'stats' sub-command counts the requests instead. " +
+			"while json and yaml carry it as next-cursor. The table output also prints the head " +
+			"cursor of the page on the error stream, and --after follows the log forward from it. " +
+			"A warning on the error stream says when the page is incomplete or skipped parts of the log. The 'stats' sub-command counts the requests instead. " +
 			"Reading the log needs Sys.Syslog on /nodes/{node}.",
 		Example: `  pmx pve node access-log --node pve1 --limit 20
   pmx pve node access-log --node pve1 --client 10.0.0.5 --min-status 400
@@ -46,14 +47,18 @@ func newAccessLogCmd() *cobra.Command {
 		if resp == nil {
 			return fmt.Errorf("read the access log of node %q: empty response from server", deps.Node)
 		}
-		res, err := accesslog.ListResult(accesslog.Page{Entries: resp.Entries, NextCursor: resp.NextCursor, Raw: resp})
+		page := accesslog.Page{
+			Entries: resp.Entries, NextCursor: resp.NextCursor, HeadCursor: resp.HeadCursor,
+			Complete: bool(resp.Complete), Gaps: len(resp.Gaps), Raw: resp,
+		}
+		res, err := accesslog.ListResult(page)
 		if err != nil {
 			return err
 		}
 		if err := deps.Out.Render(cmd.OutOrStdout(), res, deps.Format); err != nil {
 			return err
 		}
-		accesslog.WriteNextCursor(cmd.ErrOrStderr(), deps.Format, resp.NextCursor)
+		accesslog.WriteNotes(cmd.ErrOrStderr(), deps.Format, page)
 		return nil
 	}
 	cmd.AddCommand(newAccessLogStatsCmd())

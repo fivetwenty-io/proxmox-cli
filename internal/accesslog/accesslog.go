@@ -195,6 +195,9 @@ func (f *Filters) PBSStats() *pbsnodes.ListAccessLogStatsParams {
 type Page struct {
 	Entries    []json.RawMessage
 	NextCursor *string
+	HeadCursor *string
+	Complete   bool
+	Gaps       int
 	Raw        any
 }
 
@@ -252,17 +255,29 @@ func cell(key string, v any) string {
 	return output.Cell(v)
 }
 
-// WriteNextCursor tells the operator how to read the next page. It writes to
-// the error stream, so a pipe of the table output stays clean, and only for the
-// human formats because the json and yaml documents carry the cursor already.
-func WriteNextCursor(w io.Writer, format output.Format, next *string) {
-	if next == nil || *next == "" {
-		return
-	}
+// WriteNotes tells the operator what the table and plain output of a page
+// leaves out. It writes to the error stream, so a pipe of the table output stays
+// clean, and only for the human formats because the json and yaml documents
+// carry every one of these fields already. It names the cursor that reads the
+// next page of older requests, the head cursor that --after takes to read what
+// was logged since, and a warning when the page is incomplete or skipped parts
+// of the log.
+func WriteNotes(w io.Writer, format output.Format, p Page) {
 	if format != output.FormatTable && format != output.FormatPlain {
 		return
 	}
-	_, _ = fmt.Fprintf(w, "More requests are available. Continue with --cursor %s\n", *next)
+	if p.NextCursor != nil && *p.NextCursor != "" {
+		_, _ = fmt.Fprintf(w, "More requests are available. Continue with --cursor %s\n", *p.NextCursor)
+	}
+	if p.HeadCursor != nil && *p.HeadCursor != "" {
+		_, _ = fmt.Fprintf(w, "To read the requests logged after this page, use --after %s\n", *p.HeadCursor)
+	}
+	if p.Gaps > 0 {
+		_, _ = fmt.Fprintf(w, "Warning: the server skipped %d unreadable part(s) of the log, so some requests are missing.\n", p.Gaps)
+	}
+	if !p.Complete {
+		_, _ = fmt.Fprintln(w, "Warning: this page and the ones before it do not cover the whole log; use -o json for the details.")
+	}
 }
 
 // topLimit bounds how many ranked values a summary line lists.

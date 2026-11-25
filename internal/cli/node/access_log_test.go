@@ -1,6 +1,7 @@
 package node_test
 
 import (
+	"bytes"
 	"net/http"
 	"testing"
 
@@ -68,10 +69,13 @@ func TestNodeAccessLog_TableShowsTimeAndNextCursor(t *testing.T) {
 	recordForm(f, "GET /api2/json/nodes/pve1/access-log", &rec, accessLogPage("cursor-2"))
 
 	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	var stderr bytes.Buffer
+	root.SetErr(&stderr)
 	root.SetArgs(append(prefix, "--node", "pve1", "node", "access-log"))
 	require.NoError(t, root.Execute())
 	require.Contains(t, buf.String(), "2026-09-21T")
-	require.Contains(t, buf.String(), "--cursor cursor-2")
+	require.NotContains(t, buf.String(), "--cursor", "the hint must stay off stdout")
+	require.Contains(t, stderr.String(), "--cursor cursor-2")
 	require.NotContains(t, buf.String(), "USER-AGENT", "PVE does not log a user agent")
 
 	root, buf, prefix = newNodeRoot(t, f, output.FormatJSON, exec.Fake())
@@ -166,4 +170,38 @@ func TestNodeAccessLogStats_TableSummary(t *testing.T) {
 	for _, want := range []string{"total-requests", "10.0.0.5 (40)", "stopped", "damaged copy", "2026-09-21T"} {
 		require.Contains(t, buf.String(), want)
 	}
+}
+
+// TestNodeAccessLog_ForwardsAfter verifies --after reaches the after query key.
+func TestNodeAccessLog_ForwardsAfter(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	recordForm(f, "GET /api2/json/nodes/pve1/access-log", &rec, accessLogPage(""))
+	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "access-log", "--after", "head-1"))
+	require.NoError(t, root.Execute())
+	require.Contains(t, rec.query, "after=head-1")
+	require.NotContains(t, rec.query, "cursor=")
+}
+
+// TestNodeAccessLog_PrintsHeadCursorAndWarnings verifies the table output names
+// the head cursor on stderr and warns about an incomplete page or gaps.
+func TestNodeAccessLog_PrintsHeadCursorAndWarnings(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	page := accessLogPage("")
+	page["head-cursor"] = "head-9"
+	page["complete"] = 0
+	page["gaps"] = []any{map[string]any{"from": 1, "to": 2}}
+	var rec recordedRequest
+	recordForm(f, "GET /api2/json/nodes/pve1/access-log", &rec, page)
+
+	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	var stderr bytes.Buffer
+	root.SetErr(&stderr)
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "access-log"))
+	require.NoError(t, root.Execute())
+	require.NotContains(t, buf.String(), "head-9")
+	require.Contains(t, stderr.String(), "--after head-9")
+	require.Contains(t, stderr.String(), "skipped 1 unreadable")
+	require.Contains(t, stderr.String(), "do not cover the whole log")
 }

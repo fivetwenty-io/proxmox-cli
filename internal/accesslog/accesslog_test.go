@@ -65,17 +65,38 @@ func TestListResult_RejectsMalformedEntry(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestWriteNextCursor(t *testing.T) {
-	next := "c1"
+func TestWriteNotes_CursorsOnHumanFormatsOnly(t *testing.T) {
+	next, head := "c1", "h1"
+	p := Page{NextCursor: &next, HeadCursor: &head, Complete: true}
 	var buf bytes.Buffer
-	WriteNextCursor(&buf, output.FormatTable, &next)
+	WriteNotes(&buf, output.FormatTable, p)
 	require.Contains(t, buf.String(), "--cursor c1")
+	require.Contains(t, buf.String(), "--after h1")
+	require.NotContains(t, buf.String(), "Warning")
 
 	buf.Reset()
-	WriteNextCursor(&buf, output.FormatJSON, &next)
-	WriteNextCursor(&buf, output.FormatTable, nil)
+	WriteNotes(&buf, output.FormatPlain, p)
+	require.Contains(t, buf.String(), "--after h1")
+
+	buf.Reset()
+	WriteNotes(&buf, output.FormatJSON, p)
+	WriteNotes(&buf, output.FormatTable, Page{Complete: true})
 	empty := ""
-	WriteNextCursor(&buf, output.FormatTable, &empty)
+	WriteNotes(&buf, output.FormatTable, Page{NextCursor: &empty, HeadCursor: &empty, Complete: true})
+	require.Empty(t, buf.String())
+}
+
+func TestWriteNotes_WarnsWhenIncompleteOrGapped(t *testing.T) {
+	var buf bytes.Buffer
+	WriteNotes(&buf, output.FormatTable, Page{Complete: false})
+	require.Contains(t, buf.String(), "do not cover the whole log")
+
+	buf.Reset()
+	WriteNotes(&buf, output.FormatTable, Page{Complete: true, Gaps: 2})
+	require.Contains(t, buf.String(), "skipped 2 unreadable part(s)")
+
+	buf.Reset()
+	WriteNotes(&buf, output.FormatJSON, Page{Gaps: 2})
 	require.Empty(t, buf.String())
 }
 

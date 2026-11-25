@@ -2,11 +2,14 @@ package pbs
 
 import (
 	"bytes"
+	"context"
 	"net/http"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-cli/internal/testhelper"
 )
@@ -67,10 +70,55 @@ func TestNodeAccessLog_ShowsUserAgentColumnAndCursor(t *testing.T) {
 	recordJSON(f, "GET "+nodeAPIBase+"/access-log", &rec, pbsAccessLogPage("cursor-2"))
 
 	deps := depsFor(t, pc, output.FormatTable, false)
+	stdout, stderr, err := runSplit(deps, newNodeCmd(), "node", "access-log")
+	require.NoError(t, err)
+	require.Contains(t, stdout, "USER-AGENT")
+	require.NotContains(t, stdout, "--cursor", "the hint must stay off stdout")
+	require.Contains(t, stderr, "--cursor cursor-2")
+}
+
+// runSplit runs sub with separate stdout and stderr buffers.
+func runSplit(deps *cli.Deps, sub *cobra.Command, args ...string) (string, string, error) {
+	var out, errBuf bytes.Buffer
+	cmd := &cobra.Command{Use: "pbs"}
+	cmd.AddCommand(sub)
+	cmd.SetContext(cli.WithDeps(context.Background(), deps))
+	cmd.SetOut(&out)
+	cmd.SetErr(&errBuf)
+	cmd.SetArgs(args)
+	err := cmd.Execute()
+	return out.String(), errBuf.String(), err
+}
+
+// TestNodeAccessLog_ForwardsAfter verifies --after reaches the after query key.
+func TestNodeAccessLog_ForwardsAfter(t *testing.T) {
+	f, pc := newFakeClient(t)
+	var rec recordedRequest
+	recordJSON(f, "GET "+nodeAPIBase+"/access-log", &rec, pbsAccessLogPage(""))
+	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	require.NoError(t, run(deps, &buf, newNodeCmd(), "node", "access-log"))
-	require.Contains(t, buf.String(), "USER-AGENT")
-	require.Contains(t, buf.String(), "--cursor cursor-2")
+	require.NoError(t, run(deps, &buf, newNodeCmd(), "node", "access-log", "--after", "head-1"))
+	require.Equal(t, "head-1", rec.query.Get("after"))
+	require.False(t, rec.query.Has("cursor"))
+}
+
+// TestNodeAccessLog_PrintsHeadCursorAndWarnings verifies the table output names
+// the head cursor on stderr and warns about an incomplete page or gaps.
+func TestNodeAccessLog_PrintsHeadCursorAndWarnings(t *testing.T) {
+	f, pc := newFakeClient(t)
+	page := pbsAccessLogPage("")
+	page["head-cursor"] = "head-9"
+	page["complete"] = 0
+	page["gaps"] = []any{map[string]any{"from": 1, "to": 2}}
+	var rec recordedRequest
+	recordJSON(f, "GET "+nodeAPIBase+"/access-log", &rec, page)
+	deps := depsFor(t, pc, output.FormatTable, false)
+	stdout, stderr, err := runSplit(deps, newNodeCmd(), "node", "access-log")
+	require.NoError(t, err)
+	require.NotContains(t, stdout, "head-9")
+	require.Contains(t, stderr, "--after head-9")
+	require.Contains(t, stderr, "skipped 1 unreadable")
+	require.Contains(t, stderr, "do not cover the whole log")
 }
 
 // TestNodeAccessLog_RejectsAfterWithCursor verifies the conflict is caught
