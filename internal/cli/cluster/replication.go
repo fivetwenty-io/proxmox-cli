@@ -81,14 +81,15 @@ func newReplicationListCmd() *cobra.Command {
 
 func newReplicationCreateCmd() *cobra.Command {
 	var (
-		id        string
-		target    string
-		jobType   string
-		schedule  string
-		rate      float64
-		comment   string
-		disable   bool
-		removeJob string
+		id         string
+		target     string
+		jobType    string
+		schedule   string
+		rate       float64
+		comment    string
+		disable    bool
+		removeJob  string
+		skipFreeze bool
 	)
 	cmd := &cobra.Command{
 		Use:   "create",
@@ -121,6 +122,9 @@ func newReplicationCreateCmd() *cobra.Command {
 			if fl.Changed("remove-job") {
 				params.RemoveJob = &removeJob
 			}
+			if fl.Changed("skip-freeze-fs") {
+				params.SkipFreezeFs = &skipFreeze
+			}
 			if err := deps.API.Cluster.CreateReplication(cmd.Context(), params); err != nil {
 				return fmt.Errorf("create replication job %q: %w", id, err)
 			}
@@ -138,6 +142,8 @@ func newReplicationCreateCmd() *cobra.Command {
 	f.BoolVar(&disable, "disable", false, "create the job disabled")
 	f.StringVar(&removeJob, "remove-job", "",
 		"mark the job for removal: 'local' clears local snapshots, 'full' also removes target volumes")
+	f.BoolVar(&skipFreeze, "skip-freeze-fs", false,
+		"skip freezing and thawing the guest filesystems for consistency during replication")
 	cli.MustMarkRequired(cmd, "id")
 	cli.MustMarkRequired(cmd, "target-node")
 	return cmd
@@ -170,12 +176,13 @@ func newReplicationGetCmd() *cobra.Command {
 
 func newReplicationSetCmd() *cobra.Command {
 	var (
-		schedule  string
-		rate      float64
-		comment   string
-		disable   bool
-		removeJob string
-		del       string
+		schedule   string
+		rate       float64
+		comment    string
+		disable    bool
+		removeJob  string
+		del        string
+		skipFreeze bool
 	)
 	cmd := &cobra.Command{
 		Use:   "set <id>",
@@ -189,7 +196,7 @@ func newReplicationSetCmd() *cobra.Command {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
 			fl := cmd.Flags()
-			if !anyFlagChanged(fl, "schedule", "rate", "comment", "disable", "remove-job", "delete") {
+			if !anyFlagChanged(fl, "schedule", "rate", "comment", "disable", "remove-job", "skip-freeze-fs", "delete") {
 				return fmt.Errorf("no changes requested: pass at least one flag")
 			}
 			params := &pvecluster.UpdateReplicationParams{}
@@ -208,6 +215,9 @@ func newReplicationSetCmd() *cobra.Command {
 			if fl.Changed("remove-job") {
 				params.RemoveJob = &removeJob
 			}
+			if fl.Changed("skip-freeze-fs") {
+				params.SkipFreezeFs = &skipFreeze
+			}
 			if fl.Changed("delete") {
 				params.Delete = &del
 			}
@@ -225,6 +235,8 @@ func newReplicationSetCmd() *cobra.Command {
 	f.BoolVar(&disable, "disable", false, "disable the job")
 	f.StringVar(&removeJob, "remove-job", "",
 		"mark the job for removal: 'local' clears local snapshots, 'full' also removes target volumes")
+	f.BoolVar(&skipFreeze, "skip-freeze-fs", false,
+		"skip freezing and thawing the guest filesystems for consistency during replication")
 	f.StringVar(&del, "delete", "", "comma-separated list of settings to reset to default")
 	return cmd
 }

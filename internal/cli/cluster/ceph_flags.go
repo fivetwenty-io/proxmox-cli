@@ -89,6 +89,8 @@ type cephFlagSpec struct {
 // cephFlagSpecs enumerates the cluster-wide Ceph OSD flags that the bulk set-all
 // command can toggle, in the order they appear in the help text.
 var cephFlagSpecs = []cephFlagSpec{
+	{"noautoscale", "stop the PG autoscaler from changing the PG count of any pool",
+		func(p *pvecluster.UpdateCephFlagsParams, v bool) { p.Noautoscale = &v }},
 	{"nobackfill", "suspend backfilling of PGs", func(p *pvecluster.UpdateCephFlagsParams, v bool) { p.Nobackfill = &v }},
 	{"nodeep-scrub", "disable deep scrubbing", func(p *pvecluster.UpdateCephFlagsParams, v bool) { p.NodeepScrub = &v }},
 	{"nodown", "ignore OSD failure reports", func(p *pvecluster.UpdateCephFlagsParams, v bool) { p.Nodown = &v }},
