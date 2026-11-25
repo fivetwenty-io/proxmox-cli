@@ -101,9 +101,14 @@ func TestStorageSet_RejectsCreateOnlyFlags(t *testing.T) {
 		testhelper.WriteData(w, map[string]any{})
 	})
 
-	_, err := run(t, f, "set", "lvm0", "--iscsiprovider", "comstar")
-	require.Error(t, err)
-	require.False(t, called, "create-only flag must not be accepted by set")
+	for _, args := range [][]string{
+		{"set", "lvm0", "--iscsiprovider", "comstar"},
+		{"set", "lvm0", "--server", "10.0.0.9"},
+	} {
+		_, err := run(t, f, args...)
+		require.Error(t, err)
+		require.False(t, called, "create-only flag must not be accepted by set: %v", args)
+	}
 }
 
 // TestStorageCreate_OmitsUnsetAuditFlags verifies the audit flags are omitted

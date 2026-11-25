@@ -320,6 +320,7 @@ func (sf *storageFlags) registerCreate(cmd *cobra.Command) {
 	f.StringVar(&sf.iscsiTarget, "iscsi-target", "", "iSCSI target (iscsi)")
 	f.StringVar(&sf.iscsiprovider, "iscsiprovider", "", "iSCSI provider: comstar|istgt|iet|LIO (iscsi)")
 	f.StringVar(&sf.subsysnqn, "subsysnqn", "", "NQN of the NVMe subsystem (nvmeof)")
+	f.StringVar(&sf.server, "server", "", "server IP or DNS name (nfs, cifs, pbs)")
 	f.StringVar(&sf.base, "base", "", "base volume; automatically activated (zfspool, lvm)")
 	sf.registerCommon(cmd)
 }
@@ -335,7 +336,6 @@ func (sf *storageFlags) registerSet(cmd *cobra.Command) {
 // registerCommon binds the attribute flags accepted by both create and update.
 func (sf *storageFlags) registerCommon(cmd *cobra.Command) {
 	f := cmd.Flags()
-	f.StringVar(&sf.server, "server", "", "server IP or DNS name (nfs, cifs, pbs)")
 	f.StringVar(&sf.content, "content", "", "allowed content types (comma-separated)")
 	f.StringVar(&sf.contentDirs, "content-dirs", "", "overrides for default content type directories")
 	f.StringVar(&sf.nodes, "nodes", "", "nodes the storage applies to (comma-separated)")
@@ -385,7 +385,7 @@ func (sf *storageFlags) registerCommon(cmd *cobra.Command) {
 	f.StringVar(&sf.lioTpg, "lio-tpg", "", "target portal group for Linux LIO targets (iscsi)")
 	f.StringVar(&sf.portals, "portals", "", "NVMe subsystem TCP portals, comma-separated, with an optional port (nvmeof)")
 	f.StringVar(&sf.onVolumeRemove, "on-volume-remove", "", "actions when removing LVs, as a property string such as discard=1 (lvm)")
-	f.Int64Var(&sf.fastIoFailTmo, "fast-io-fail-tmo", 0, "seconds before I/O through a reconnecting path fails, -1 to disable (iscsi, nvmeof)")
+	f.Int64Var(&sf.fastIoFailTmo, "fast-io-fail-tmo", 0, "seconds before I/O through a reconnecting path fails, -1 to disable (nvmeof)")
 	f.BoolVar(&sf.managedMultipath, "managed-multipath", false, "manage multipath access to the LUNs and monitor path health (iscsi)")
 }
 
