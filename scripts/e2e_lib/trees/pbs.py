@@ -548,7 +548,11 @@ def _node(ctx: Ctx) -> None:
         else:
             ctx.skip("node apt termlog", "no package transaction in the history")
             ctx.skip("node apt transaction-changelogs", "no package transaction in the history")
-        ver_pkg = _pick(_rows(ctx.run("pbs", "node", "apt", "versions")), "Package", "package", "Name", "name")
+        # PBS lists the proxmox-backup meta-package first, with version "unknown"
+        # and no changelog, so read the changelog of a package that is installed.
+        installed = [r for r in _rows(ctx.run("pbs", "node", "apt", "versions"))
+                     if isinstance(r, dict) and r.get("version") not in (None, "", "unknown")]
+        ver_pkg = _pick(installed, "Package", "package", "Name", "name")
         if ver_pkg:
             ctx.check("node apt installed-changelog", "pbs", "node", "apt", "installed-changelog",
                       "--name", ver_pkg, skip_on=apt_skip)
