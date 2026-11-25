@@ -80,6 +80,7 @@ func newMigrateCmd() *cobra.Command {
 		migrationNetwork   string
 		migrationType      string
 		withConntrackState bool
+		skipConfigCheck    bool
 		bwlimit            int64
 		targetstorage      string
 	)
@@ -127,6 +128,9 @@ func newMigrateCmd() *cobra.Command {
 			if fl.Changed("with-conntrack-state") {
 				params.WithConntrackState = new(withConntrackState)
 			}
+			if fl.Changed("skip-config-check") {
+				params.SkipConfigCheck = new(skipConfigCheck)
+			}
 			if fl.Changed("bwlimit") {
 				params.Bwlimit = new(bwlimit)
 			}
@@ -156,6 +160,9 @@ func newMigrateCmd() *cobra.Command {
 		"migration traffic protection: secure (default) or insecure")
 	cmd.Flags().BoolVar(&withConntrackState, "with-conntrack-state", false,
 		"migrate conntrack state for running VMs with a configured firewall")
+	cmd.Flags().BoolVar(&skipConfigCheck, "skip-config-check", false,
+		"skip checking that the target can parse the VM configuration; "+
+			"options the target is too old to parse can be dropped")
 	cmd.Flags().Int64Var(&bwlimit, "bwlimit", 0,
 		"override I/O bandwidth limit in KiB/s for migrated disks")
 	cmd.Flags().StringVar(&targetstorage, "targetstorage", "",

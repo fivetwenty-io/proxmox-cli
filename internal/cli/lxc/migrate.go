@@ -24,6 +24,7 @@ func newMigrateCmd() *cobra.Command {
 		target        string
 		online        bool
 		restart       bool
+		skipConfig    bool
 		targetStorage string
 		timeout       int64
 		bwlimit       float64
@@ -74,6 +75,9 @@ func newMigrateCmd() *cobra.Command {
 			if fl.Changed("bwlimit") {
 				params.Bwlimit = &bwlimit
 			}
+			if fl.Changed("skip-config-check") {
+				params.SkipConfigCheck = &skipConfig
+			}
 
 			resp, err := deps.API.Nodes.CreateLxcMigrate(cmd.Context(), node, vmid, params)
 			if err != nil {
@@ -95,6 +99,9 @@ func newMigrateCmd() *cobra.Command {
 	cli.AliasFlags(cmd, map[string]string{"target-storage": "targetstorage"})
 	cmd.Flags().Int64Var(&timeout, "timeout", 0, "shutdown timeout in seconds for restart migration")
 	cmd.Flags().Float64Var(&bwlimit, "bwlimit", 0, "override I/O bandwidth limit in KiB/s")
+	cmd.Flags().BoolVar(&skipConfig, "skip-config-check", false,
+		"skip checking that the target can parse the container configuration; "+
+			"options the target is too old to parse can be dropped")
 
 	cmd.AddCommand(newMigrateCheckCmd())
 	return cmd

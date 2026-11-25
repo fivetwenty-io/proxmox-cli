@@ -317,7 +317,12 @@ func newHaResourceDeleteCmd() *cobra.Command {
 
 // newHaResourceMigrateCmd builds `pmx pve cluster ha resource migrate <sid>`.
 func newHaResourceMigrateCmd() *cobra.Command {
-	var node string
+	var (
+		node               string
+		resourceType       string
+		skipConfigCheck    bool
+		withConntrackState bool
+	)
 	cmd := &cobra.Command{
 		Use:   "migrate <sid>",
 		Short: "Request a manual migration of an HA resource",
@@ -333,8 +338,18 @@ func newHaResourceMigrateCmd() *cobra.Command {
 				return fmt.Errorf("--target-node is required: provide the destination node name")
 			}
 
-			resp, err := deps.API.Cluster.CreateHaResourcesMigrate(cmd.Context(), sid,
-				&pvecluster.CreateHaResourcesMigrateParams{Node: node})
+			params := &pvecluster.CreateHaResourcesMigrateParams{Node: node}
+			fl := cmd.Flags()
+			if fl.Changed("resource-type") && resourceType != "" {
+				params.ResourceType = &resourceType
+			}
+			if fl.Changed("skip-config-check") {
+				params.SkipConfigCheck = &skipConfigCheck
+			}
+			if fl.Changed("with-conntrack-state") {
+				params.WithConntrackState = &withConntrackState
+			}
+			resp, err := deps.API.Cluster.CreateHaResourcesMigrate(cmd.Context(), sid, params)
 			if err != nil {
 				return fmt.Errorf("migrate HA resource %q: %w", sid, err)
 			}
@@ -348,6 +363,13 @@ func newHaResourceMigrateCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&node, "target-node", "", "destination node name (required)")
+	cmd.Flags().StringVar(&resourceType, "resource-type", "",
+		"resource type, ct or vm; only sent when given, and --skip-config-check reads it")
+	cmd.Flags().BoolVar(&skipConfigCheck, "skip-config-check", false,
+		"skip checking that the target can parse the guest configuration; "+
+			"options the target is too old to parse can be dropped")
+	cmd.Flags().BoolVar(&withConntrackState, "with-conntrack-state", false,
+		"migrate conntrack entries for running VMs with a configured firewall")
 	return cmd
 }
 

@@ -28,6 +28,7 @@ func newRemoteMigrateCmd() *cobra.Command {
 		deleteSource   bool
 		bwlimit        int64
 		targetVmid     int64
+		allowNewUID    bool
 	)
 	cmd := &cobra.Command{
 		Use:   "remote-migrate <vmid|name>",
@@ -72,6 +73,9 @@ func newRemoteMigrateCmd() *cobra.Command {
 			if cmd.Flags().Changed("target-vmid") {
 				params.TargetVmid = new(targetVmid)
 			}
+			if cmd.Flags().Changed("allow-new-uid") {
+				params.AllowNewUid = new(allowNewUID)
+			}
 
 			resp, err := deps.API.Nodes.CreateQemuRemoteMigrate(cmd.Context(), node, vmid, params)
 			if err != nil {
@@ -103,6 +107,8 @@ func newRemoteMigrateCmd() *cobra.Command {
 	cmd.Flags().Int64Var(&bwlimit, "bwlimit", 0, "I/O bandwidth limit in KiB/s")
 	cmd.Flags().Int64Var(&targetVmid, "target-vmid", 0,
 		"VMID to use on the target cluster (defaults to source VMID)")
+	cmd.Flags().BoolVar(&allowNewUID, "allow-new-uid", false,
+		"allow the migration when a guest on the target cluster already has this VM's uid; the migrated VM gets a new uid")
 
 	cli.MustMarkRequired(cmd, "target-endpoint")
 	cli.MustMarkRequired(cmd, "target-storage")

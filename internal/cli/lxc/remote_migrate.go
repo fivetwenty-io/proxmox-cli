@@ -32,6 +32,7 @@ func newRemoteMigrateCmd() *cobra.Command {
 		deleteSource   bool
 		bwlimit        float64
 		timeout        int64
+		allowNewUID    bool
 	)
 
 	cmd := &cobra.Command{
@@ -98,6 +99,9 @@ func newRemoteMigrateCmd() *cobra.Command {
 			if fl.Changed("timeout") {
 				params.Timeout = &timeout
 			}
+			if fl.Changed("allow-new-uid") {
+				params.AllowNewUid = &allowNewUID
+			}
 
 			resp, err := deps.API.Nodes.CreateLxcRemoteMigrate(cmd.Context(), node, vmid, params)
 			if err != nil {
@@ -146,6 +150,8 @@ func newRemoteMigrateCmd() *cobra.Command {
 		"delete the source container after a successful migration (default: keep a stopped copy)")
 	cmd.Flags().Float64Var(&bwlimit, "bwlimit", 0, "override I/O bandwidth limit in KiB/s")
 	cmd.Flags().Int64Var(&timeout, "timeout", 0, "shutdown timeout in seconds for restart migration")
+	cmd.Flags().BoolVar(&allowNewUID, "allow-new-uid", false,
+		"allow the migration when a guest on the target cluster already has this container's uid; the migrated container gets a new uid")
 	// migrate spells the same setting --targetstorage, after its own API
 	// parameter; accept either here so the two commands agree.
 	cli.AliasFlags(cmd, map[string]string{"targetstorage": "target-storage"})
