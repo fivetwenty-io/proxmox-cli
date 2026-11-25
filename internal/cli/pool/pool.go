@@ -261,7 +261,7 @@ func newCreateCmd() *cobra.Command {
 // newSetCmd builds `pmx pve pool set <poolid>`.
 // Uses PUT /pools (non-deprecated) instead of PUT /pools/{poolid}.
 func newSetCmd() *cobra.Command {
-	var comment, vms, storage string
+	var comment, vms, storage, network string
 	var del, allowMove bool
 	cmd := &cobra.Command{
 		Use:   "set <poolid>",
@@ -269,10 +269,14 @@ func newSetCmd() *cobra.Command {
 		Long: "Update a resource pool: change its --comment or add members with --vms and " +
 			"--storage (comma-separated guest VMIDs and storage IDs). Pass --delete to remove " +
 			"the listed members instead of adding them, and --allow-move to add a guest that " +
-			"already belongs to another pool, moving it out of its current pool.",
+			"already belongs to another pool, moving it out of its current pool.\n\n" +
+			"--network adds network resources, as vnet/<zone>/<vnet> to allow a VNet without a " +
+			"VLAN tag, vnet/<zone>/<vnet>/<tag> to allow one VLAN tag, or vnet/<zone>/<vnet>/* " +
+			"to allow any tag. It combines with --delete the same way --vms does.",
 		Example: `  pmx pve pool set backups --vms 100,101
   pmx pve pool set backups --storage local,local-lvm
-  pmx pve pool set backups --vms 100 --delete`,
+  pmx pve pool set backups --vms 100 --delete
+  pmx pve pool set backups --network vnet/zone1/vnet1/100`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -287,6 +291,9 @@ func newSetCmd() *cobra.Command {
 			}
 			if storage != "" {
 				params.Storage = &storage
+			}
+			if network != "" {
+				params.Network = &network
 			}
 			if del {
 				params.Delete = &del
@@ -306,7 +313,9 @@ func newSetCmd() *cobra.Command {
 	cmd.Flags().StringVar(&comment, "comment", "", "pool comment")
 	cmd.Flags().StringVar(&vms, "vms", "", "comma-separated guest VMIDs to add (or remove with --delete)")
 	cmd.Flags().StringVar(&storage, "storage", "", "comma-separated storage IDs to add (or remove with --delete)")
-	cmd.Flags().BoolVar(&del, "delete", false, "remove the passed VMIDs and/or storage IDs instead of adding them")
+	cmd.Flags().StringVar(&network, "network", "",
+		"comma-separated network resources to add (or remove with --delete), such as vnet/<zone>/<vnet>[/<tag>]")
+	cmd.Flags().BoolVar(&del, "delete", false, "remove the passed VMIDs, storage IDs, and/or network resources instead of adding them")
 	cmd.Flags().BoolVar(&allowMove, "allow-move", false,
 		"add a guest even if it already belongs to another pool, moving it from its current pool")
 	return cmd
