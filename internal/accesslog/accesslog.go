@@ -260,8 +260,9 @@ func cell(key string, v any) string {
 // clean, and only for the human formats because the json and yaml documents
 // carry every one of these fields already. It names the cursor that reads the
 // next page of older requests, the head cursor that --after takes to read what
-// was logged since, and a warning when the page is incomplete or skipped parts
-// of the log.
+// was logged since, and a warning when the server skipped parts of the log or
+// the last page leaves the log uncovered. A page that still has a next cursor
+// is incomplete by design, so it gets no coverage warning.
 func WriteNotes(w io.Writer, format output.Format, p Page) {
 	if format != output.FormatTable && format != output.FormatPlain {
 		return
@@ -275,8 +276,9 @@ func WriteNotes(w io.Writer, format output.Format, p Page) {
 	if p.Gaps > 0 {
 		_, _ = fmt.Fprintf(w, "Warning: the server skipped %d unreadable part(s) of the log, so some requests are missing.\n", p.Gaps)
 	}
-	if !p.Complete {
-		_, _ = fmt.Fprintln(w, "Warning: this page and the ones before it do not cover the whole log; use -o json for the details.")
+	lastPage := p.NextCursor == nil || *p.NextCursor == ""
+	if !p.Complete && lastPage {
+		_, _ = fmt.Fprintln(w, "Warning: the pages read so far do not cover the whole log; use -o json for the details.")
 	}
 }
 

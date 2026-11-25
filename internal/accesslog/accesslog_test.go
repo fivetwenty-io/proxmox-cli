@@ -91,6 +91,13 @@ func TestWriteNotes_WarnsWhenIncompleteOrGapped(t *testing.T) {
 	WriteNotes(&buf, output.FormatTable, Page{Complete: false})
 	require.Contains(t, buf.String(), "do not cover the whole log")
 
+	// A page with a next cursor is incomplete by design and gets no warning.
+	buf.Reset()
+	next := "older"
+	WriteNotes(&buf, output.FormatTable, Page{NextCursor: &next, Complete: false})
+	require.Contains(t, buf.String(), "--cursor older")
+	require.NotContains(t, buf.String(), "do not cover the whole log")
+
 	buf.Reset()
 	WriteNotes(&buf, output.FormatTable, Page{Complete: true, Gaps: 2})
 	require.Contains(t, buf.String(), "skipped 2 unreadable part(s)")
