@@ -147,7 +147,7 @@ var configSchemas = []optionschema.Schema{
 				Name:        "mknod",
 				Type:        "boolean",
 				Default:     "false",
-				Description: "Allow unprivileged containers to use mknod() to add certain device nodes. This requires a kernel with seccomp trap to user space support (5.3 or newer). This is experimental.",
+				Description: "Allow unprivileged containers to use mknod() to add certain device nodes. This requires a kernel with seccomp trap to user space support (5.3 or newer).",
 			},
 			{
 				Name:        "mount",
@@ -267,7 +267,7 @@ var configSchemas = []optionschema.Schema{
 		Name:        "nameserver",
 		Flag:        "nameserver",
 		Type:        "string",
-		Description: "Sets DNS server IP address for a container. Create will automatically use the setting from the host if you neither set searchdomain nor nameserver.",
+		Description: "Comma-separated list of IP addresses. Sets the addresses of the DNS servers of the container. Create will automatically use the setting from the host if you neither set searchdomain nor nameserver.",
 	},
 	{
 		Name:        "net[n]",

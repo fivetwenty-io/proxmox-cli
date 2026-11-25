@@ -1011,7 +1011,7 @@ func newFirewallAliasUpdateCmd() *cobra.Command {
 			}
 			name, cidr := args[1], args[2]
 
-			params := &nodes.UpdateQemuFirewallAliasesParams{Cidr: cidr}
+			params := &nodes.UpdateQemuFirewallAliasesParams{Cidr: cli.OptString(cidr)}
 			if cmd.Flags().Changed("comment") {
 				params.Comment = new(comment)
 			}

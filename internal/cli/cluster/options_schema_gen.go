@@ -49,7 +49,7 @@ var optionSchemas = []optionschema.Schema{
 		Name:        "consent-text",
 		Flag:        "consent-text",
 		Type:        "string",
-		Description: "Consent text that is displayed before logging in.",
+		Description: "Consent text that is displayed before logging in. Needs to be base64 encoded.",
 	},
 	{
 		Name:        "console",
@@ -241,10 +241,22 @@ var optionSchemas = []optionschema.Schema{
 		Description: "Control the range for the free VMID auto-selection pool.",
 		SubKeys: []optionschema.SubKey{
 			{
+				Name:        "enforce",
+				Type:        "boolean",
+				Default:     "false",
+				Description: "Reject IDs for new guests outside of the configured 'lower' and 'upper' boundaries and, with 'unique', IDs that were used before.",
+			},
+			{
 				Name:        "lower",
 				Type:        "integer",
 				Default:     "100",
 				Description: "Lower, inclusive boundary for free next-id API range.",
+			},
+			{
+				Name:        "unique",
+				Type:        "boolean",
+				Default:     "false",
+				Description: "Only suggest guest IDs that are neither currently in use nor have previously been used.",
 			},
 			{
 				Name:        "upper",
@@ -353,6 +365,50 @@ var optionSchemas = []optionschema.Schema{
 				Default:     "circle",
 				Enum:        []string{"full", "circle", "dense", "none"},
 				Description: "Tag shape for the web ui tree. 'full' draws the full tag. 'circle' draws only a circle with the background color. 'dense' only draws a small rectancle (useful when many tags are assigned to each guest).'none' disables showing the tags.",
+			},
+		},
+	},
+	{
+		Name:        "token-policy",
+		Flag:        "token-policy",
+		Type:        "string",
+		Description: "Cluster-wide policy for creating and updating API tokens, for example to enforce an expiration date or privilege separation.",
+		SubKeys: []optionschema.SubKey{
+			{
+				Name:        "allow-extension-on-regenerate",
+				Type:        "boolean",
+				Default:     "false",
+				Description: "Allow extending the expiration date of an existing API token when its secret is regenerated in the same request, despite 'disallow-expiry-extension'. The maximum lifetime still applies.",
+			},
+			{
+				Name:        "default-to-max-lifetime",
+				Type:        "boolean",
+				Default:     "false",
+				Description: "Give API tokens created without an expiration date the maximum lifetime instead of rejecting them, for example for tools unaware of the policy. Has no effect without 'max-lifetime'.",
+			},
+			{
+				Name:        "disallow-expiry-extension",
+				Type:        "boolean",
+				Default:     "false",
+				Description: "Disallow moving the expiration date of existing API tokens later or removing it, so that 'max-lifetime' cannot be circumvented by extending tokens repeatedly. Shortening the expiration date or setting one on a token that has none remains possible, and tokens can still be deleted and recreated.",
+			},
+			{
+				Name:        "max-lifetime",
+				Type:        "integer",
+				Minimum:     "1",
+				Description: "Maximum lifetime of API tokens in seconds, counted from when the expiration date is set, that is on creation or when an update changes it. Implies 'require-expiry'.",
+			},
+			{
+				Name:        "require-expiry",
+				Type:        "boolean",
+				Default:     "false",
+				Description: "Require an expiration date for new API tokens and when changing the expiration date of existing ones.",
+			},
+			{
+				Name:        "require-privilege-separation",
+				Type:        "boolean",
+				Default:     "false",
+				Description: "Require privilege separation for new API tokens and when changing that setting on existing ones, that is, disallow tokens with the full privileges of their user.",
 			},
 		},
 	},

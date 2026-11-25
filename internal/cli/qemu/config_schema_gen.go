@@ -56,6 +56,12 @@ var configSchemas = []optionschema.Schema{
 				Required: true,
 			},
 			{
+				Name:        "sync-time-on-resume",
+				Type:        "boolean",
+				Default:     "false",
+				Description: "Synchronize the guest's clock through QGA after operations that can leave the guest's clock behind.",
+			},
+			{
 				Name:        "type",
 				Type:        "string",
 				Default:     "virtio",
@@ -471,7 +477,7 @@ var configSchemas = []optionschema.Schema{
 			{
 				Name:        "bps",
 				Type:        "integer",
-				Description: "Maximum r/w speed in bytes per second.",
+				Description: "Maximum r/w speed in bytes per second. Deprecated: Use 'mbps' instead.",
 			},
 			{
 				Name:        "bps_max_length",
@@ -482,7 +488,7 @@ var configSchemas = []optionschema.Schema{
 			{
 				Name:        "bps_rd",
 				Type:        "integer",
-				Description: "Maximum read speed in bytes per second.",
+				Description: "Maximum read speed in bytes per second. Deprecated: Use 'mbps_rd' instead.",
 			},
 			{
 				Name:     "bps_rd_length",
@@ -498,7 +504,7 @@ var configSchemas = []optionschema.Schema{
 			{
 				Name:        "bps_wr",
 				Type:        "integer",
-				Description: "Maximum write speed in bytes per second.",
+				Description: "Maximum write speed in bytes per second. Deprecated: Use 'mbps_wr' instead.",
 			},
 			{
 				Name:     "bps_wr_length",
@@ -708,9 +714,8 @@ var configSchemas = []optionschema.Schema{
 		Description: "Trusted Domain Extension (TDX) features by Intel CPUs",
 		SubKeys: []optionschema.SubKey{
 			{
-				Name:     "attestation",
-				Type:     "boolean",
-				Required: true,
+				Name: "attestation",
+				Type: "boolean",
 			},
 			{
 				Name:     "type",
@@ -803,7 +808,7 @@ var configSchemas = []optionschema.Schema{
 		Name:        "lock",
 		Flag:        "lock",
 		Type:        "string",
-		Enum:        []string{"backup", "clone", "create", "migrate", "rollback", "snapshot", "snapshot-delete", "suspending", "suspended"},
+		Enum:        []string{"backup", "clone", "create", "import", "migrate", "rollback", "snapshot", "snapshot-delete", "suspending", "suspended"},
 		Description: "Lock/unlock the VM.",
 	},
 	{
@@ -1146,7 +1151,7 @@ var configSchemas = []optionschema.Schema{
 			{
 				Name:        "bps",
 				Type:        "integer",
-				Description: "Maximum r/w speed in bytes per second.",
+				Description: "Maximum r/w speed in bytes per second. Deprecated: Use 'mbps' instead.",
 			},
 			{
 				Name:        "bps_max_length",
@@ -1157,7 +1162,7 @@ var configSchemas = []optionschema.Schema{
 			{
 				Name:        "bps_rd",
 				Type:        "integer",
-				Description: "Maximum read speed in bytes per second.",
+				Description: "Maximum read speed in bytes per second. Deprecated: Use 'mbps_rd' instead.",
 			},
 			{
 				Name:     "bps_rd_length",
@@ -1173,7 +1178,7 @@ var configSchemas = []optionschema.Schema{
 			{
 				Name:        "bps_wr",
 				Type:        "integer",
-				Description: "Maximum write speed in bytes per second.",
+				Description: "Maximum write speed in bytes per second. Deprecated: Use 'mbps_wr' instead.",
 			},
 			{
 				Name:     "bps_wr_length",
@@ -1392,7 +1397,7 @@ var configSchemas = []optionschema.Schema{
 			{
 				Name:        "bps",
 				Type:        "integer",
-				Description: "Maximum r/w speed in bytes per second.",
+				Description: "Maximum r/w speed in bytes per second. Deprecated: Use 'mbps' instead.",
 			},
 			{
 				Name:        "bps_max_length",
@@ -1403,7 +1408,7 @@ var configSchemas = []optionschema.Schema{
 			{
 				Name:        "bps_rd",
 				Type:        "integer",
-				Description: "Maximum read speed in bytes per second.",
+				Description: "Maximum read speed in bytes per second. Deprecated: Use 'mbps_rd' instead.",
 			},
 			{
 				Name:     "bps_rd_length",
@@ -1419,7 +1424,7 @@ var configSchemas = []optionschema.Schema{
 			{
 				Name:        "bps_wr",
 				Type:        "integer",
-				Description: "Maximum write speed in bytes per second.",
+				Description: "Maximum write speed in bytes per second. Deprecated: Use 'mbps_wr' instead.",
 			},
 			{
 				Name:     "bps_wr_length",
@@ -1960,7 +1965,7 @@ var configSchemas = []optionschema.Schema{
 			{
 				Name:        "bps",
 				Type:        "integer",
-				Description: "Maximum r/w speed in bytes per second.",
+				Description: "Maximum r/w speed in bytes per second. Deprecated: Use 'mbps' instead.",
 			},
 			{
 				Name:        "bps_max_length",
@@ -1971,7 +1976,7 @@ var configSchemas = []optionschema.Schema{
 			{
 				Name:        "bps_rd",
 				Type:        "integer",
-				Description: "Maximum read speed in bytes per second.",
+				Description: "Maximum read speed in bytes per second. Deprecated: Use 'mbps_rd' instead.",
 			},
 			{
 				Name:     "bps_rd_length",
@@ -1987,7 +1992,7 @@ var configSchemas = []optionschema.Schema{
 			{
 				Name:        "bps_wr",
 				Type:        "integer",
-				Description: "Maximum write speed in bytes per second.",
+				Description: "Maximum write speed in bytes per second. Deprecated: Use 'mbps_wr' instead.",
 			},
 			{
 				Name:     "bps_wr_length",
@@ -2251,7 +2256,6 @@ var configSchemas = []optionschema.Schema{
 			{
 				Name: "model",
 				Type: "string",
-				Enum: []string{"i6300esb", "ib700"},
 			},
 		},
 	},

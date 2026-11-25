@@ -1147,7 +1147,7 @@ func newClusterFirewallAliasUpdateCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name, cidr := args[0], args[1]
-			params := &pvecluster.UpdateFirewallAliasesParams{Cidr: cidr}
+			params := &pvecluster.UpdateFirewallAliasesParams{Cidr: cli.OptString(cidr)}
 			if cmd.Flags().Changed("comment") {
 				params.Comment = &comment
 			}

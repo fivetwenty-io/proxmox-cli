@@ -23,7 +23,7 @@ var datastoreOptionSchemas = []optionschema.Schema{
 		Name:        "comment",
 		Flag:        "comment",
 		Type:        "string",
-		Description: "Comment.",
+		Description: "Datastore comment (may span multiple lines and contain markdown formatting).",
 	},
 	{
 		Name:        "counter-reset-schedule",
@@ -90,6 +90,12 @@ var datastoreOptionSchemas = []optionschema.Schema{
 		Flag:        "maintenance-mode",
 		Type:        "string",
 		Description: "Maintenance mode, type is either 'offline' or 'read-only', message should be enclosed in \"",
+	},
+	{
+		Name:        "max-snapshot-time-skew",
+		Flag:        "max-snapshot-time-skew",
+		Type:        "string",
+		Description: "Maximum allowed time skew between new snapshot's timestamp and server system time (<= 1 day, default = 1 minute)",
 	},
 	{
 		Name:        "notification-mode",

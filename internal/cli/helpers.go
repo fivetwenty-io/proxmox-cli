@@ -97,3 +97,12 @@ func RawScalarText(raw json.RawMessage) string {
 	}
 	return string(raw)
 }
+
+// OptString returns a pointer to s, or nil when s is empty, so an unset
+// optional request field is omitted from the request rather than sent empty.
+func OptString(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}

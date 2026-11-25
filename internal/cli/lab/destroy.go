@@ -614,7 +614,7 @@ func destroyDeletePool(ctx context.Context, api *apiclient.APIClient, poolID str
 // than a 404, so a plain pveerrors.ErrNotFound check misses it (see
 // isStorageNotFound in create.go).
 func destroyDeleteStorage(ctx context.Context, api *apiclient.APIClient, stgID string) error {
-	err := api.ClusterStorage.DeleteStorage(ctx, stgID)
+	err := api.ClusterStorage.DeleteStorage(ctx, stgID, nil)
 	if err != nil && !isStorageNotFound(err, stgID) {
 		return fmt.Errorf("delete storage %q: %w", stgID, err)
 	}

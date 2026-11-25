@@ -111,7 +111,7 @@ func newVnetIpsCreateCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vnet := args[0]
-			params := &cluster.CreateSdnVnetsIpsParams{Ip: ip, Zone: zone}
+			params := &cluster.CreateSdnVnetsIpsParams{Ip: ip, Zone: cli.OptString(zone)}
 			fl := cmd.Flags()
 			if fl.Changed("mac") {
 				params.Mac = new(mac)
@@ -156,7 +156,7 @@ func newVnetIpsSetCmd() *cobra.Command {
 			if !anyFlagChanged(fl, vnetIpsSetFlagNames...) {
 				return fmt.Errorf("no changes requested: pass at least one field flag")
 			}
-			params := &cluster.UpdateSdnVnetsIpsParams{Ip: ip, Zone: zone}
+			params := &cluster.UpdateSdnVnetsIpsParams{Ip: ip, Zone: cli.OptString(zone)}
 			if fl.Changed("mac") {
 				params.Mac = new(mac)
 			}
@@ -201,7 +201,7 @@ func newVnetIpsDeleteCmd() *cobra.Command {
 			if !yes {
 				return fmt.Errorf("refusing to delete IP mapping %q without confirmation: pass --yes", ip)
 			}
-			params := &cluster.DeleteSdnVnetsIpsParams{Ip: ip, Zone: zone}
+			params := &cluster.DeleteSdnVnetsIpsParams{Ip: ip, Zone: cli.OptString(zone)}
 			fl := cmd.Flags()
 			if fl.Changed("mac") {
 				params.Mac = new(mac)

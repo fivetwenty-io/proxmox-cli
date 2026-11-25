@@ -983,7 +983,7 @@ func newMatcherGetCmd() *cobra.Command {
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			resp, err := deps.API.Cluster.GetNotificationsMatchers(cmd.Context(), args[0])
+			resp, err := deps.API.Cluster.GetNotificationsMatchers(cmd.Context(), args[0], nil)
 			if err != nil {
 				return fmt.Errorf("get matcher %q: %w", args[0], err)
 			}

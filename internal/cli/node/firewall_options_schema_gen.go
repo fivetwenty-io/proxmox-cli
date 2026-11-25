@@ -92,7 +92,7 @@ var firewallOptionSchemas = []optionschema.Schema{
 		Flag:        "nftables",
 		Type:        "boolean",
 		Default:     "false",
-		Description: "Enable nftables based firewall (tech preview)",
+		Description: "Enable nftables based firewall.",
 	},
 	{
 		Name:        "nosmurfs",
@@ -112,6 +112,7 @@ var firewallOptionSchemas = []optionschema.Schema{
 		Flag:        "protection-synflood-burst",
 		Type:        "integer",
 		Default:     "1000",
+		Maximum:     "1000000",
 		Description: "Synflood protection rate burst by ip src.",
 	},
 	{
@@ -119,6 +120,7 @@ var firewallOptionSchemas = []optionschema.Schema{
 		Flag:        "protection-synflood-rate",
 		Type:        "integer",
 		Default:     "200",
+		Maximum:     "1000000",
 		Description: "Synflood protection rate syn/sec by ip src.",
 	},
 	{

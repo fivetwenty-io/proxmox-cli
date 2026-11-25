@@ -242,7 +242,6 @@ type storageFlags struct {
 	iscsiTarget string
 
 	// create-only tunables (no update parameter)
-	authsupported string
 	iscsiprovider string
 	base          string
 
@@ -313,7 +312,6 @@ func (sf *storageFlags) registerCreate(cmd *cobra.Command) {
 	f.StringVar(&sf.datastore, "datastore", "", "Proxmox Backup Server datastore name (pbs)")
 	f.StringVar(&sf.portal, "portal", "", "iSCSI portal, IP or DNS name with optional port (iscsi)")
 	f.StringVar(&sf.iscsiTarget, "iscsi-target", "", "iSCSI target (iscsi)")
-	f.StringVar(&sf.authsupported, "authsupported", "", "supported authentication methods (iscsi)")
 	f.StringVar(&sf.iscsiprovider, "iscsiprovider", "", "iSCSI provider: comstar|istgt|iet|LIO (iscsi)")
 	f.StringVar(&sf.base, "base", "", "base volume; automatically activated (zfspool, lvm)")
 	sf.registerCommon(cmd)
@@ -444,7 +442,6 @@ func (sf *storageFlags) applyCreate(cmd *cobra.Command, p *clusterstorage.Create
 	bl("sparse", &sf.sparse, &p.Sparse)
 	str("is-mountpoint", &sf.isMountpoint, &p.IsMountpoint)
 	bl("skip-cert-verification", &sf.skipCertVerify, &p.SkipCertVerification)
-	str("authsupported", &sf.authsupported, &p.Authsupported)
 	str("iscsiprovider", &sf.iscsiprovider, &p.Iscsiprovider)
 	str("base", &sf.base, &p.Base)
 	str("blocksize", &sf.blocksize, &p.Blocksize)
@@ -479,7 +476,6 @@ func (sf *storageFlags) applyUpdate(cmd *cobra.Command, p *clusterstorage.Update
 			*dst = v
 		}
 	}
-	str("server", &sf.server, &p.Server)
 	str("content", &sf.content, &p.Content)
 	str("content-dirs", &sf.contentDirs, &p.ContentDirs)
 	str("nodes", &sf.nodes, &p.Nodes)
@@ -664,7 +660,7 @@ func newDeleteCmd() *cobra.Command {
 			if !yes {
 				return fmt.Errorf("refusing to delete storage %q without --yes", storageID)
 			}
-			if err := deps.API.ClusterStorage.DeleteStorage(cmd.Context(), storageID); err != nil {
+			if err := deps.API.ClusterStorage.DeleteStorage(cmd.Context(), storageID, nil); err != nil {
 				return err
 			}
 			res := output.Result{Message: fmt.Sprintf("Storage %q deleted.", storageID)}

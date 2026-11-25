@@ -20,6 +20,12 @@ var notifMatcherOptionSchemas = []optionschema.Schema{
 		Description: "Disable this matcher.",
 	},
 	{
+		Name:        "expression",
+		Flag:        "expression",
+		Type:        "string",
+		Description: "Match expression as inline JSON. This option is mutually exclusive with the following options. - match-field - match-calendar - match-severity - invert-match - mode All of the above can be represented as (sub)-expressions of this expression.",
+	},
+	{
 		Name:        "invert-match",
 		Flag:        "invert-match",
 		Type:        "boolean",
@@ -29,7 +35,7 @@ var notifMatcherOptionSchemas = []optionschema.Schema{
 		Name:        "match-calendar",
 		Flag:        "match-calendar",
 		Type:        "array",
-		Description: "List of matched severity levels.",
+		Description: "List of matched calendar entries.",
 	},
 	{
 		Name:        "match-field",

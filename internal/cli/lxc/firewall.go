@@ -986,7 +986,7 @@ func newFirewallAliasUpdateCmd() *cobra.Command {
 			}
 			name, cidr := args[1], args[2]
 
-			params := &nodes.UpdateLxcFirewallAliasesParams{Cidr: cidr}
+			params := &nodes.UpdateLxcFirewallAliasesParams{Cidr: cli.OptString(cidr)}
 			if cmd.Flags().Changed("comment") {
 				params.Comment = &comment
 			}

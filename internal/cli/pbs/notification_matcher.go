@@ -117,7 +117,7 @@ func newNotifMatcherShowCmd() *cobra.Command {
 				return fmt.Errorf("matcher name must not be empty")
 			}
 
-			resp, err := deps.PBS.Config.GetNotificationsMatchers(cmd.Context(), name)
+			resp, err := deps.PBS.Config.GetNotificationsMatchers(cmd.Context(), name, nil)
 			if err != nil {
 				return fmt.Errorf("show notification matcher %q: %w", name, err)
 			}

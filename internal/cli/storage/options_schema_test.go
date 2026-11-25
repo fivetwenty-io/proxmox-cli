@@ -76,7 +76,7 @@ func TestStorageDescribe_Catalog(t *testing.T) {
 	require.Contains(t, out, "TYPES")
 	require.Contains(t, out, "iscsi-target")
 	require.Regexp(t, `(?m)^│ content\s.*│ all\s+│`, out, "options accepted everywhere collapse to \"all\"")
-	require.Regexp(t, `(?m)^│ authsupported\s.*│ none\s+│`, out, "options no plugin accepts are marked \"none\"")
+	require.Regexp(t, `(?m)^│ fast-io-fail-tmo\s.*│ none\s+│`, out, "options no plugin accepts are marked \"none\"")
 
 	out, err = run(t, f, "describe", "thinpool")
 	require.NoError(t, err)

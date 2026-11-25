@@ -51,7 +51,7 @@ func TestStorageCreate_AuditCommonFlags(t *testing.T) {
 }
 
 // TestStorageCreate_AuditCreateOnlyFlags verifies the create-only field flags
-// (authsupported, iscsiprovider, base) reach the POST body.
+// (iscsiprovider, base) reach the POST body.
 func TestStorageCreate_AuditCreateOnlyFlags(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec recordedRequest
@@ -60,13 +60,11 @@ func TestStorageCreate_AuditCreateOnlyFlags(t *testing.T) {
 	_, err := run(t, f, "create",
 		"--storage", "iscsi0",
 		"--type", "iscsi",
-		"--authsupported", "none",
 		"--iscsiprovider", "comstar",
 		"--base", "local:base-100-disk-0",
 	)
 	require.NoError(t, err)
 
-	require.Equal(t, "none", rec.form.Get("authsupported"))
 	require.Equal(t, "comstar", rec.form.Get("iscsiprovider"))
 	require.Equal(t, "local:base-100-disk-0", rec.form.Get("base"))
 }
@@ -103,7 +101,7 @@ func TestStorageSet_RejectsCreateOnlyFlags(t *testing.T) {
 		testhelper.WriteData(w, map[string]any{})
 	})
 
-	_, err := run(t, f, "set", "lvm0", "--authsupported", "none")
+	_, err := run(t, f, "set", "lvm0", "--iscsiprovider", "comstar")
 	require.Error(t, err)
 	require.False(t, called, "create-only flag must not be accepted by set")
 }
@@ -121,7 +119,7 @@ func TestStorageCreate_OmitsUnsetAuditFlags(t *testing.T) {
 	for _, key := range []string{
 		"blocksize", "nocow", "saferemove", "nowritecache", "saferemove-stepsize",
 		"saferemove_throughput", "snapshot-as-volume-chain", "tagged_only", "zfs-base-path",
-		"comstar_hg", "comstar_tg", "lio_tpg", "authsupported", "iscsiprovider", "base",
+		"comstar_hg", "comstar_tg", "lio_tpg", "iscsiprovider", "base",
 	} {
 		require.False(t, rec.form.Has(key), "%s must be omitted when unset", key)
 	}

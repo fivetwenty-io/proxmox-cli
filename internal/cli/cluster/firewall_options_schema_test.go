@@ -84,6 +84,8 @@ func TestClusterFirewallOptions_GetDefaults(t *testing.T) {
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
 	require.Equal(t, "DROP", got.Set["policy_in"])
 	require.Equal(t, "true", got.Defaults["ebtables"])
-	require.Contains(t, got.Defaults["log_ratelimit"], "rate=1/second")
+	// PVE 9.3 publishes log_ratelimit as a named format (pve-fw-log-ratelimit)
+	// with no inline sub-key defaults, so there is no default to report.
+	require.NotContains(t, got.Defaults, "log_ratelimit")
 	require.NotContains(t, got.Defaults, "policy_in", "set options must not appear in defaults")
 }
