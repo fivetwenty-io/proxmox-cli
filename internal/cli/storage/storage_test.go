@@ -443,6 +443,53 @@ func TestStorageCreate_IscsiTargetMapsToTarget(t *testing.T) {
 	require.False(t, rec.form.Has("iscsi-target"), "the flag name must not leak into the body")
 }
 
+// TestStorageCreate_NvmeofForwardsSchemaFlags verifies the nvmeof type is
+// accepted and its schema-generated flags reach the request body.
+func TestStorageCreate_NvmeofForwardsSchemaFlags(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	recordJSON(f, "POST /api2/json/storage", &rec, map[string]any{"storage": "nvme1", "type": "nvmeof"})
+
+	_, err := run(t, f, "create",
+		"--storage", "nvme1", "--type", "nvmeof",
+		"--portals", "10.0.0.5:4420,10.0.0.6", "--subsysnqn", "nqn.2024-01.com.example:sub",
+		"--fast-io-fail-tmo", "15",
+	)
+	require.NoError(t, err)
+	require.Equal(t, "nvmeof", rec.form.Get("type"))
+	require.Equal(t, "10.0.0.5:4420,10.0.0.6", rec.form.Get("portals"))
+	require.Equal(t, "nqn.2024-01.com.example:sub", rec.form.Get("subsysnqn"))
+	require.Equal(t, "15", rec.form.Get("fast-io-fail-tmo"))
+}
+
+// TestStorageCreate_OnVolumeRemoveForwarded verifies the schema-generated
+// --on-volume-remove flag reaches the request body (the plugin accepts it on
+// LVM, not on nvmeof).
+func TestStorageCreate_OnVolumeRemoveForwarded(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	recordJSON(f, "POST /api2/json/storage", &rec, map[string]any{"storage": "lvm1", "type": "lvm"})
+
+	_, err := run(t, f, "create", "--storage", "lvm1", "--type", "lvm", "--vgname", "pve",
+		"--on-volume-remove", "discard=1")
+	require.NoError(t, err)
+	require.Equal(t, "discard=1", rec.form.Get("on-volume-remove"))
+}
+
+// TestStorageSet_ForwardsNvmeofPortalsOnly verifies update sends portals and
+// never sends the create-only subsystem NQN or a type.
+func TestStorageSet_ForwardsNvmeofPortalsOnly(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	recordJSON(f, "PUT /api2/json/storage/nvme1", &rec, map[string]any{"storage": "nvme1", "type": "nvmeof"})
+
+	_, err := run(t, f, "set", "nvme1", "--portals", "10.0.0.7")
+	require.NoError(t, err)
+	require.Equal(t, "10.0.0.7", rec.form.Get("portals"))
+	require.False(t, rec.form.Has("subsysnqn"))
+	require.False(t, rec.form.Has("type"))
+}
+
 // TestStorageCreate_OmitsUnsetNewFlags verifies the expanded flag set is omitted
 // from the body unless explicitly passed.
 func TestStorageCreate_OmitsUnsetNewFlags(t *testing.T) {

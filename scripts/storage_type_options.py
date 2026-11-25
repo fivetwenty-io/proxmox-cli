@@ -20,6 +20,12 @@ Usage (from the repo root):
     git -C /tmp/pve-storage checkout <tag-or-commit matching the lab version>
     python3 scripts/storage_type_options.py --pve-storage /tmp/pve-storage
 
+Source used for the nvmeof type: a shallow clone of
+https://git.proxmox.com/git/pve-storage.git (libpve-storage-perl 9.1.26, which
+carries NVMeOFPlugin.pm), fetched anonymously. The v3.14.0 SDK apidoc wraps
+POST /storage in allOf plus per-type oneOf variants, and the cross-check reads
+the union of those members.
+
 The pinned source version is recorded in the generated header (from
 debian/changelog) so the provenance of the committed file is auditable.
 """
@@ -43,7 +49,7 @@ def parse_plugin(path: str) -> tuple[str, dict[str, dict[str, bool]]] | None:
     """Return (type, {option: {fixed, required}}) for one plugin file."""
     src = open(path, encoding="utf-8").read()
 
-    m = re.search(r"^sub type\s*\{.*?return\s+'([a-z0-9]+)';", src, re.M | re.S)
+    m = re.search(r"^sub type\s*\{.*?return\s+'([a-z0-9]+)'\s*[;}]", src, re.M | re.S)
     if not m:
         return None
     stype = m.group(1)
@@ -89,7 +95,15 @@ def apidoc_storage_properties(apidoc_path: str) -> set[str]:
     node = find(doc, "/storage")
     if node is None:
         sys.exit("storage_type_options: /storage not found in apidoc")
-    return set(node["info"]["POST"]["parameters"]["properties"])
+    params = node["info"]["POST"]["parameters"]
+    names: set[str] = set(params.get("properties", {}))
+    # Newer apidocs wrap the schema in allOf (identity parameters plus a oneOf
+    # of per-type variants); every member's properties apply.
+    for member in params.get("allOf", []):
+        names |= set(member.get("properties", {}))
+        for variant in member.get("oneOf", []):
+            names |= set(variant.get("properties", {}))
+    return names
 
 
 def source_version(checkout: str) -> str:

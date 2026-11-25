@@ -40,7 +40,7 @@ func TestStorageOptionSchemas_GeneratedTable(t *testing.T) {
 // generated sources: every option the plugin mapping claims must exist in the
 // API schema table, and every API type enum member must have a mapping.
 func TestStorageTypeOptions_MatchSchemas(t *testing.T) {
-	require.Len(t, storageTypeOptions, 14, "storage type count changed — regenerate both tables")
+	require.Len(t, storageTypeOptions, 15, "storage type count changed — regenerate both tables")
 	for stype, set := range storageTypeOptions {
 		require.NotEmpty(t, set, "type %q has no options", stype)
 		for name := range set {
@@ -76,7 +76,9 @@ func TestStorageDescribe_Catalog(t *testing.T) {
 	require.Contains(t, out, "TYPES")
 	require.Contains(t, out, "iscsi-target")
 	require.Regexp(t, `(?m)^│ content\s.*│ all\s+│`, out, "options accepted everywhere collapse to \"all\"")
-	require.Regexp(t, `(?m)^│ fast-io-fail-tmo\s.*│ none\s+│`, out, "options no plugin accepts are marked \"none\"")
+	require.Regexp(t, `(?m)^│ fast-io-fail-tmo\s.*│ nvmeof\s+│`, out, "an option one plugin accepts lists that type")
+	require.Regexp(t, `(?m)^│ portals\s.*│ nvmeof\s+│`, out, "nvmeof carries its portals option")
+	require.Regexp(t, `(?m)^│ subsysnqn\s.*│ nvmeof\s+│`, out, "nvmeof carries its subsystem NQN option")
 
 	out, err = run(t, f, "describe", "thinpool")
 	require.NoError(t, err)

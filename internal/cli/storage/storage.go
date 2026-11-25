@@ -294,6 +294,11 @@ type storageFlags struct {
 	comstarHg             string
 	comstarTg             string
 	lioTpg                string
+	portals               string
+	subsysnqn             string
+	onVolumeRemove        string
+	fastIoFailTmo         int64
+	managedMultipath      bool
 
 	// update-only
 	del    string
@@ -313,6 +318,7 @@ func (sf *storageFlags) registerCreate(cmd *cobra.Command) {
 	f.StringVar(&sf.portal, "portal", "", "iSCSI portal, IP or DNS name with optional port (iscsi)")
 	f.StringVar(&sf.iscsiTarget, "iscsi-target", "", "iSCSI target (iscsi)")
 	f.StringVar(&sf.iscsiprovider, "iscsiprovider", "", "iSCSI provider: comstar|istgt|iet|LIO (iscsi)")
+	f.StringVar(&sf.subsysnqn, "subsysnqn", "", "NQN of the NVMe subsystem (nvmeof)")
 	f.StringVar(&sf.base, "base", "", "base volume; automatically activated (zfspool, lvm)")
 	sf.registerCommon(cmd)
 }
@@ -376,6 +382,10 @@ func (sf *storageFlags) registerCommon(cmd *cobra.Command) {
 	f.StringVar(&sf.comstarHg, "comstar-hg", "", "host group for comstar views (iscsi)")
 	f.StringVar(&sf.comstarTg, "comstar-tg", "", "target group for comstar views (iscsi)")
 	f.StringVar(&sf.lioTpg, "lio-tpg", "", "target portal group for Linux LIO targets (iscsi)")
+	f.StringVar(&sf.portals, "portals", "", "NVMe subsystem TCP portals, comma-separated, with an optional port (nvmeof)")
+	f.StringVar(&sf.onVolumeRemove, "on-volume-remove", "", "actions when removing LVs, as a property string such as discard=1 (lvm)")
+	f.Int64Var(&sf.fastIoFailTmo, "fast-io-fail-tmo", 0, "seconds before I/O through a reconnecting path fails, -1 to disable (iscsi, nvmeof)")
+	f.BoolVar(&sf.managedMultipath, "managed-multipath", false, "manage multipath access to the LUNs and monitor path health (iscsi)")
 }
 
 // applyCreate builds the create payload, forwarding optional flags only when set.
@@ -404,6 +414,7 @@ func (sf *storageFlags) applyCreate(cmd *cobra.Command, p *clusterstorage.Create
 	str("datastore", &sf.datastore, &p.Datastore)
 	str("portal", &sf.portal, &p.Portal)
 	str("iscsi-target", &sf.iscsiTarget, &p.Target)
+	str("subsysnqn", &sf.subsysnqn, &p.Subsysnqn)
 	str("server", &sf.server, &p.Server)
 	str("content", &sf.content, &p.Content)
 	str("content-dirs", &sf.contentDirs, &p.ContentDirs)
@@ -456,6 +467,10 @@ func (sf *storageFlags) applyCreate(cmd *cobra.Command, p *clusterstorage.Create
 	str("comstar-hg", &sf.comstarHg, &p.ComstarHg)
 	str("comstar-tg", &sf.comstarTg, &p.ComstarTg)
 	str("lio-tpg", &sf.lioTpg, &p.LioTpg)
+	str("portals", &sf.portals, &p.Portals)
+	str("on-volume-remove", &sf.onVolumeRemove, &p.OnVolumeRemove)
+	i64("fast-io-fail-tmo", &sf.fastIoFailTmo, &p.FastIoFailTmo)
+	bl("managed-multipath", &sf.managedMultipath, &p.ManagedMultipath)
 }
 
 // applyUpdate builds the update payload, forwarding optional flags only when set.
@@ -525,6 +540,10 @@ func (sf *storageFlags) applyUpdate(cmd *cobra.Command, p *clusterstorage.Update
 	str("comstar-hg", &sf.comstarHg, &p.ComstarHg)
 	str("comstar-tg", &sf.comstarTg, &p.ComstarTg)
 	str("lio-tpg", &sf.lioTpg, &p.LioTpg)
+	str("portals", &sf.portals, &p.Portals)
+	str("on-volume-remove", &sf.onVolumeRemove, &p.OnVolumeRemove)
+	i64("fast-io-fail-tmo", &sf.fastIoFailTmo, &p.FastIoFailTmo)
+	bl("managed-multipath", &sf.managedMultipath, &p.ManagedMultipath)
 	str("delete", &sf.del, &p.Delete)
 	str("digest", &sf.digest, &p.Digest)
 }
@@ -561,7 +580,8 @@ func newCreateCmd() *cobra.Command {
 			"Credential flags such as --password and --keyring are forwarded to the API and " +
 			"never echoed back.",
 		Example: `  pmx pve storage create --storage backup01 --type nfs --server 10.0.0.5 --export /export/backup
-  pmx pve storage create --storage images01 --type dir --path /var/lib/images --content images,iso`,
+  pmx pve storage create --storage images01 --type dir --path /var/lib/images --content images,iso
+  pmx pve storage create --storage nvme01 --type nvmeof --portals 10.0.0.5:4420,10.0.0.6 --subsysnqn nqn.2024-01.com.example:sub`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -585,7 +605,7 @@ func newCreateCmd() *cobra.Command {
 	// Comma-separated so the list wraps: pipe-joined it is a single token no
 	// help renderer can break across lines.
 	cmd.Flags().StringVar(&stType, "type", "",
-		"storage type, one of dir, nfs, cifs, rbd, lvm, lvmthin, zfspool, btrfs, pbs (required)")
+		"storage type, one of dir, nfs, cifs, rbd, lvm, lvmthin, zfspool, btrfs, pbs, nvmeof (required)")
 	sf.registerCreate(cmd)
 	cli.MustMarkRequired(cmd, "storage")
 	cli.MustMarkRequired(cmd, "type")
