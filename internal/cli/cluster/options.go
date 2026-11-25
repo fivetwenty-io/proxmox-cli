@@ -53,7 +53,9 @@ func newOptionsGetCmd() *cobra.Command {
 		Short: "Show the cluster-wide datacenter options",
 		Long: "Show the datacenter options currently set in datacenter.cfg. The PVE API " +
 			"omits options left at their built-in defaults; pass --defaults to also list " +
-			"those with the value they effectively have.",
+			"those with the value they effectively have.\n\n" +
+			"A nested option such as token-policy prints as comma-separated key=value " +
+			"pairs, the same form `options set --token-policy` accepts.",
 		Example: `  pmx pve cluster options get
   pmx pve cluster options get --defaults`,
 		Args: cobra.NoArgs,
@@ -85,7 +87,7 @@ var optionsSetFlags = []string{
 	"bwlimit", "console", "consent-text", "crs", "description", "email-from",
 	"fencing", "ha", "http-proxy", "keyboard", "language", "location",
 	"mac-prefix", "max-workers", "migration", "migration-unsecure", "next-id", "notify",
-	"registered-tags", "replication", "tag-style", "u2f", "user-tag-access", "webauthn", "delete",
+	"registered-tags", "replication", "tag-style", "token-policy", "u2f", "user-tag-access", "webauthn", "delete",
 }
 
 func newOptionsSetCmd() *cobra.Command {
@@ -111,6 +113,7 @@ func newOptionsSetCmd() *cobra.Command {
 		registeredTags string
 		replication    string
 		tagStyle       string
+		tokenPolicy    string
 		u2f            string
 		userTagAccess  string
 		webauthn       string
@@ -194,6 +197,9 @@ func newOptionsSetCmd() *cobra.Command {
 			if fl.Changed("tag-style") {
 				params.TagStyle = &tagStyle
 			}
+			if fl.Changed("token-policy") {
+				params.TokenPolicy = &tokenPolicy
+			}
 			if fl.Changed("u2f") {
 				params.U2f = &u2f
 			}
@@ -237,6 +243,8 @@ func newOptionsSetCmd() *cobra.Command {
 	f.StringVar(&registeredTags, "registered-tags", "", "tags that require Sys.Modify on '/' to set or delete")
 	f.StringVar(&replication, "replication", "", "cluster-wide replication settings")
 	f.StringVar(&tagStyle, "tag-style", "", "tag style options, for example color-map=...")
+	f.StringVar(&tokenPolicy, "token-policy", "",
+		"cluster-wide API token policy as a property string, for example require-expiry=1,max-lifetime=7776000")
 	f.StringVar(&u2f, "u2f", "", "U2F/FIDO2 authentication settings, for example origin=https://...")
 	f.StringVar(&userTagAccess, "user-tag-access", "", "privilege options for user-settable tags")
 	f.StringVar(&webauthn, "webauthn", "", "WebAuthn authentication settings, for example rp=...,origin=...")
