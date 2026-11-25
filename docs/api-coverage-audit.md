@@ -161,6 +161,7 @@ These commands cover Proxmox VE and Proxmox Backup Server API endpoints that arr
 | SAN | `pmx pve cluster san list\|status`, `pmx pve node san list\|luns`, `pmx pve node san iscsi list\|status\|targets`, `pmx pve node san nvmeof list\|controllers\|status`, `pmx pve node san nvmeof controller delete`, `pmx pve node scan nvmeof` | Cluster-wide and per-node SAN reads, the NVMe-oF discovery scan, and the controller disconnect, which asks for confirmation and runs as a task |
 | Multipath | `pmx pve cluster multipath list`, `override show\|set`, `wwid list\|show\|create\|set\|delete` | The cluster-wide multipath maps by WWID and the verbatim override sections; `wwid delete` asks for confirmation, and every change accepts `--digest` |
 | Node access log | `pmx pve node access-log`, `pmx pve node access-log stats`, `pmx pbs node access-log`, `pmx pbs node access-log stats` | The API proxy request log with every server filter under its API name, cursor paging (the next cursor goes to stderr on table output), and a statistics summary. PBS adds `--user-agent` |
+| Node apt history and changelogs | `pmx pve node apt {history,termlog,installed-changelog,transaction-changelogs,update-changelogs}`, and the same five under `pmx pbs node apt` | Package transaction history with time filters, the terminal log of a transaction as plain text, and the changelogs of installed packages, of a transaction, and of pending updates, with the entries in the json and yaml output |
 
 ## High-severity gaps (historical, resolved)
 

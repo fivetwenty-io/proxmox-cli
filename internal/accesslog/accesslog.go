@@ -11,13 +11,13 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
 	pvenodes "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 	pbsnodes "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/nodes"
 
+	"github.com/fivetwenty-io/proxmox-cli/internal/epoch"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
@@ -95,14 +95,7 @@ func (f *Flags) bindCommon(cmd *cobra.Command) {
 
 // ParseTime reads a UNIX epoch or an RFC 3339 time and returns epoch seconds.
 func ParseTime(flag, value string) (int64, error) {
-	if n, err := strconv.ParseInt(value, 10, 64); err == nil {
-		return n, nil
-	}
-	t, err := time.Parse(time.RFC3339, value)
-	if err != nil {
-		return 0, fmt.Errorf("invalid --%s %q: want a UNIX epoch or an RFC 3339 time such as 2026-11-01T12:00:00Z", flag, value)
-	}
-	return t.Unix(), nil
+	return epoch.Parse(flag, value)
 }
 
 // Collect reads the flags that were given into a Filters value.
@@ -253,7 +246,7 @@ func ListResult(p Page) (output.Result, error) {
 func cell(key string, v any) string {
 	if key == "time" {
 		if n, ok := v.(float64); ok {
-			return time.Unix(int64(n), 0).UTC().Format(time.RFC3339)
+			return epoch.Format(int64(n))
 		}
 	}
 	return output.Cell(v)
@@ -296,8 +289,8 @@ type NamedList struct {
 // stay in the json and yaml output.
 func StatsResult(in StatsInput) (output.Result, error) {
 	single := map[string]string{
-		"since":         time.Unix(in.Since, 0).UTC().Format(time.RFC3339),
-		"until":         time.Unix(in.Until, 0).UTC().Format(time.RFC3339),
+		"since":         epoch.Format(in.Since),
+		"until":         epoch.Format(in.Until),
 		"complete":      strconv.FormatBool(in.Complete),
 		"invalid-lines": strconv.FormatInt(in.InvalidLines, 10),
 	}

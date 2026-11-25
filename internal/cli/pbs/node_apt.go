@@ -55,6 +55,11 @@ func newNodeAptCmd(nf *nodeFlags) *cobra.Command {
 		newNodeAptRepoUpdateCmd(nf),
 		newNodeAptVersionsCmd(nf),
 		newNodeAptChangelogCmd(nf),
+		newNodeAptHistoryCmd(nf),
+		newNodeAptTermlogCmd(nf),
+		newNodeAptInstalledChangelogCmd(nf),
+		newNodeAptTransactionChangelogsCmd(nf),
+		newNodeAptUpdateChangelogsCmd(nf),
 	)
 	return cmd
 }

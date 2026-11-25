@@ -533,6 +533,29 @@ def _node(ctx: Ctx) -> None:
         else:
             ctx.skip("node apt changelog", "no pending package update to query")
 
+        # The history and changelog reads are newer than PBS 4.0, so an older
+        # server skips them. termlog and transaction-changelogs need a start time,
+        # which the history supplies.
+        apt_skip = {**TICKET_ONLY, "not implemented": "server predates the apt history endpoints"}
+        hist = ctx.check("node apt history", "pbs", "node", "apt", "history", "--limit", "5",
+                         validate=is_list, skip_on=apt_skip)
+        start = _pick(_rows(hist), "start-time", "START")
+        if start:
+            ctx.check("node apt termlog", "pbs", "node", "apt", "termlog", "--start-time", str(start),
+                      fmt="plain", skip_on=apt_skip)
+            ctx.check("node apt transaction-changelogs", "pbs", "node", "apt", "transaction-changelogs",
+                      "--start-time", str(start), skip_on=apt_skip)
+        else:
+            ctx.skip("node apt termlog", "no package transaction in the history")
+            ctx.skip("node apt transaction-changelogs", "no package transaction in the history")
+        ver_pkg = _pick(_rows(ctx.run("pbs", "node", "apt", "versions")), "Package", "package", "Name", "name")
+        if ver_pkg:
+            ctx.check("node apt installed-changelog", "pbs", "node", "apt", "installed-changelog",
+                      "--name", ver_pkg, skip_on=apt_skip)
+        else:
+            ctx.skip("node apt installed-changelog", "no installed package to inspect")
+        ctx.check("node apt update-changelogs", "pbs", "node", "apt", "update-changelogs", skip_on=apt_skip)
+
         disks = ctx.check("node disks ls", "pbs", "node", "disks", "ls",
                           validate=is_list)
         disk = _pick(_rows(disks), "name")

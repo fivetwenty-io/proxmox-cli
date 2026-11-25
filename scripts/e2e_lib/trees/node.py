@@ -156,6 +156,33 @@ def run(ctx: Ctx) -> None:
             ctx.check("apt changelog", "pve", "node", "apt", "changelog", "--name", str(pkg), node=n, fmt="")
         else:
             ctx.skip("apt changelog", "no installed package to inspect")
+        # The history and changelog reads are newer than PVE 9.0, so an older
+        # server skips them. termlog and transaction-changelogs need a start time,
+        # which the history supplies.
+        apt_unserved = {"not implemented": "server predates the apt history endpoints"}
+        hist = ctx.check("apt history", "pve", "node", "apt", "history", "--limit", "5", node=n,
+                         validate=is_list, skip_on=apt_unserved)
+        start = None
+        if hist.rc == 0:
+            try:
+                start = ctx.first(hist.json(), "start-time")
+            except ValueError:
+                start = None
+        if start is not None:
+            ctx.check("apt termlog", "pve", "node", "apt", "termlog", "--start-time", str(start), node=n,
+                      fmt="", skip_on=apt_unserved)
+            ctx.check("apt transaction-changelogs", "pve", "node", "apt", "transaction-changelogs",
+                      "--start-time", str(start), node=n, skip_on=apt_unserved)
+        else:
+            ctx.skip("apt termlog", "no package transaction in the history")
+            ctx.skip("apt transaction-changelogs", "no package transaction in the history")
+        if pkg:
+            ctx.check("apt installed-changelog", "pve", "node", "apt", "installed-changelog", "--name",
+                      str(pkg), node=n, skip_on=apt_unserved)
+        else:
+            ctx.skip("apt installed-changelog", "no installed package to inspect")
+        ctx.check("apt update-changelogs", "pve", "node", "apt", "update-changelogs", node=n,
+                  skip_on=apt_unserved)
         ctx.check("apt repositories list", "pve", "node", "apt", "repositories", "list", node=n)
         ctx.check("apt update --help", "pve", "node", "apt", "update", "--help", fmt="")
         # apt templates list mirrors `storage aplinfo list` (same underlying
