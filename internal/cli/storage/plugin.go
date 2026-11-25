@@ -88,21 +88,34 @@ func newPluginListCmd() *cobra.Command {
 				return fmt.Errorf("list storage plugins: %w", err)
 			}
 
-			var rows [][]string
+			var entries []pluginEntry
+			named := false
 			if resp != nil {
 				for _, raw := range *resp {
 					var e pluginEntry
 					if jsonErr := json.Unmarshal(raw, &e); jsonErr != nil {
 						return fmt.Errorf("decode storage plugin: %w", jsonErr)
 					}
-					rows = append(rows, []string{
-						e.Type, e.DisplayName, e.Origin,
-						strings.Join(e.Content.Supported, ","), strings.Join(e.Content.Default, ","),
-					})
+					named = named || e.DisplayName != ""
+					entries = append(entries, e)
 				}
 			}
+			// PVE 9.3 publishes no display name in the plugin index, so the NAME
+			// column appears only when the server sends at least one.
+			headers := []string{"TYPE", "ORIGIN", "CONTENT", "DEFAULT"}
+			if named {
+				headers = []string{"TYPE", "NAME", "ORIGIN", "CONTENT", "DEFAULT"}
+			}
+			rows := make([][]string, 0, len(entries))
+			for _, e := range entries {
+				row := []string{e.Type, e.Origin, strings.Join(e.Content.Supported, ","), strings.Join(e.Content.Default, ",")}
+				if named {
+					row = []string{e.Type, e.DisplayName, e.Origin, row[2], row[3]}
+				}
+				rows = append(rows, row)
+			}
 			res := output.Result{
-				Headers: []string{"TYPE", "NAME", "ORIGIN", "CONTENT", "DEFAULT"},
+				Headers: headers,
 				Rows:    rows,
 				Raw:     resp,
 			}
@@ -144,16 +157,14 @@ func newPluginShowCmd() *cobra.Command {
 					return fmt.Errorf("decode content of storage plugin %q: %w", typ, jsonErr)
 				}
 			}
-			name := ""
-			if resp.DisplayName != nil {
-				name = *resp.DisplayName
-			}
 			single := map[string]string{
 				"type":              resp.Type,
-				"display-name":      name,
 				"origin":            resp.Origin,
 				"content-supported": strings.Join(content.Supported, ","),
 				"content-default":   strings.Join(content.Default, ","),
+			}
+			if resp.DisplayName != nil && *resp.DisplayName != "" {
+				single["display-name"] = *resp.DisplayName
 			}
 			return deps.Out.Render(cmd.OutOrStdout(), output.Result{Single: single, Raw: resp}, deps.Format)
 		},

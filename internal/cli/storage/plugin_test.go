@@ -67,6 +67,29 @@ func TestStoragePlugin_List(t *testing.T) {
 	}
 }
 
+// TestStoragePlugin_ListLiveShape verifies a list in the shape PVE 9.3.1 returns
+// (no display-name on any record) renders without an always-blank NAME column.
+func TestStoragePlugin_ListLiveShape(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec pluginRequest
+	live := func(typ string) map[string]any {
+		return map[string]any{
+			"type":    typ,
+			"origin":  "builtin",
+			"content": map[string]any{"supported": []string{"images", "iso"}, "default": []string{"images"}},
+			"schema":  map[string]any{"path": map[string]any{"type": "string"}},
+		}
+	}
+	recordPlugin(f, "GET /api2/json/plugins/storage/plugin", &rec, []any{live("btrfs"), live("nfs")})
+
+	out, err := run(t, f, "plugin", "list")
+	require.NoError(t, err)
+	require.NotContains(t, out, "NAME")
+	for _, want := range []string{"TYPE", "ORIGIN", "CONTENT", "DEFAULT", "btrfs", "nfs", "images,iso"} {
+		require.Contains(t, out, want)
+	}
+}
+
 // TestStoragePlugin_ListOrigin verifies --origin is passed through as a query
 // parameter and that an unknown origin is refused before any request.
 func TestStoragePlugin_ListOrigin(t *testing.T) {
