@@ -317,6 +317,12 @@ def run(ctx: Ctx) -> None:
         ctx.check("journal structured", "pve", "node", "journal", "--structured", "--lastentries", "20",
                   node=n, validate=is_list)
         ctx.check("syslog", "pve", "node", "syslog", "--limit", "20", node=n, validate=is_list)
+        # access-log: the API proxy's request log (pve-manager 9.3 and newer). A
+        # page is bounded with --limit, and an older server skips the checks.
+        log_unserved = {"not implemented": "server predates the access-log endpoints (needs PVE 9.3)"}
+        ctx.check("access-log", "pve", "node", "access-log", "--limit", "5", node=n, skip_on=log_unserved)
+        ctx.check("access-log stats", "pve", "node", "access-log", "stats", "--top", "3", node=n,
+                  skip_on=log_unserved)
         ctx.check("report", "pve", "node", "report", node=n, fmt="")
         ctx.check("subscription get", "pve", "node", "subscription", "get", node=n, validate=is_object)
         # rrddata: timeseries for node-level metrics; zero-row result is valid.

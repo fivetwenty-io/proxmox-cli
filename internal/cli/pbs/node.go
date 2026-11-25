@@ -54,6 +54,7 @@ func newNodeCmd() *cobra.Command {
 		newNodeRrdCmd(nf),
 		newNodeReportCmd(nf),
 		newNodeSyslogCmd(nf),
+		newNodeAccessLogCmd(nf),
 		newNodeJournalCmd(nf),
 		newNodeDNSCmd(nf),
 		newNodeTimeCmd(nf),

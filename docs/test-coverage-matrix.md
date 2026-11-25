@@ -92,15 +92,15 @@ swept clean before the next provisions.
 | `init` | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `lab` | 34 | 4 | 1 | 0 | 0 | 28 | 1 | 0 |
 | `logs` | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
-| `pbs` | 279 | 0 | 126 | 104 | 42 | 7 | 0 | 0 |
+| `pbs` | 280 | 0 | 127 | 104 | 42 | 7 | 0 | 0 |
 | `pdm` | 260 | 0 | 145 | 59 | 54 | 2 | 0 | 0 |
-| `pve` | 708 | 87 | 192 | 442 | 1 | 69 | 9 | 0 |
+| `pve` | 709 | 87 | 193 | 442 | 1 | 69 | 9 | 0 |
 | `rsync` | 1 | 0 | 0 | 1 | 0 | 0 | 0 | 0 |
 | `ssh` | 1 | 0 | 0 | 1 | 0 | 0 | 0 | 0 |
 | `version` | 3 | 2 | 1 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **1311** | **109** | **467** | **613** | **97** | **106** | **11** | **0** |
+| **Total** | **1313** | **109** | **469** | **613** | **97** | **106** | **11** | **0** |
 
-Leaf commands are counted from a walk of the built command tree (`pmx <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **1311** leaves, **1194** are exercised by at least one live suite, **106** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **11** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pmx <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **1313** leaves, **1196** are exercised by at least one live suite, **106** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **11** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `api`
 
@@ -245,6 +245,7 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `pbs metrics influxdb-udp ls` | ◑ | — |  |
 | `pbs metrics influxdb-udp show` | ◑ | — |  |
 | `pbs metrics influxdb-udp update` | — | ✓ |  |
+| `pbs node access-log stats` | ◑ | — |  |
 | `pbs node apt changelog` | ◑ | — |  |
 | `pbs node apt ls` | ◑ | — |  |
 | `pbs node apt repo-add` | — | ✓ |  |
@@ -1040,6 +1041,7 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `pve lxc template download` | — | ✓ |  |
 | `pve lxc template list` | ✓ | — |  |
 | `pve lxc to-template` | — | ✓ |  |
+| `pve node access-log stats` | ◑ | — |  |
 | `pve node apt changelog` | ◑ | — |  |
 | `pve node apt list` | ◑ | — |  |
 | `pve node apt repositories add` | — | — | deferred — adds a standard APT repository to the node's sources; not exercised live |

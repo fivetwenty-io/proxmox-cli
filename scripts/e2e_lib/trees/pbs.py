@@ -473,6 +473,11 @@ def _node(ctx: Ctx) -> None:
         ctx.check("node status", "pbs", "node", "status")
         ctx.check("node report", "pbs", "node", "report", fmt="plain")
         ctx.check("node syslog", "pbs", "node", "syslog")
+        # access-log: the proxy's request log. A page is bounded with --limit; a
+        # server that lacks the endpoint, or a token without the privilege, skips.
+        log_skip = {**TICKET_ONLY, "not implemented": "server predates the access-log endpoints"}
+        ctx.check("node access-log", "pbs", "node", "access-log", "--limit", "5", skip_on=log_skip)
+        ctx.check("node access-log stats", "pbs", "node", "access-log", "stats", "--top", "3", skip_on=log_skip)
         ctx.check("node journal", "pbs", "node", "journal", fmt="plain")
         ctx.check("node journal structured", "pbs", "node", "journal", "--structured", "--lastentries", "20",
                   validate=is_list)

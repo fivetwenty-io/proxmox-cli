@@ -102,6 +102,7 @@ Bulk and advanced features for larger or newer deployments.
 | Storage plugin index | `pmx storage plugin list\|show` | The storage plugins the server knows, with their content types and property schemas | Shipped |
 | Node maintenance mode | `pmx pve node maintenance enable\|disable` | HA maintenance mode for a node, with confirmation on enable | Shipped |
 | SAN and multipath | `pmx pve cluster san`, `pmx pve node san`, `pmx pve cluster multipath`, `pmx pve node scan nvmeof` | SAN reads, NVMe-oF scan and controller disconnect, and the multipath map configuration | Shipped |
+| Node access log | `pmx pve node access-log [stats]`, `pmx pbs node access-log [stats]` | The API proxy request log with filters and cursor paging, and request statistics | Shipped |
 
 ## P5 — Test Coverage Closure
 

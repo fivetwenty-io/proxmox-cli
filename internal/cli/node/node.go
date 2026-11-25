@@ -93,6 +93,7 @@ func Group(_ *cli.Deps) *cobra.Command {
 		newPermissionsCmd(),
 		newMaintenanceCmd(),
 		newSanCmd(),
+		newAccessLogCmd(),
 	)
 
 	return cmd
