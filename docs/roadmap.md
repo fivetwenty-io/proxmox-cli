@@ -98,6 +98,7 @@ Bulk and advanced features for larger or newer deployments.
 | SDN preview and rollback | `pmx sdn dry-run`, `pmx sdn rollback` | Preview the running-vs-pending SDN diff for a node, and discard all pending SDN changes cluster-wide | Shipped |
 | SDN fabrics and routing policy | `pmx sdn fabric`, `pmx sdn prefix-list`, `pmx sdn route-map` | BGP fabric topology and routing policy | Shipped |
 | PVE 9.2 endpoints | `pmx node oci`, `pmx node capabilities`, `pmx cluster cpu-model` | OCI image import, capability queries, and custom CPU models | Shipped |
+| PVE 9.3 endpoints | `pmx qemu agent` statistics | Guest CPU, disk, and load statistics through the guest agent | Shipped |
 
 ## P5 — Test Coverage Closure
 

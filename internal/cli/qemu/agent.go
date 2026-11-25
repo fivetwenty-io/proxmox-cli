@@ -26,9 +26,10 @@ type agentCall func(ctx context.Context, node, vmid string) (*json.RawMessage, e
 // or log. They can be added later as dedicated sub-commands.
 var (
 	agentQueryCommands = []string{
-		"fsfreeze-status", "get-fsinfo", "get-host-name", "get-memory-block-info",
-		"get-memory-blocks", "get-osinfo", "get-time", "get-timezone", "get-users",
-		"get-vcpus", "info", "network-get-interfaces", "ping",
+		"fsfreeze-status", "get-cpustats", "get-disks", "get-diskstats", "get-fsinfo",
+		"get-host-name", "get-load", "get-memory-block-info", "get-memory-blocks",
+		"get-osinfo", "get-time", "get-timezone", "get-users", "get-vcpus", "info",
+		"network-get-interfaces", "ping",
 	}
 	agentMutateCommands = []string{
 		"fsfreeze-freeze", "fsfreeze-thaw", "fstrim", "shutdown",
@@ -41,8 +42,12 @@ var (
 // service (deps.API.Nodes); calling it with a nil service would panic.
 func buildAgentCalls(n agentNodes) map[string]agentCall {
 	return map[string]agentCall{
+		"get-cpustats":           n.ListQemuAgentGetCpustats,
+		"get-disks":              n.ListQemuAgentGetDisks,
+		"get-diskstats":          n.ListQemuAgentGetDiskstats,
 		"get-fsinfo":             n.ListQemuAgentGetFsinfo,
 		"get-host-name":          n.ListQemuAgentGetHostName,
+		"get-load":               n.ListQemuAgentGetLoad,
 		"get-memory-block-info":  n.ListQemuAgentGetMemoryBlockInfo,
 		"get-memory-blocks":      n.ListQemuAgentGetMemoryBlocks,
 		"get-osinfo":             n.ListQemuAgentGetOsinfo,
@@ -67,8 +72,12 @@ func buildAgentCalls(n agentNodes) map[string]agentCall {
 // agentNodes is the subset of the nodes service the agent command depends on. It
 // is satisfied by the live deps.API.Nodes service.
 type agentNodes interface {
+	ListQemuAgentGetCpustats(ctx context.Context, node, vmid string) (*json.RawMessage, error)
+	ListQemuAgentGetDisks(ctx context.Context, node, vmid string) (*json.RawMessage, error)
+	ListQemuAgentGetDiskstats(ctx context.Context, node, vmid string) (*json.RawMessage, error)
 	ListQemuAgentGetFsinfo(ctx context.Context, node, vmid string) (*json.RawMessage, error)
 	ListQemuAgentGetHostName(ctx context.Context, node, vmid string) (*json.RawMessage, error)
+	ListQemuAgentGetLoad(ctx context.Context, node, vmid string) (*json.RawMessage, error)
 	ListQemuAgentGetMemoryBlockInfo(ctx context.Context, node, vmid string) (*json.RawMessage, error)
 	ListQemuAgentGetMemoryBlocks(ctx context.Context, node, vmid string) (*json.RawMessage, error)
 	ListQemuAgentGetOsinfo(ctx context.Context, node, vmid string) (*json.RawMessage, error)
@@ -139,7 +148,10 @@ func newAgentCmd() *cobra.Command {
 		Short: "Run a QEMU guest-agent command against a VM",
 		Long:  long,
 		Example: `  pmx pve qemu agent 100 ping
-  pmx pve qemu agent 100 get-osinfo`,
+  pmx pve qemu agent 100 get-osinfo
+  pmx pve qemu agent 100 get-load
+  pmx pve qemu agent 100 get-cpustats
+  pmx pve qemu agent 100 get-diskstats`,
 		Args:      cobra.ExactArgs(2),
 		ValidArgs: append(append([]string{}, agentQueryCommands...), agentMutateCommands...),
 		RunE: func(cmd *cobra.Command, args []string) error {

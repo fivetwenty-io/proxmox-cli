@@ -78,6 +78,31 @@ func TestQemuAgentGetTime_ScalarResult(t *testing.T) {
 	require.Contains(t, buf.String(), "1700000000")
 }
 
+// TestQemuAgentStatsCommands verifies the guest statistics queries each issue
+// a GET against their own endpoint and render the result in every format.
+func TestQemuAgentStatsCommands(t *testing.T) {
+	for _, command := range []string{"get-cpustats", "get-disks", "get-diskstats", "get-load"} {
+		for _, format := range []output.Format{output.FormatTable, output.FormatJSON, output.FormatYAML} {
+			t.Run(command+"/"+string(format), func(t *testing.T) {
+				f, ac := newFakeClient(t)
+				var gotMethod, gotPath string
+				f.HandleFunc("GET /api2/json/nodes/pve1/qemu/100/agent/"+command,
+					func(w http.ResponseWriter, r *http.Request) {
+						gotMethod, gotPath = r.Method, r.URL.Path
+						testhelper.WriteData(w, map[string]any{"result": []any{map[string]any{"marker": command + "-data"}}})
+					})
+				deps := depsFor(t, ac, format, "pve1", false)
+
+				var buf bytes.Buffer
+				require.NoError(t, run(deps, &buf, "agent", "100", command))
+				require.Equal(t, http.MethodGet, gotMethod)
+				require.Equal(t, "/api2/json/nodes/pve1/qemu/100/agent/"+command, gotPath)
+				require.Contains(t, buf.String(), command+"-data")
+			})
+		}
+	}
+}
+
 func TestQemuAgentMutateFstrim(t *testing.T) {
 	f, ac := newFakeClient(t)
 	var gotMethod string

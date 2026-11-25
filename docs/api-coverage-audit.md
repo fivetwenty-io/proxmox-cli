@@ -148,6 +148,14 @@ These three commands cover Proxmox VE API endpoints that arrived with the `proxm
 | Cluster Ceph | `pmx pve cluster ceph health-mute create` | Mutes one health check by code, with --ttl for an expiry and --sticky to keep the mute when the check gets worse, and it is also reachable as `mute` |
 | Cluster Ceph | `pmx pve cluster ceph health-mute delete` | Unmutes one health check by code so it counts towards the cluster status again, and it is also reachable as `unmute` |
 
+### Endpoints added by the SDK 3.14 client bump
+
+These commands cover Proxmox VE and Proxmox Backup Server API endpoints that arrived with the `proxmox-apiclient-go` v3.14 client. Like the earlier client additions, they are not part of the ten-gap count.
+
+| Area | Command added | What it exposes |
+|---|---|---|
+| Qemu guest agent | `pmx pve qemu agent <vmid> get-cpustats`, `get-disks`, `get-diskstats`, `get-load` | The four guest-agent statistics queries, which return CPU counters, the disk list, per-disk I/O counters, and the load average from inside the guest |
+
 ## High-severity gaps (historical, resolved)
 
 These three blocked real operator workflows at audit time; each has since been
