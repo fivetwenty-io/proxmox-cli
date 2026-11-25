@@ -131,7 +131,9 @@ func newAutoInstallInstallationLsCmd() *cobra.Command {
 		Use:   "ls",
 		Short: "List automated installation records",
 		Long: "List every automated installation record received by this Proxmox " +
-			"Datacenter Manager (GET /auto-install/installations).",
+			"Datacenter Manager (GET /auto-install/installations). The STATUS column shows " +
+			"answer-sent, no-answer-found, installer-outdated, in-progress, or finished; " +
+			"installer-outdated means the installer is too old to use the answer it was sent.",
 		Example: `  pmx pdm auto-install installation ls`,
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {

@@ -139,3 +139,15 @@ func TestNodeNetworkUpdate_ForwardsAutoMethod(t *testing.T) {
 	require.Equal(t, "auto", rec.form.Get("method"))
 	require.False(t, rec.form.Has("method6"))
 }
+
+func TestAutoInstallInstallationLs_RendersInstallerOutdatedStatus(t *testing.T) {
+	f, pc := newFakeClient(t)
+	f.HandleJSON("GET /api2/json/auto-install/installations", []map[string]any{
+		{"uuid": "aaaaaaaa-0000-0000-0000-000000000000", "status": "installer-outdated", "received-at": 1700000000},
+	})
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	require.NoError(t, run(deps, &buf, newAutoInstallInstallationLsCmd(), "ls"))
+	require.Contains(t, buf.String(), "installer-outdated")
+}
