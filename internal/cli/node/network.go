@@ -362,6 +362,8 @@ func newNetworkUpdateCmd() *cobra.Command {
 	var (
 		f         netIfaceFlags
 		ifaceType string
+		ipForward bool
+		vrf       string
 	)
 	cmd := &cobra.Command{
 		Use:   "set <iface>",
@@ -382,6 +384,12 @@ func newNetworkUpdateCmd() *cobra.Command {
 
 			params := &nodes.UpdateNetwork2Params{Type: ifaceType}
 			applyNetworkUpdateFlags(cmd, &f, params)
+			if cmd.Flags().Changed("ip-forward") {
+				params.IpForward = &ipForward
+			}
+			if cmd.Flags().Changed("vrf") {
+				params.Vrf = &vrf
+			}
 
 			if err := deps.API.Nodes.UpdateNetwork2(cmd.Context(), deps.Node, iface, params); err != nil {
 				return fmt.Errorf("update network interface %q on node %q: %w", iface, deps.Node, err)
@@ -393,6 +401,9 @@ func newNetworkUpdateCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&ifaceType, "type", "", "interface type: bridge, bond, eth, alias, vlan, OVSBridge, OVSBond, OVSPort, OVSIntPort, or unknown")
+	cmd.Flags().BoolVar(&ipForward, "ip-forward", false,
+		"enable IPv4 forwarding on the interface, and pass --ip-forward=false to turn it off")
+	cmd.Flags().StringVar(&vrf, "vrf", "", "VRF master interface")
 	f.register(cmd, true)
 	return cmd
 }
