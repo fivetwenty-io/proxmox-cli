@@ -98,7 +98,14 @@ EMPTY_COLUMN_ALLOWLIST: dict[str, set[str]] = {
     # carries no delete key on any of the 25 rows. The native
     # `pve qemu config pending` renders no such column, so only the PDM proxy
     # needs the exemption.
-    "pdm pve qemu pending": {"DELETE"},
+    # Likewise the pending value: the rows carry only key and value, because
+    # no lab guest has a change staged.
+    "pdm pve qemu pending": {"DELETE", "PENDING"},
+    # The PDM proxy reports an empty level on every cluster node of an
+    # unsubscribed lab, as the native `pve cluster status` already does.
+    "pdm pve cluster status": {"LEVEL"},
+    # PBS reports a null comment on every notification-matcher field value.
+    "pbs notification matcher field-values": {"COMMENT"},
     # Same field, same reason, on the native leaves: PVE reports a pending
     # value and a delete flag only for a key that has one staged, and a lab
     # guest between two config writes has none. Confirmed against -o json.
