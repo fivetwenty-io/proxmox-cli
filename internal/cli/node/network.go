@@ -223,6 +223,8 @@ func newNetworkCreateCmd() *cobra.Command {
 		f         netIfaceFlags
 		iface     string
 		ifaceType string
+		ipForward bool
+		vrf       string
 	)
 	cmd := &cobra.Command{
 		Use:   "create",
@@ -246,6 +248,12 @@ func newNetworkCreateCmd() *cobra.Command {
 
 			params := &nodes.CreateNetworkParams{Iface: iface, Type: ifaceType}
 			applyNetworkCreateFlags(cmd, &f, params)
+			if cmd.Flags().Changed("ip-forward") {
+				params.IpForward = &ipForward
+			}
+			if cmd.Flags().Changed("vrf") {
+				params.Vrf = &vrf
+			}
 
 			if err := deps.API.Nodes.CreateNetwork(cmd.Context(), deps.Node, params); err != nil {
 				return fmt.Errorf("create network interface %q on node %q: %w", iface, deps.Node, err)
@@ -258,6 +266,10 @@ func newNetworkCreateCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&iface, "iface", "", "network interface name, for example vmbr1")
 	cmd.Flags().StringVar(&ifaceType, "type", "", "interface type: bridge, bond, eth, alias, vlan, OVSBridge, OVSBond, OVSPort, OVSIntPort, or unknown")
+	cmd.Flags().BoolVar(&ipForward, "ip-forward", false,
+		"enable IPv4 forwarding on the interface, needed for interfaces that receive routed traffic, "+
+			"such as the uplinks of an SDN zone with a dedicated VRF")
+	cmd.Flags().StringVar(&vrf, "vrf", "", "VRF master interface")
 	f.register(cmd, false)
 	return cmd
 }
