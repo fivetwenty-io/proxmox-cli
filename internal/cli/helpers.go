@@ -106,3 +106,24 @@ func OptString(s string) *string {
 	}
 	return &s
 }
+
+// RejectConflictingFlags returns an error when the flag named primary is set
+// together with any flag in conflicts. Unlike cobra's mutually-exclusive
+// groups it leaves the conflicts free to combine with one another, so one
+// flag can stand against a whole family of flags. The check uses Changed, so
+// a flag passed with its zero value still counts as set.
+func RejectConflictingFlags(fl interface{ Changed(string) bool }, primary string, conflicts ...string) error {
+	if !fl.Changed(primary) {
+		return nil
+	}
+	var set []string
+	for _, c := range conflicts {
+		if fl.Changed(c) {
+			set = append(set, "--"+c)
+		}
+	}
+	if len(set) == 0 {
+		return nil
+	}
+	return fmt.Errorf("--%s cannot be combined with %s", primary, strings.Join(set, ", "))
+}

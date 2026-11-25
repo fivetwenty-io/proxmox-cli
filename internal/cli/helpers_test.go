@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/require"
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
@@ -171,4 +172,24 @@ func TestRawScalarText(t *testing.T) {
 			require.Equal(t, tc.want, cli.RawScalarText(tc.in))
 		})
 	}
+}
+
+func TestRejectConflictingFlags(t *testing.T) {
+	newFlags := func(args ...string) *pflag.FlagSet {
+		fs := pflag.NewFlagSet("t", pflag.ContinueOnError)
+		fs.String("expression", "", "")
+		fs.StringArray("match-field", nil, "")
+		fs.Bool("invert-match", false, "")
+		require.NoError(t, fs.Parse(args))
+		return fs
+	}
+	conflicts := []string{"match-field", "invert-match"}
+
+	require.NoError(t, cli.RejectConflictingFlags(newFlags(), "expression", conflicts...))
+	require.NoError(t, cli.RejectConflictingFlags(newFlags("--match-field", "a"), "expression", conflicts...))
+	require.NoError(t, cli.RejectConflictingFlags(newFlags("--expression", "{}"), "expression", conflicts...))
+
+	err := cli.RejectConflictingFlags(newFlags("--expression", "{}", "--match-field", "a", "--invert-match=false"),
+		"expression", conflicts...)
+	require.EqualError(t, err, "--expression cannot be combined with --match-field, --invert-match")
 }

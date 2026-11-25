@@ -974,28 +974,42 @@ func newMatcherCmd() *cobra.Command {
 }
 
 func newMatcherGetCmd() *cobra.Command {
-	return &cobra.Command{
+	var migrateToExpression bool
+	cmd := &cobra.Command{
 		Use:   "get <name>",
 		Short: "Show a matcher",
 		Long: "Show the configuration of a single notification matcher, including its match " +
-			"rules, target endpoints, mode, comment, and enabled state.",
-		Example: "  pmx pve cluster notifications matcher get my-matcher",
-		Args:    cobra.ExactArgs(1),
+			"rules, target endpoints, mode, comment, and enabled state.\n\n" +
+			"Pass --migrate-to-expression to change the output: the server translates the " +
+			"matcher's match-field, match-calendar, match-severity, invert-match, and mode " +
+			"settings into an equivalent expression and returns that in place of the " +
+			"legacy fields. Nothing is saved, so use the result with `set --expression` " +
+			"to adopt it.",
+		Example: `  pmx pve cluster notifications matcher get my-matcher
+  pmx pve cluster notifications matcher get my-matcher --migrate-to-expression`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			resp, err := deps.API.Cluster.GetNotificationsMatchers(cmd.Context(), args[0], nil)
+			var params *pvecluster.GetNotificationsMatchersParams
+			if cmd.Flags().Changed("migrate-to-expression") {
+				params = &pvecluster.GetNotificationsMatchersParams{MigrateToExpression: &migrateToExpression}
+			}
+			resp, err := deps.API.Cluster.GetNotificationsMatchers(cmd.Context(), args[0], params)
 			if err != nil {
 				return fmt.Errorf("get matcher %q: %w", args[0], err)
 			}
 			return renderEndpointGet(cmd, deps, resp, "matcher", args[0])
 		},
 	}
+	cmd.Flags().BoolVar(&migrateToExpression, "migrate-to-expression", false,
+		"change the output: show the legacy match settings translated into an equivalent expression")
+	return cmd
 }
 
 func newMatcherCreateCmd() *cobra.Command {
 	var (
 		matchField, matchSeverity, matchCalendar, target []string
-		mode, comment                                    string
+		mode, comment, expression                        string
 		invertMatch, disable                             bool
 	)
 	cmd := &cobra.Command{
@@ -1009,6 +1023,9 @@ func newMatcherCreateCmd() *cobra.Command {
 			"  --notify-target    the endpoints a match notifies\n\n" +
 			"--mode decides how the rules combine, all or any, and --invert-match negates " +
 			"the matcher as a whole.\n\n" +
+			"--expression takes the whole match as one inline JSON expression instead, and " +
+			"cannot be combined with --match-field, --match-calendar, --match-severity, " +
+			"--invert-match, or --mode.\n\n" +
 			"Pass --comment to annotate the matcher, or --disable to create it inactive.",
 		Example: "  pmx pve cluster notifications matcher create my-matcher " +
 			"--match-severity error --notify-target my-gotify",
@@ -1016,9 +1033,12 @@ func newMatcherCreateCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
+			if err := cli.RejectConflictingFlags(fl, "expression", matcherExpressionConflicts...); err != nil {
+				return err
+			}
 			params := &pvecluster.CreateNotificationsMatchersParams{Name: args[0]}
 			applyMatcherCreate(fl, params, matcherVals{
-				matchField, matchSeverity, matchCalendar, target, mode, comment, invertMatch, disable,
+				matchField, matchSeverity, matchCalendar, target, mode, comment, expression, invertMatch, disable,
 			})
 			if err := deps.API.Cluster.CreateNotificationsMatchers(cmd.Context(), params); err != nil {
 				return fmt.Errorf("create matcher %q: %w", args[0], err)
@@ -1027,14 +1047,14 @@ func newMatcherCreateCmd() *cobra.Command {
 				output.Result{Message: fmt.Sprintf("Matcher %q created.", args[0])}, deps.Format)
 		},
 	}
-	registerMatcherFlags(cmd, &matchField, &matchSeverity, &matchCalendar, &target, &mode, &comment, &invertMatch, &disable)
+	registerMatcherFlags(cmd, &matchField, &matchSeverity, &matchCalendar, &target, &mode, &comment, &expression, &invertMatch, &disable)
 	return cmd
 }
 
 func newMatcherSetCmd() *cobra.Command {
 	var (
 		matchField, matchSeverity, matchCalendar, target []string
-		mode, comment                                    string
+		mode, comment, expression                        string
 		invertMatch, disable                             bool
 		del                                              []string
 		digest                                           string
@@ -1044,7 +1064,9 @@ func newMatcherSetCmd() *cobra.Command {
 		Short: "Update a matcher",
 		Long: "Update an existing notification matcher.\n\n" +
 			"Pass at least one of --match-field, --match-severity, --match-calendar, " +
-			"--notify-target, --mode, --comment, --invert-match, or --disable.\n\n" +
+			"--notify-target, --mode, --comment, --expression, --invert-match, or --disable. " +
+			"--expression cannot be combined with --match-field, --match-calendar, " +
+			"--match-severity, --invert-match, or --mode.\n\n" +
 			"--delete resets a setting to its default, and --digest rejects the change if the " +
 			"config moved since you read it.",
 		Example: "  pmx pve cluster notifications matcher set my-matcher --notify-target my-smtp",
@@ -1053,8 +1075,11 @@ func newMatcherSetCmd() *cobra.Command {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
 			if !anyFlagChanged(fl, "match-field", "match-severity", "match-calendar", "notify-target",
-				"mode", "comment", "invert-match", "disable", "delete", "digest") {
+				"mode", "comment", "expression", "invert-match", "disable", "delete", "digest") {
 				return fmt.Errorf("no changes requested: pass at least one flag")
+			}
+			if err := cli.RejectConflictingFlags(fl, "expression", matcherExpressionConflicts...); err != nil {
+				return err
 			}
 			params := &pvecluster.UpdateNotificationsMatchersParams{}
 			if fl.Changed("match-field") {
@@ -1075,6 +1100,9 @@ func newMatcherSetCmd() *cobra.Command {
 			if fl.Changed("comment") {
 				params.Comment = &comment
 			}
+			if fl.Changed("expression") {
+				params.Expression = &expression
+			}
 			if fl.Changed("invert-match") {
 				params.InvertMatch = &invertMatch
 			}
@@ -1094,7 +1122,7 @@ func newMatcherSetCmd() *cobra.Command {
 				output.Result{Message: fmt.Sprintf("Matcher %q updated.", args[0])}, deps.Format)
 		},
 	}
-	registerMatcherFlags(cmd, &matchField, &matchSeverity, &matchCalendar, &target, &mode, &comment, &invertMatch, &disable)
+	registerMatcherFlags(cmd, &matchField, &matchSeverity, &matchCalendar, &target, &mode, &comment, &expression, &invertMatch, &disable)
 	f := cmd.Flags()
 	f.StringArrayVar(&del, "delete", nil, "settings to reset to default (repeatable)")
 	f.StringVar(&digest, "digest", "", "prevent changes if the config digest differs")
@@ -1108,8 +1136,15 @@ type matcherVals struct {
 	target        []string
 	mode          string
 	comment       string
+	expression    string
 	invertMatch   bool
 	disable       bool
+}
+
+// matcherExpressionConflicts lists the legacy matcher flags the server rejects
+// alongside an expression.
+var matcherExpressionConflicts = []string{
+	"match-field", "match-calendar", "match-severity", "invert-match", "mode",
 }
 
 func applyMatcherCreate(fl flagChecker, p *pvecluster.CreateNotificationsMatchersParams, v matcherVals) {
@@ -1131,6 +1166,9 @@ func applyMatcherCreate(fl flagChecker, p *pvecluster.CreateNotificationsMatcher
 	if fl.Changed("comment") {
 		p.Comment = &v.comment
 	}
+	if fl.Changed("expression") {
+		p.Expression = &v.expression
+	}
 	if fl.Changed("invert-match") {
 		p.InvertMatch = &v.invertMatch
 	}
@@ -1140,7 +1178,7 @@ func applyMatcherCreate(fl flagChecker, p *pvecluster.CreateNotificationsMatcher
 }
 
 func registerMatcherFlags(cmd *cobra.Command, matchField, matchSeverity, matchCalendar, target *[]string,
-	mode, comment *string, invertMatch, disable *bool) {
+	mode, comment, expression *string, invertMatch, disable *bool) {
 	f := cmd.Flags()
 	f.StringArrayVar(matchField, "match-field", nil, "field match (regex|exact):<field>=<value> (repeatable)")
 	f.StringArrayVar(matchSeverity, "match-severity", nil, "severity to match (repeatable)")
@@ -1148,6 +1186,9 @@ func registerMatcherFlags(cmd *cobra.Command, matchField, matchSeverity, matchCa
 	f.StringArrayVar(target, "notify-target", nil, "target endpoint to notify on match (repeatable)")
 	f.StringVar(mode, "mode", "", "combine properties with 'all' or 'any'")
 	f.StringVar(comment, "comment", "", "comment")
+	f.StringVar(expression, "expression", "",
+		"match expression as inline JSON; cannot be combined with --match-field, --match-calendar, "+
+			"--match-severity, --invert-match, or --mode")
 	f.BoolVar(invertMatch, "invert-match", false, "invert the match of the whole matcher")
 	f.BoolVar(disable, "disable", false, "create the matcher disabled")
 }

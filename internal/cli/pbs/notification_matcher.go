@@ -42,6 +42,7 @@ func newNotifMatcherCmd() *cobra.Command {
 type notifMatcherEntry struct {
 	Comment       *string  `json:"comment,omitempty"`
 	Disable       *bool    `json:"disable,omitempty"`
+	Expression    *string  `json:"expression,omitempty"`
 	InvertMatch   *bool    `json:"invert-match,omitempty"`
 	MatchCalendar []string `json:"match-calendar,omitempty"`
 	MatchField    []string `json:"match-field,omitempty"`
@@ -100,16 +101,22 @@ func newNotifMatcherLsCmd() *cobra.Command {
 // — show a single matcher's configuration
 // (GET /config/notifications/matchers/{name}).
 func newNotifMatcherShowCmd() *cobra.Command {
-	var withDefaults bool
+	var withDefaults, migrateToExpression bool
 	cmd := &cobra.Command{
 		Use:   "show <name>",
 		Short: "Show a single matcher's configuration",
 		Long: "Show every populated field of a single notification matcher (GET " +
 			"/config/notifications/matchers/{name}). The API omits options left at " +
 			"their built-in defaults; pass --defaults to also list those, with the " +
-			"value they effectively have.",
-		Example: "  pmx pbs notification matcher show storage-alerts",
-		Args:    cobra.ExactArgs(1),
+			"value they effectively have.\n\n" +
+			"Pass --migrate-to-expression to change the output: the server translates the " +
+			"matcher's match-field, match-calendar, match-severity, invert-match, and mode " +
+			"settings into an equivalent expression and returns that in place of the " +
+			"legacy fields. Nothing is saved, so use the result with `update --expression` " +
+			"to adopt it.",
+		Example: `  pmx pbs notification matcher show storage-alerts
+  pmx pbs notification matcher show storage-alerts --migrate-to-expression`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -117,7 +124,12 @@ func newNotifMatcherShowCmd() *cobra.Command {
 				return fmt.Errorf("matcher name must not be empty")
 			}
 
-			resp, err := deps.PBS.Config.GetNotificationsMatchers(cmd.Context(), name, nil)
+			var getParams *pbsconfig.GetNotificationsMatchersParams
+			if cmd.Flags().Changed("migrate-to-expression") {
+				getParams = &pbsconfig.GetNotificationsMatchersParams{MigrateToExpression: &migrateToExpression}
+			}
+
+			resp, err := deps.PBS.Config.GetNotificationsMatchers(cmd.Context(), name, getParams)
 			if err != nil {
 				return fmt.Errorf("show notification matcher %q: %w", name, err)
 			}
@@ -139,6 +151,8 @@ func newNotifMatcherShowCmd() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&withDefaults, "defaults", false,
 		"include the unset options with their built-in default values")
+	cmd.Flags().BoolVar(&migrateToExpression, "migrate-to-expression", false,
+		"change the output: show the legacy match settings translated into an equivalent expression")
 	return cmd
 }
 
@@ -148,6 +162,7 @@ func newNotifMatcherShowCmd() *cobra.Command {
 type notifMatcherFlags struct {
 	comment       string
 	disable       bool
+	expression    string
 	invertMatch   bool
 	matchCalendar []string
 	matchField    []string
@@ -161,11 +176,22 @@ type notifMatcherFlags struct {
 	digest string
 }
 
+// notifMatcherExpressionUsage is the --expression help text shared by add and update.
+const notifMatcherExpressionUsage = "match expression as inline JSON; cannot be combined with " +
+	"--match-field, --match-calendar, --match-severity, --invert-match, or --mode"
+
+// notifMatcherExpressionConflicts lists the legacy matcher flags that the
+// server rejects alongside an expression.
+var notifMatcherExpressionConflicts = []string{
+	"match-field", "match-calendar", "match-severity", "invert-match", "mode",
+}
+
 // registerNotifMatcherAddFlags binds the attribute flags accepted by `add`.
 func registerNotifMatcherAddFlags(cmd *cobra.Command, mf *notifMatcherFlags) {
 	f := cmd.Flags()
 	f.StringVar(&mf.comment, "comment", "", "comment")
 	f.BoolVar(&mf.disable, "disable", false, "create the matcher disabled")
+	f.StringVar(&mf.expression, "expression", "", notifMatcherExpressionUsage)
 	f.BoolVar(&mf.invertMatch, "invert-match", false, "invert the match of the whole filter")
 	f.StringArrayVar(&mf.matchCalendar, "match-calendar", nil, "calendar-event match expression (repeatable)")
 	f.StringArrayVar(&mf.matchField, "match-field", nil, "metadata-field match expression (repeatable)")
@@ -182,6 +208,7 @@ func registerNotifMatcherUpdateFlags(cmd *cobra.Command, mf *notifMatcherFlags) 
 	f := cmd.Flags()
 	f.StringVar(&mf.comment, "comment", "", "comment")
 	f.BoolVar(&mf.disable, "disable", false, "disable the matcher")
+	f.StringVar(&mf.expression, "expression", "", notifMatcherExpressionUsage)
 	f.BoolVar(&mf.invertMatch, "invert-match", false, "invert the match of the whole filter")
 	f.StringArrayVar(&mf.matchCalendar, "match-calendar", nil, "calendar-event match expression (repeatable)")
 	f.StringArrayVar(&mf.matchField, "match-field", nil, "metadata-field match expression (repeatable)")
@@ -203,7 +230,9 @@ func newNotifMatcherAddCmd() *cobra.Command {
 		Use:   "add <name>",
 		Short: "Create a notification matcher",
 		Long: "Create a new notification matcher (POST /config/notifications/matchers). " +
-			"Every option is optional and only forwarded when explicitly set.",
+			"Every option is optional and only forwarded when explicitly set.\n\n" +
+			"Match with either the legacy --match-field, --match-calendar, --match-severity, " +
+			"--invert-match, and --mode flags, or with one --expression, never both.",
 		Example: `  pmx pbs notification matcher add storage-alerts \
   --match-severity error --target smtp-main`,
 		Args: cobra.ExactArgs(1),
@@ -217,6 +246,12 @@ func newNotifMatcherAddCmd() *cobra.Command {
 			params := &pbsconfig.CreateNotificationsMatchersParams{Name: name}
 
 			fl := cmd.Flags()
+			if err := cli.RejectConflictingFlags(fl, "expression", notifMatcherExpressionConflicts...); err != nil {
+				return err
+			}
+			if fl.Changed("expression") {
+				params.Expression = new(mf.expression)
+			}
 			if fl.Changed("comment") {
 				params.Comment = new(mf.comment)
 			}
@@ -292,6 +327,10 @@ func newNotifMatcherUpdateCmd() *cobra.Command {
 				return fmt.Errorf("update notification matcher %q: no changes requested: pass at least one flag", name)
 			}
 
+			if err := cli.RejectConflictingFlags(fl, "expression", notifMatcherExpressionConflicts...); err != nil {
+				return err
+			}
+
 			if fl.Changed("delete") {
 				if slices.Contains(mf.del, "") {
 					return fmt.Errorf("--delete: property name must not be empty")
@@ -299,6 +338,10 @@ func newNotifMatcherUpdateCmd() *cobra.Command {
 			}
 
 			params := &pbsconfig.UpdateNotificationsMatchersParams{}
+
+			if fl.Changed("expression") {
+				params.Expression = new(mf.expression)
+			}
 
 			if fl.Changed("comment") {
 				params.Comment = new(mf.comment)
