@@ -4,7 +4,7 @@ This roadmap tracks the path to full Proxmox VE 9.2 API coverage in the `pmx` CL
 
 ## Background
 
-The `pmx` CLI is built on the generated `proxmox-apiclient-go` v3 client, which exposes 716 service methods covering the complete Proxmox VE 9.2 REST surface (all 444 documented endpoints), including the 9.2 net-new features: SDN fabrics, storage identity, in-place token-secret rotation, custom CPU models, node location, and OCI container images.
+The `pmx` CLI is built on the generated `proxmox-apiclient-go` v3 client, which exposes 716 method-operations covering the complete Proxmox VE 9.3 REST surface (all 481 documented endpoints), including the 9.2 net-new features: SDN fabrics, storage identity, in-place token-secret rotation, custom CPU models, node location, and OCI container images.
 
 The CLI now surfaces the complete user-facing command set. Every capability listed below is shipped and backed by a method that already exists in the client, so no client regeneration is required. The remaining work is test-coverage maintenance: keeping each shipped leaf either exercised by a live suite or formally deferred with a documented rationale.
 
@@ -203,6 +203,12 @@ The 54 leaves that remain deferred are genuinely impossible to exercise on the s
 | Interactive terminals | 2 | `console` and `shell` open a live SSH or VNC session that cannot be driven head-less |
 
 A recurring lesson from this pass: live de-risking before writing harness code caught five verbs that read-only inspection had mislabelled recoverable — local-node `wakeonlan`, the three `acme account` verbs, and `disks wipe` all turned out to be rejected by API-token auth or single-node topology, and were reclassified as blocked with corrected rationales.
+
+## Backlog
+
+| Feature | Commands | Notes | Status |
+|---|---|---|---|
+| Live argument completion | Node, VMID, storage, and WWID arguments across the `pve` and `pbs` trees, starting with the leaves added in v0.8.0 (`node san`, `node maintenance`, `node access-log`, `node apt history`, `cluster multipath wwid`) | Completion today covers context names only. Node, VMID, storage, and WWID values exist only on the server, so completing them means an API call under cobra's `__complete` dispatcher. Like the context helper, it has to stay silent on any error and bound its own timeout, so a slow or unreachable host never stalls the shell. | Backlog |
 
 ## Delivery Standard
 
