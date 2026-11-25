@@ -465,6 +465,55 @@ def run(ctx: Ctx) -> None:
         isolation=False, live_covered=False,
     )
 
+    # SAN and multipath (pve-manager 9.3 and newer). The reads answer on any
+    # cluster, with empty lists when no LUN is attached; an older server answers
+    # "not implemented", which skips the check. The multipath writes change the
+    # configuration every node assembles its maps from, so they are parse-checked
+    # and deferred.
+    san_unserved = {"not implemented": "server predates the SAN and multipath endpoints (needs PVE 9.3)"}
+    ctx.check("san list", "pve", "cluster", "san", "list", validate=is_list, skip_on=san_unserved)
+    ctx.check("san status", "pve", "cluster", "san", "status", skip_on=san_unserved)
+    ctx.check("multipath list", "pve", "cluster", "multipath", "list", validate=is_list, skip_on=san_unserved)
+    ctx.check("multipath wwid list", "pve", "cluster", "multipath", "wwid", "list", validate=is_list,
+              skip_on=san_unserved)
+    ctx.check("multipath override show", "pve", "cluster", "multipath", "override", "show",
+              skip_on=san_unserved)
+    ctx.check("multipath wwid show --help", "pve", "cluster", "multipath", "wwid", "show", "--help", fmt="")
+    ctx.check("multipath wwid create --help", "pve", "cluster", "multipath", "wwid", "create", "--help", fmt="")
+    ctx.check("multipath wwid set --help", "pve", "cluster", "multipath", "wwid", "set", "--help", fmt="")
+    ctx.check("multipath wwid delete --help", "pve", "cluster", "multipath", "wwid", "delete", "--help", fmt="")
+    ctx.check("multipath override set --help", "pve", "cluster", "multipath", "override", "set", "--help", fmt="")
+    ctx.defer(
+        "multipath wwid show",
+        "reads one map by WWID, and the lab has no multipath LUN to name; covered by unit tests",
+        "pmx pve cluster multipath wwid show <wwid>",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "multipath wwid create",
+        "writes a cluster-wide multipath map that every node assembles; covered by unit tests",
+        "pmx pve cluster multipath wwid create <wwid> --alias data1",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "multipath wwid set",
+        "changes a cluster-wide multipath map that every node assembles; covered by unit tests",
+        "pmx pve cluster multipath wwid set <wwid> --paths-expected 2",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "multipath wwid delete",
+        "removes a cluster-wide multipath map that every node assembles; covered by unit tests",
+        "pmx pve cluster multipath wwid delete <wwid> --yes",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "multipath override set",
+        "replaces the verbatim multipath override text on every node; covered by unit tests",
+        "pmx pve cluster multipath override set --file overrides.conf",
+        isolation=False, live_covered=False,
+    )
+
     # Ceph flags/status require a configured Ceph cluster; the lab node has no
     # Ceph, so the API returns an error — record a skip there rather than a
     # failure. The flag set and set-all are cluster-disruptive and are

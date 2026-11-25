@@ -216,6 +216,39 @@ def run(ctx: Ctx) -> None:
         ctx.check("scan lvm", "pve", "node", "scan", "lvm", node=n, validate=is_list)
         ctx.check("scan zfs", "pve", "node", "scan", "zfs", node=n, validate=is_list)
 
+        # SAN reads (pve-manager 9.3 and newer): empty lists and a "not installed"
+        # status are valid on a node with no iSCSI or NVMe-oF. An older server
+        # answers "not implemented", which skips the check.
+        san_unserved = {"not implemented": "server predates the SAN endpoints (needs PVE 9.3)"}
+        ctx.check("san list", "pve", "node", "san", "list", node=n, validate=is_list, skip_on=san_unserved)
+        ctx.check("san luns", "pve", "node", "san", "luns", node=n, validate=is_list, skip_on=san_unserved)
+        ctx.check("san iscsi list", "pve", "node", "san", "iscsi", "list", node=n, validate=is_list,
+                  skip_on=san_unserved)
+        ctx.check("san iscsi status", "pve", "node", "san", "iscsi", "status", node=n, skip_on=san_unserved)
+        ctx.check("san iscsi targets", "pve", "node", "san", "iscsi", "targets", node=n, validate=is_list,
+                  skip_on=san_unserved)
+        ctx.check("san nvmeof list", "pve", "node", "san", "nvmeof", "list", node=n, validate=is_list,
+                  skip_on=san_unserved)
+        ctx.check("san nvmeof controllers", "pve", "node", "san", "nvmeof", "controllers", node=n,
+                  validate=is_list, skip_on=san_unserved)
+        ctx.check("san nvmeof status", "pve", "node", "san", "nvmeof", "status", node=n, skip_on=san_unserved)
+        ctx.check("san nvmeof controller delete --help", "pve", "node", "san", "nvmeof", "controller", "delete",
+                  "--help", fmt="")
+        ctx.defer(
+            "san nvmeof controller delete",
+            "disconnects a live NVMe-oF controller, and the lab has none; covered by unit tests",
+            "pmx pve node san nvmeof controller delete <controller> --node <node> --yes",
+            isolation=False, live_covered=False,
+        )
+        # scan nvmeof queries a remote NVMe-oF discovery portal, which the lab lacks.
+        ctx.check("scan nvmeof --help", "pve", "node", "scan", "nvmeof", "--help", fmt="")
+        ctx.defer(
+            "scan nvmeof",
+            "needs a reachable NVMe-oF discovery portal, and the lab has none; covered by unit tests",
+            "pmx pve node scan nvmeof --portal <addr> --node <node>",
+            isolation=False, live_covered=False,
+        )
+
         # scan lvmthin: list the LVM-thin pools inside a volume group. It needs a
         # real VG (`--vg`), so discover one from the local LVM tree (`disks ls
         # lvm`, an object whose top-level children are the node's volume groups).

@@ -92,6 +92,7 @@ func Group(_ *cli.Deps) *cobra.Command {
 		newSpiceshellCmd(),
 		newPermissionsCmd(),
 		newMaintenanceCmd(),
+		newSanCmd(),
 	)
 
 	return cmd

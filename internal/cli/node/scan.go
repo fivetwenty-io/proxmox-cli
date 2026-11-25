@@ -34,6 +34,7 @@ func newScanCmd() *cobra.Command {
 		newScanCifsCmd(),
 		newScanIscsiCmd(),
 		newScanPbsCmd(),
+		newScanNvmeofCmd(),
 	)
 	return cmd
 }

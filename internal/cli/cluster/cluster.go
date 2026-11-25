@@ -64,6 +64,8 @@ func Group(_ *cli.Deps) *cobra.Command {
 		newBulkCmd(),
 		newCpuModelCmd(),
 		newClusterQemuCmd(),
+		newSanCmd(),
+		newMultipathCmd(),
 	)
 
 	return cmd

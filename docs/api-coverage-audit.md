@@ -158,6 +158,8 @@ These commands cover Proxmox VE and Proxmox Backup Server API endpoints that arr
 | Storage plugins | `pmx pve storage plugin list`, `pmx pve storage plugin show <type>` | The server's storage plugin index, with each plugin's display name, origin, supported and default content types, and (in json and yaml) its property schema. `list` takes `--origin builtin|custom` |
 | Storage plugins | `/plugins` and `/plugins/storage` (`ListPlugins`, `ListStorage`) | Index-only. Both endpoints only list the names of their child paths, so no command wraps them, and `plugin list` reads the real index below them |
 | Node maintenance | `pmx pve node maintenance enable`, `pmx pve node maintenance disable` | Requests or leaves HA node maintenance mode (`PUT /nodes/{node}/maintenance`). `enable` migrates HA-managed guests away, so it asks for confirmation or `--yes` |
+| SAN | `pmx pve cluster san list\|status`, `pmx pve node san list\|luns`, `pmx pve node san iscsi list\|status\|targets`, `pmx pve node san nvmeof list\|controllers\|status`, `pmx pve node san nvmeof controller delete`, `pmx pve node scan nvmeof` | Cluster-wide and per-node SAN reads, the NVMe-oF discovery scan, and the controller disconnect, which asks for confirmation and runs as a task |
+| Multipath | `pmx pve cluster multipath list`, `override show\|set`, `wwid list\|show\|create\|set\|delete` | The cluster-wide multipath maps by WWID and the verbatim override sections; `wwid delete` asks for confirmation, and every change accepts `--digest` |
 
 ## High-severity gaps (historical, resolved)
 
