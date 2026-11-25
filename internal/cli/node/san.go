@@ -263,17 +263,13 @@ func newSanNvmeofControllerDeleteCmd() *cobra.Command {
 			}
 			upid, upidErr := apiclient.UPIDFromRaw(raw)
 			if upidErr != nil {
-				return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: done}, deps.Format)
+				return fmt.Errorf("disconnect NVMe-oF controller %q on node %q: the server did not return a task ID: %w",
+					controller, deps.Node, upidErr)
 			}
-			if deps.Async {
-				return deps.Out.Render(cmd.OutOrStdout(), output.Result{
-					Single: map[string]string{"upid": upid}, Raw: map[string]string{"upid": upid}, Message: upid,
-				}, deps.Format)
-			}
-			if err := apiclient.WaitTask(cmd.Context(), deps.API, upid, nil); err != nil {
+			if err := cli.RenderTaskWait(cmd, deps, upid, done, nil); err != nil {
 				return fmt.Errorf("disconnect NVMe-oF controller %q on node %q: %w", controller, deps.Node, err)
 			}
-			return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: done}, deps.Format)
+			return nil
 		},
 	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm the disconnect without prompting")

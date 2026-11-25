@@ -125,9 +125,14 @@ func TestNodeSanNvmeofControllerDelete_WithYes(t *testing.T) {
 			f := testhelper.NewFakePVE(t)
 			var rec recordedRequest
 			recordForm(f, "DELETE /api2/json/nodes/pve1/san/nvmeof/controller/nvme1", &rec, sanDeleteUPID)
-			f.HandleJSON("GET /api2/json/nodes/pve1/tasks/"+sanDeleteUPID+"/status", map[string]any{
-				"status": "stopped", "exitstatus": "OK", "upid": sanDeleteUPID,
-			})
+			waited := false
+			f.HandleFunc("GET /api2/json/nodes/pve1/tasks/"+sanDeleteUPID+"/status",
+				func(w http.ResponseWriter, _ *http.Request) {
+					waited = true
+					testhelper.WriteData(w, map[string]any{
+						"status": "stopped", "exitstatus": "OK", "upid": sanDeleteUPID,
+					})
+				})
 
 			root, buf, prefix := newNodeRoot(t, f, format, exec.Fake())
 			root.SetArgs(append(prefix, "--node", "pve1", "node", "san", "nvmeof", "controller", "delete", "nvme1",
@@ -139,8 +144,26 @@ func TestNodeSanNvmeofControllerDelete_WithYes(t *testing.T) {
 			require.Contains(t, rec.query, "portal=10.0.0.5%3A4420")
 			require.Contains(t, rec.query, "subsysnqn=nqn.2014-08.org.example%3Asub1")
 			require.Contains(t, buf.String(), "nvme1")
+			require.True(t, waited, "the command must wait on the task")
 		})
 	}
+}
+
+// TestNodeSanNvmeofControllerDelete_RejectsNonUPID verifies a response that is
+// not a task ID is an error rather than a success report.
+func TestNodeSanNvmeofControllerDelete_RejectsNonUPID(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	f.HandleFunc("DELETE /api2/json/nodes/pve1/san/nvmeof/controller/nvme1", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, nil)
+	})
+
+	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "san", "nvmeof", "controller", "delete", "nvme1", "--yes"))
+
+	err := root.Execute()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "task ID")
+	require.NotContains(t, buf.String(), "disconnected")
 }
 
 // TestNodeSanNvmeofControllerDelete_Async verifies --async prints the UPID
