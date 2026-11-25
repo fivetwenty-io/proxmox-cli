@@ -523,6 +523,7 @@ func newNodeDisksZfsCreateCmd(nf *nodeFlags) *cobra.Command {
 		raidlevel    string
 		ashift       int64
 		compression  string
+		recordsize   string
 		addDatastore bool
 	)
 
@@ -546,6 +547,9 @@ func newNodeDisksZfsCreateCmd(nf *nodeFlags) *cobra.Command {
 			if fl.Changed("compression") {
 				params.Compression = &compression
 			}
+			if fl.Changed("recordsize") {
+				params.Recordsize = &recordsize
+			}
 			if fl.Changed("add-datastore") {
 				params.AddDatastore = &addDatastore
 			}
@@ -567,6 +571,7 @@ func newNodeDisksZfsCreateCmd(nf *nodeFlags) *cobra.Command {
 	f.StringVar(&raidlevel, "raidlevel", "", "ZFS RAID level, e.g. single|mirror|raidz (required)")
 	f.Int64Var(&ashift, "ashift", 0, "pool sector size exponent")
 	f.StringVar(&compression, "compression", "", "ZFS compression algorithm")
+	f.StringVar(&recordsize, "recordsize", "", "ZFS record size, a number with an optional k or m suffix, e.g. 128k")
 	f.BoolVar(&addDatastore, "add-datastore", false, "configure a datastore using the new pool")
 	cli.MustMarkRequired(cmd, "devices")
 	cli.MustMarkRequired(cmd, "raidlevel")

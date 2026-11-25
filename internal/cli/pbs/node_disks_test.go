@@ -279,7 +279,7 @@ func TestNodeDisksZfsCreate_BlocksUntilTaskFinishes(t *testing.T) {
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
 	err := run(deps, &buf, newNodeCmd(), "node", "disks", "zfs", "create", "tank",
-		"--devices", "sdb,sdc", "--raidlevel", "mirror", "--ashift", "12", "--compression", "lz4", "--add-datastore")
+		"--devices", "sdb,sdc", "--raidlevel", "mirror", "--ashift", "12", "--compression", "lz4", "--recordsize", "1m", "--add-datastore")
 	require.NoError(t, err)
 
 	require.Equal(t, http.MethodPost, rec.method)
@@ -288,6 +288,7 @@ func TestNodeDisksZfsCreate_BlocksUntilTaskFinishes(t *testing.T) {
 	require.Equal(t, "mirror", rec.form.Get("raidlevel"))
 	require.Equal(t, "12", rec.form.Get("ashift"))
 	require.Equal(t, "lz4", rec.form.Get("compression"))
+	require.Equal(t, "1m", rec.form.Get("recordsize"))
 	require.Equal(t, "1", rec.form.Get("add-datastore"))
 	require.Contains(t, buf.String(), "created")
 }
