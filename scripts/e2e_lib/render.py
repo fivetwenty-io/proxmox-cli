@@ -82,7 +82,8 @@ EMPTY_COLUMN_ALLOWLIST: dict[str, set[str]] = {
     "pbs s3 ls": {"PORT", "REGION"},
     # Every remote SDN zone in the lab is `simple`, so the vxlan and
     # controller columns have nothing to carry.
-    "pdm sdn vnet ls": {"STATE"},
+    # A lab vnet sets neither a tag nor an alias.
+    "pdm sdn vnet ls": {"STATE", "TAG", "ALIAS"},
     # No remote in the lab declares a web URL, and PDM leaves worker_id unset
     # on its own node tasks and on the remote task cache.
     "pdm remote ls": {"WEB-URL"},
@@ -104,6 +105,8 @@ EMPTY_COLUMN_ALLOWLIST: dict[str, set[str]] = {
     # The PDM proxy reports an empty level on every cluster node of an
     # unsubscribed lab, as the native `pve cluster status` already does.
     "pdm pve cluster status": {"LEVEL"},
+    # Same as the qemu proxy: a lab container has no staged change.
+    "pdm pve lxc pending": {"PENDING", "DELETE"},
     # PBS reports a null comment on every notification-matcher field value.
     "pbs notification matcher field-values": {"COMMENT"},
     # Same field, same reason, on the native leaves: PVE reports a pending
